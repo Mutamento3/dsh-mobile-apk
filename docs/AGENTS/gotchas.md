@@ -2052,3 +2052,7 @@ JVM 边界测试在 `EngineBootInstrumentationTest`（取值与 clamp 边界、�
     修法：隐藏 = `wm.removeView()`；召回 = 按先光环后球的顺序重新 `addView`（z 序见 F8）。召回条另建第四个窗口，且**窗口尺寸 = 可视尺寸（8x44dp）**，不留「窗口比图形大」的边——同一个坑的第二种形态。
     复验证据：`CallSiteContractTest.hidingRemovesBothWindowsInsteadOfFadingThem`（断言 `removeWindow(rootView)`/`removeWindow(haloView)` 在场，且 hideBall 体内**不得**出现 `alpha = 0f` / `visibility = View.GONE`）与 `theRecallStripIsBuiltLazilyAndNeverStealsFocus`（条窗懒建 + NOT_FOCUSABLE）；撤掉任一条即红。
     同型提醒：凡「让某个悬浮面消失」，先问「它的**命中矩形**现在在哪」——判据是窗口在不在 WindowManager 里，不是像素还画不画。
+
+329. **工具结果条数、调用 id 配对和连接中断必须分开归因，否则会把传输问题修成协议问题**：2026-10-18 的新修复会话包含 20 个连续工具批次，`assistant(tool_calls)` 与后续 `tool` 的 id 全部一一配对；把同一份历史原样回放给 D1 得到 HTTP 200。真正可复现的致命点是停止或销毁 Activity 时，工作线程被中断，`FutureTask.get()` 随后在 `removePendingActivity()` 的清理路径里再次抛 `InterruptedException`，从 `catch` 中逃逸并绕过 `finally` 的会话保存。修法：UI 同步改为等待主线程执行完闭锁，等待期间暂存并恢复中断标记；停止、取消和 `Socket closed` 统一走停止提示；仅在结构化历史确已完成配对时发送原生 tool 序列，兼容投影每次只合并成一个 user 观察并省略空 assistant。只对可证明未完成的传输错误重发字节完全相同的请求，HTTP 协议错误一律直接报告。回归必须覆盖空工具批次投影、连续多批次顺序，以及“协议 400 不得重试”。
+
+330. **停止恰好落在半批工具调用之间，会让下一轮 400；必须先闭合末批再发请求**：2026-10-18 的真实停包会话在最后一次回复中发出 `call_00_GrXMGDJPnVNzOYxJpmty0195`，用户按下停止时该调用尚未执行，磁盘历史因此缺少对应的 `tool` 结果。再次打开同一会话并继续发送，网关会以 `tool calls and tool results do not match` 拒绝；这不是旧会话串线。修法：只在尾部确有不完整批次时，为缺少结果的调用追加固定、如实的取消结果；已有 assistant 文本、reasoning 与工具结果逐字保留，并在发送前再次闭合残留半批。回归须覆盖“尾部完整但前面的旧批次”不得误补，以及补完后配对集合与顺序正确。
