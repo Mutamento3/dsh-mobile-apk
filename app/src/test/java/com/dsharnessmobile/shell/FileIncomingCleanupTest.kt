@@ -208,6 +208,21 @@ class FileIncomingCleanupTest {
     }
   }
 
+  @Test
+  fun validJsonWithUnknownReferenceSchemaStopsCleanup() {
+    val dir = Files.createTempDirectory("queued-schema").toFile()
+    try {
+      val record = File(dir, "unknown.json")
+      for (text in listOf("{}", "{\"path\":null}", "{\"path\":42}", "{\"path\":\" \"}")) {
+        record.writeText(text)
+        assertEquals("unknown reference schema must not be treated as no references", null, FileIncoming.readQueuedSessionPaths(dir))
+      }
+    } finally {
+      dir.deleteRecursively()
+    }
+  }
+
+  @Test
   fun missingAndEmptyLedgerAreDifferentFromUnreadableLedger() {
     val dir = Files.createTempDirectory("pending-ledger").toFile()
     try {

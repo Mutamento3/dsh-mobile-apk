@@ -293,7 +293,9 @@ object FileIncoming {
       val result = mutableListOf<String>()
       for (file in files) {
         val record = try { org.json.JSONObject(file.readText()) } catch (_: Exception) { return null }
-        record.optString("path").takeIf { it.isNotBlank() }?.let { result += it }
+        val path = record.opt("path") as? String ?: return null
+        if (path.isBlank()) return null
+        result += path
       }
       result
     } catch (_: Exception) {
