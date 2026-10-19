@@ -2072,7 +2072,10 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 覆盖全域（脚本里定义，构建产物与第三方目录除外）：`app/src/**/*.kt` 与 `AndroidManifest.xml`、`plugins/*/{src,test}/**`、三个子仓 src/lib、`scripts/{check-,verify-,build-,inject-}*` 与 `scripts/patches/**`、`scripts/snapshot-config/**`。
 
+注入成员检查：plugin-dirs 的 externals 是当前注入集，retiredExternals 只保留历史源码位置。check-inject-completeness 对每个活动包和两个装配 profile 继续全量判定；自检包含缺活动包和缺成员的拒绝反例。
+
 <!-- COVERAGE
+scripts/check-inject-completeness.test.mjs
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
 scripts/verify-mobile-workspaces.mjs
