@@ -2072,7 +2072,10 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 覆盖全域（脚本里定义，构建产物与第三方目录除外）：`app/src/**/*.kt` 与 `AndroidManifest.xml`、`plugins/*/{src,test}/**`、三个子仓 src/lib、`scripts/{check-,verify-,build-,inject-}*` 与 `scripts/patches/**`、`scripts/snapshot-config/**`。
 
+设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
+
 <!-- COVERAGE
+scripts/verify-webview-settings.test.mjs
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
 scripts/verify-mobile-workspaces.mjs
