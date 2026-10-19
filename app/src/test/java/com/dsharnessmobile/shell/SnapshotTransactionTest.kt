@@ -21,14 +21,6 @@ class SnapshotTransactionTest {
       val original = File(dir, "original.json")
       val old = "{\"用户\":\"旧配置\"}\n".toByteArray(Charsets.UTF_8)
       original.writeBytes(old)
-      val legacyTarget = File(dir, "legacy-package.json")
-      legacyTarget.writeBytes(old)
-      fun legacyWrite(text: String, publicationFails: Boolean) {
-        if (publicationFails) legacyTarget.writeText(text)
-      }
-      legacyWrite("{\"new\":true}", publicationFails = true)
-      assertFalse("负控：旧实现发布失败时确实会截断旧数据", old.contentEquals(legacyTarget.readBytes()))
-      legacyTarget.delete()
       Files.copy(original.toPath(), target.toPath())
       var calls = 0
       try {
