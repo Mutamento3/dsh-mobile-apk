@@ -353,15 +353,16 @@ internal object SnapshotTransaction {
    * `.snapshot-previous/usr/lib` 两处残留并存）：失败残渣（全量树副本，数百 MB）→ 空间变紧 →
    * 下一次更易失败 → 又能留下新残渣。
    *
-   * 安全边界：**只删带 `.failed-` 中缀的条目**（写点只有「live 条目的兄弟位置」，见 [residueDirs]）；
-   * 不碰 `previous`/`stage`（半程事务的回滚源），也不做全树递归。
+   * 安全边界：只删 [failedResidueStamp] 确认属于 `.failed-` 写点的条目；stage orphan 仍只由
+   * [reclaimResidue] 按年龄回收。未知名称、未知目录与畸形时间戳一律保留；不碰
+   * `previous`/`stage`（半程事务的回滚源），也不做全树递归。
    */
   fun clearFailedResidue(filesDir: File): List<String> {
     val cleared = mutableListOf<String>()
     val dirs = listOf(filesDir, File(filesDir, "home"), File(filesDir, "home/.dsh"))
     for (dir in dirs) {
       for (child in dir.listFiles() ?: continue) {
-        if (!child.name.contains(".failed-")) continue
+        if (failedResidueStamp(filesDir, child) == null) continue
         if (!SnapshotFs.exists(child)) continue
         // 严格删：残渣删不掉要如实抛（否则又变成「说清了其实没清」，本 issue 的病根）。
         try {
@@ -384,12 +385,14 @@ internal object SnapshotTransaction {
     private set
 
   /**
-   * 扫描三类位置上的残渣目录（纯函数，可单测）：
-   *  - `files/` 与 `files/home/` 与 `files/home/.dsh/` 下的 `*.failed-*`（rollback/补偿挪开的 live 树）；
-   *  - `files/` 下的 `.snapshot-stage-orphan-*`（stage 删不掉时挪开的解压残渣）。
+   * 扫描残渣目录（纯函数，可单测）：
+   *  - [failedResidueStamp] 确认属于事务写点的失败残渣（rollback/补偿挪开的 live 树）；
+   *  - `files/` 下 [stageOrphanStamp] 确认的 `.snapshot-stage-orphan-<ts>`（stage 删不掉时挪开的解压残渣）。
    *
-   * 为什么只扫这三层：`.failed-*` 的写点只有「live 条目的兄弟位置」，而 live 条目全部落在
-   * `files/usr`、`files/home/<name>`、`files/home/.dsh/<name>` 三处（见 livePath）。不做全树递归 =
+   * 只在事务可能写残渣的三层里观察，但不把「带 `.failed-` 的名字」直接当成所有权。当前写点
+   * 只能把 `usr` 挪到 `files/usr.failed-<ts>`；把 profiles 合并失败的副本挪到
+   * `files/profiles.failed-<ts>`；回滚也可能把 `files/home/.dsh/profiles` 挪到
+   * `files/home/.dsh/profiles.failed-<ts>` 这一兄弟位置。因此只认这三个槽名。不做全树递归 =
    * 不把用户数据树整个走一遍（回收入口在启动路径上，必须廉价）。
    */
   fun residueDirs(filesDir: File, now: Long = System.currentTimeMillis()): List<File> {
@@ -399,17 +402,53 @@ internal object SnapshotTransaction {
       val children = dir.listFiles() ?: continue
       for (child in children) {
         val name = child.name
-        val isFailed = name.contains(".failed-")
-        val isOrphanStage = dir == filesDir && name.startsWith(STAGE_ORPHAN_PREFIX)
-        if (!isFailed && !isOrphanStage) continue
+        val failedStamp = failedResidueStamp(filesDir, child)
+        val stamp = failedStamp ?: stageOrphanStamp(filesDir, child)
+        if (stamp == null) continue
         if (!SnapshotFs.exists(child)) continue
-        // 年龄门槛：`<ts>` 后缀是写点时间戳；解析不出时间戳的（老版本命名）不删（保守）。
-        val stamp = name.substringAfterLast('-', "").toLongOrNull() ?: continue
+        // 年龄门槛：后缀必须是写点产生的正毫秒时间戳；畸形/旧命名保守保留。
         if (now - stamp < RESIDUE_MIN_AGE_MS) continue
         out += child
       }
     }
     return out
+  }
+
+  /**
+   * 失败残渣的**所有权与写点格式**判据。
+   *
+   * `.failed-` 写点都使用 `live.name + ".failed-" + System.currentTimeMillis()`：
+   *  - `rollbackEntry` 把 `usr` 挪到 `files/`；
+   *  - `compensateFailedProfilesMerge` 把 `profiles` 挪到 `files/`；
+   *  - `rollbackEntry` 也可能把 `profiles` 挪到 `files/home/.dsh/` 的兄弟位置。
+   *
+   * 其他名字即使含 `.failed-` 也没有生产写点，可能是用户自己的目录。`home/` 顶层的已知名条目
+   * 在 swap 时要么保留、要么只装载缺失项，回滚不会把它们改名移走，因此这里不接受该层残渣。
+   * 后缀必须是正十进制毫秒时间戳；解析失败或溢出的条目保守保留。
+   */
+  private fun failedResidueStamp(filesDir: File, child: File): Long? {
+    val slots = when (child.parentFile) {
+      filesDir -> listOf("usr", "profiles")
+      File(filesDir, "home/.dsh") -> listOf("profiles")
+      else -> return null
+    }
+    for (slot in slots) {
+      val prefix = slot + ".failed-"
+      if (!child.name.startsWith(prefix)) continue
+      val suffix = child.name.substring(prefix.length)
+      if (suffix.isEmpty() || suffix.any { it !in '0'..'9' }) return null
+      return suffix.toLongOrNull()?.takeIf { it > 0L }
+    }
+    return null
+  }
+
+  /** `.snapshot-stage-orphan-<ts>` 的写点格式判据；只存在于 `files/` 顶层。 */
+  private fun stageOrphanStamp(filesDir: File, child: File): Long? {
+    if (child.parentFile != filesDir) return null
+    if (!child.name.startsWith(STAGE_ORPHAN_PREFIX)) return null
+    val suffix = child.name.substring(STAGE_ORPHAN_PREFIX.length)
+    if (suffix.isEmpty() || suffix.any { it !in '0'..'9' }) return null
+    return suffix.toLongOrNull()?.takeIf { it > 0L }
   }
 
   /**
