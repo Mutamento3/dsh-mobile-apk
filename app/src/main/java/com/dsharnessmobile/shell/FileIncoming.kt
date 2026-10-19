@@ -197,25 +197,26 @@ object FileIncoming {
   /**
    * 定时清理（TTL 7 天）：删除超过保留窗口的临时文件（含子目录）、以及超过窗口的历史会话元数据行。
    * 幂等；在应用启动（onCreate）与每次文件入队前调用——不打扰未过期内容。
+   * 待发清单与 `.sessions` 仍引用的来件受与 [cleanupTmp] 相同的保护；目录不递归删除。
    * onTaskRemoved 的 cleanupTmp 仍保留（进程被系统回收时的即时全清礼仪）。
    */
   fun sweepExpired(context: Context) {
-    try {
-      val dir = tmpWorkspace(context)
-      val now = System.currentTimeMillis()
-      val list = dir.listFiles() ?: return
-      var removed = 0
-      for (f in list) {
-        if (f.name == SESSIONS_ENTRY) continue // 引擎侧队列元数据：由 claim 消费删除
-        val last = f.lastModified()
-        if (last > 0 && now - last > TTL_MS) {
-          if (f.delete() || !f.exists()) removed++
+    synchronized(pendingLock) {
+      if (!workspaceWipeAllowed(activeCopies.get(), activeDeliveries.get())) {
+        LogCollector.log("dsh-file-open", "temp workspace TTL sweep skipped (copy/delivery in flight)")
+        return
+      }
+      try {
+        val dir = tmpWorkspace(context)
+        val now = System.currentTimeMillis()
+        val pending = pendingPaths(context) ?: return
+        val queued = queuedSessionPaths(context) ?: return
+        val removed = sweepWorkspace(dir, pending, queued, now, TTL_MS)
+        if (removed > 0) {
+          LogCollector.log("dsh-file-open", "temp workspace TTL sweep removed $removed expired file(s)")
         }
+      } catch (_: Exception) {
       }
-      if (removed > 0) {
-        LogCollector.log("dsh-file-open", "temp workspace TTL sweep removed $removed expired file(s)")
-      }
-    } catch (_: Exception) {
     }
   }
 
@@ -250,24 +251,53 @@ object FileIncoming {
     }
   }
 
-  /** 待发清单里的路径（未受理来件的绝对路径）；读不到 = 空（fail-soft）。 */
-  private fun pendingPaths(context: Context): List<String> = try {
-    pendingFile(context).readLines().map { it.trim() }.filter { it.isNotEmpty() }
-  } catch (_: Exception) {
-    emptyList()
+  /** Same protection rules for the TTL pass; manifest itself is never deleted by age. */
+  internal fun ttlDeletions(
+    entries: List<String>,
+    pendingPaths: List<String>,
+    queuedPaths: List<String> = emptyList(),
+  ): List<String> = cleanupDeletions(entries, pendingPaths, queuedPaths)
+
+  /** Apply the TTL policy to a real directory. Null references mean unreadable: skip deletion. */
+  internal fun sweepWorkspace(
+    dir: File,
+    pendingPaths: List<String>?,
+    queuedPaths: List<String>?,
+    now: Long,
+    ttlMs: Long,
+  ): Int {
+    if (pendingPaths == null || queuedPaths == null) return 0
+    val list = dir.listFiles() ?: return 0
+    val deletions = ttlDeletions(list.map { it.name }, pendingPaths, queuedPaths).toSet()
+    var removed = 0
+    for (file in list) {
+      if (file.name !in deletions || file.isDirectory) continue
+      val last = file.lastModified()
+      if (last > 0 && now - last > ttlMs && file.delete()) removed++
+    }
+    return removed
   }
 
+  /** null = read failure. Callers that delete files must skip the pass rather than assume empty. */
+  private fun pendingPaths(context: Context): List<String>? = readPending(pendingFile(context))
+
   /** Engine queue records whose source file must survive task removal until the browser claims it. */
-  private fun queuedSessionPaths(context: Context): List<String> {
-    val dir = File(tmpWorkspace(context), SESSIONS_ENTRY)
+  private fun queuedSessionPaths(context: Context): List<String>? =
+    readQueuedSessionPaths(File(tmpWorkspace(context), SESSIONS_ENTRY))
+
+  /** null = the queue exists but cannot be fully read; callers must not delete on null. */
+  internal fun readQueuedSessionPaths(dir: File): List<String>? {
+    if (!dir.exists()) return emptyList()
     return try {
-      dir.listFiles { file -> file.isFile && file.name.endsWith(".json") }
-        ?.mapNotNull { file ->
-          try { org.json.JSONObject(file.readText()).optString("path").takeIf { it.isNotBlank() } } catch (_: Exception) { null }
-        }
-        ?: emptyList()
+      val files = dir.listFiles { file -> file.isFile && file.name.endsWith(".json") } ?: return null
+      val result = mutableListOf<String>()
+      for (file in files) {
+        val record = try { org.json.JSONObject(file.readText()) } catch (_: Exception) { return null }
+        record.optString("path").takeIf { it.isNotBlank() }?.let { result += it }
+      }
+      result
     } catch (_: Exception) {
-      emptyList()
+      null
     }
   }
 
@@ -276,23 +306,27 @@ object FileIncoming {
    *  FX-211.2 起**投递/重试在途时同样让路**，且任何仍被待发清单或 `.sessions` 草稿队列引用的来件与三个元数据条目
    *  一律不删（残余内容交给下次 TTL 清扫）。 */
   fun cleanupTmp(context: Context) {
-    if (!workspaceWipeAllowed(activeCopies.get(), activeDeliveries.get())) {
-      LogCollector.log("dsh-file-open", "temp workspace clean skipped (copy/delivery in flight)")
-      return
-    }
-    try {
-      val dir = tmpWorkspace(context)
-      val entries = dir.listFiles()?.map { it.name } ?: emptyList()
-      val deletions = cleanupDeletions(entries, pendingPaths(context), queuedSessionPaths(context))
-      var removed = 0
-      for (name in deletions) {
-        if (File(dir, name).delete()) removed++
+    synchronized(pendingLock) {
+      if (!workspaceWipeAllowed(activeCopies.get(), activeDeliveries.get())) {
+        LogCollector.log("dsh-file-open", "temp workspace clean skipped (copy/delivery in flight)")
+        return
       }
-      LogCollector.log(
-        "dsh-file-open",
-        "temp workspace cleaned (task removed ritual; removed=" + removed + " kept=" + (entries.size - removed) + ")",
-      )
-    } catch (_: Exception) {
+      try {
+        val dir = tmpWorkspace(context)
+        val entries = dir.listFiles()?.map { it.name } ?: emptyList()
+        val pending = pendingPaths(context) ?: return
+        val queued = queuedSessionPaths(context) ?: return
+        val deletions = cleanupDeletions(entries, pending, queued)
+        var removed = 0
+        for (name in deletions) {
+          if (File(dir, name).delete()) removed++
+        }
+        LogCollector.log(
+          "dsh-file-open",
+          "temp workspace cleaned (task removed ritual; removed=" + removed + " kept=" + (entries.size - removed) + ")",
+        )
+      } catch (_: Exception) {
+      }
     }
   }
 
@@ -313,10 +347,76 @@ object FileIncoming {
   /** 待发清单：已落盘但引擎未确认受理的路径（冷启动 POST 早于 listen 曾静默丢件）。 */
   private fun pendingFile(context: Context): File = File(tmpWorkspace(context), PENDING_ENTRY)
 
-  private fun enqueuePending(context: Context, path: String) {
+  /** One serialized read-modify-write owner for the pending ledger and its delivery attempts. */
+  private val pendingLock = Any()
+
+  /**
+   * Run the TTL sweep before reserving the delivery window, with both steps under the
+   * same lock as [cleanupTmp]. The sweep must observe a quiescent workspace; cleanup
+   * must observe the reservation before this thread can start copying a new source.
+   *
+   * The body runs after the lock is released so hashing/copying and the bounded retry
+   * loop cannot block the pending ledger's other readers and writers. The reservation
+   * is always released, including when the body throws.
+   */
+  internal fun <T> withIncomingDeliveryAfterSweep(
+    lock: Any,
+    deliveries: java.util.concurrent.atomic.AtomicInteger,
+    sweep: () -> Unit,
+    body: () -> T,
+  ): T {
+    synchronized(lock) {
+      sweep()
+      deliveries.incrementAndGet()
+    }
     try {
-      pendingFile(context).appendText(path + "\n")
+      return body()
+    } finally {
+      deliveries.decrementAndGet()
+    }
+  }
+
+  private fun enqueuePending(context: Context, path: String) {
+    synchronized(pendingLock) {
+      try {
+        val f = pendingFile(context)
+        val current = readPending(f)
+        if (current == null) LogCollector.log("dsh-file-open", "pending ledger enqueue skipped (unreadable)")
+        else writePending(f, current + listOf(path))
+      } catch (_: Exception) {
+        LogCollector.log("dsh-file-open", "pending ledger enqueue failed")
+      }
+    }
+  }
+
+  /** null = the ledger exists but could not be read; [] = it is absent or empty. */
+  internal fun readPending(f: File): List<String>? {
+    if (!f.exists()) return emptyList()
+    return try {
+      f.readLines().map { it.trim() }.filter { it.isNotEmpty() }
     } catch (_: Exception) {
+      null
+    }
+  }
+
+  /** Publish a complete ledger with a unique sibling temp file and an atomic replacement. */
+  internal fun writePending(f: File, paths: List<String>) {
+    f.parentFile?.mkdirs()
+    val temp = File.createTempFile(f.name + ".", ".tmp", f.parentFile)
+    try {
+      val text = paths.joinToString("\n") + if (paths.isEmpty()) "" else "\n"
+      java.io.FileOutputStream(temp).use { output ->
+        output.write(text.toByteArray(Charsets.UTF_8))
+        output.flush()
+        output.fd.sync()
+      }
+      java.nio.file.Files.move(
+        temp.toPath(), f.toPath(),
+        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+      )
+    } finally {
+      temp.delete()
     }
   }
 
@@ -356,17 +456,22 @@ object FileIncoming {
    * 冷启动竞态的确定性补投路径）。
    */
   fun flushPending(context: Context): Boolean {
-    val f = pendingFile(context)
-    val lines = try { f.readLines().filter { it.isNotBlank() } } catch (_: Exception) { return true }
-    if (lines.isEmpty()) { try { f.delete() } catch (_: Exception) {} ; return true }
-    val remaining = lines.filter { !deliverOnce(context, it) }
-    if (remaining.isEmpty()) {
-      try { f.delete() } catch (_: Exception) {}
-      LogCollector.log("dsh-file-open", "pending incoming flushed (${lines.size} file(s))")
-    } else {
-      try { f.writeText(remaining.joinToString("\n") + "\n") } catch (_: Exception) {}
+    synchronized(pendingLock) {
+      val f = pendingFile(context)
+      val lines = readPending(f) ?: return false
+      if (lines.isEmpty()) { try { f.delete() } catch (_: Exception) {} ; return true }
+      val accepted = HashSet<String>()
+      for (line in lines) if (deliverOnce(context, line)) accepted += line
+      try {
+        val current = readPending(f) ?: return false
+        val remaining = current.filter { it !in accepted }
+        if (remaining.isEmpty()) f.delete() else writePending(f, remaining)
+        if (remaining.isEmpty()) LogCollector.log("dsh-file-open", "pending incoming flushed (${lines.size} file(s))")
+        return remaining.isEmpty()
+      } catch (_: Exception) {
+        return false
+      }
     }
-    return remaining.isEmpty()
   }
 
   /**
@@ -391,37 +496,35 @@ object FileIncoming {
     }
     val main = android.os.Handler(android.os.Looper.getMainLooper())
     ioExecutor.execute {
-      // FX-211.2：把守卫从「拷贝」扩到「投递 + 重试期」——这一段里 tmp 工作区中的来件与待发
-      // 清单都不能被 onTaskRemoved 的全清吃掉（划掉应用 = 用户主动关闭，不等于丢弃来件）。
-      activeDeliveries.incrementAndGet()
       try {
-        // 每次文件入队前先做 TTL 清扫（issue #60 F5.1：临时文件 7 天自动回收，防止无限堆积）
-        sweepExpired(context)
-        activeCopies.incrementAndGet()
-        val target = try {
-          copyIn(context, validated)
-        } finally {
-          activeCopies.decrementAndGet()
-        }
-        if (target == null) {
-          main.post { notify("文件拷贝失败", "无法读取传入文件") }
-          return@execute
-        }
-        recordOpening(context, target.absolutePath)
-        LogCollector.log("dsh-file-open", "incoming processed: " + target.absolutePath)
-        // 引擎侧插件端点：路径交给 dsh-android-file-open 强制新会话。
-        // 待发清单 + 短促重试（引擎就绪钩子会再补投，冷启动不再丢件）：
-        enqueuePending(context, target.absolutePath)
-        val deadline = System.currentTimeMillis() + 20_000
-        while (System.currentTimeMillis() < deadline) {
-          if (flushPending(context)) return@execute
-          try { Thread.sleep(4_000) } catch (_: InterruptedException) { return@execute }
+        withIncomingDeliveryAfterSweep(pendingLock, activeDeliveries, { sweepExpired(context) }) {
+          // 每次文件入队前先做 TTL 清扫（issue #60 F5.1：临时文件 7 天自动回收，防止无限堆积）
+          // 与投递预留同锁完成，见 withIncomingDeliveryAfterSweep。
+          // FX-211.2：把守卫从「拷贝」扩到「投递 + 重试期」——这一段里 tmp 工作区中的来件与待发
+          // 清单都不能被 onTaskRemoved 的全清吃掉（划掉应用 = 用户主动关闭，不等于丢弃来件）。
+          activeCopies.incrementAndGet()
+          val target = try {
+            copyIn(context, validated)
+          } finally {
+            activeCopies.decrementAndGet()
+          }
+          if (target == null) {
+            main.post { notify("文件拷贝失败", "无法读取传入文件") }
+            return@withIncomingDeliveryAfterSweep
+          }
+          recordOpening(context, target.absolutePath)
+          LogCollector.log("dsh-file-open", "incoming processed: " + target.absolutePath)
+          // 引擎侧插件端点：路径交给 dsh-android-file-open 强制新会话。
+          // 待发清单 + 短促重试（引擎就绪钩子会再补投，冷启动不再丢件）：
+          enqueuePending(context, target.absolutePath)
+          val deadline = System.currentTimeMillis() + 20_000
+          while (System.currentTimeMillis() < deadline) {
+            if (flushPending(context)) return@withIncomingDeliveryAfterSweep
+            try { Thread.sleep(4_000) } catch (_: InterruptedException) { return@withIncomingDeliveryAfterSweep }
+          }
         }
       } catch (t: Throwable) {
         android.util.Log.w("dsh-file-open", "incoming pipeline failed: " + (t.message ?: t.javaClass.simpleName))
-      } finally {
-        // 成功/失败/早退都递减：守卫只覆盖本段投递期，不泄漏（否则 tmp 永不清理）。
-        activeDeliveries.decrementAndGet()
       }
     }
   }
