@@ -5,7 +5,7 @@
 ## 定位与边界
 
 - 只做**分发页**：不托管安装包字节，下载链接直接指向 GitHub Releases（及加速镜像）。
-  因此 Pages 的 100 GB/月软带宽限制与用户量基本脱钩（页面仅约 34 KB）。
+  因此 Pages 的 100 GB/月软带宽限制与用户量基本脱钩（首屏合计约 70 KB，见 §验证范围）。
 - **不碰** gradle / 快照 / LFS / 打包链。工作流只做「读 release 元数据 -> 生成静态站 -> 部署」，整链约 30 秒。
 - 零第三方脚本、零 Cookie、零统计（GitHub Pages 禁止用途条款要求不得收集用户数据）。
 
@@ -13,8 +13,9 @@
 
 ```
 webpages/
-  src/index.html            页面模板（含 __STYLES__ / __RELEASE_DATA__ 两个构建期占位符）
-  src/assets/styles.css     样式（令牌照抄 dsh ui-theme，见文件头）
+  src/index.html            页面模板（含 __STYLES__ / __RELEASE_DATA__ / __JSONLD__ 三个构建期占位符）
+  src/assets/styles.css     样式（令牌照抄壳侧 values-night/colors.xml 与 values/colors.xml，见文件头）
+  src/assets/icon.png       本体应用图标（ic_launcher_foreground.png，8.5 KB，本站唯一图片素材）
   src/assets/release.js     发布源拼接与架构判定的唯一真源（浏览器与 Node 共用）
   src/assets/app.js         首屏交互
   src/manifest.webmanifest  PWA 清单（display: browser，不劫持安装体验）
@@ -161,11 +162,15 @@ node webpages/tools/build.mjs --refresh           # 同时刷新 data/releases.j
 本目录是**网页**，不适用壳侧 `docs/AGENTS/emulator-test-protocol.md` 的三层验收（CDP/ADB 层无从谈起）。
 替代判据与已完成证据：
 
-- **代码层**：命名门禁 25 项全绿（含受控负控，证明门禁仍会判红）；
-- **渲染层**：CDP 设备仿真覆盖竖屏 / 横屏 / 桌面（请选择架构）/ 夸克类无架构线索 / 32 位不支持 等形态，
-  逐形态核对界面文案与下载 URL；
+- **代码层**：命名与站点约束门禁 39 项全绿（含受控负控，证明门禁仍会判红）；
+- **渲染层**：三视口实测核对 —— 竖屏 390x844、宽横屏 1280x800、矮横屏 844x390：
+  两处本体图标正常加载（432x432 源图）、无横向溢出与裁剪、顶栏 sticky 钉住、
+  主操作按钮满幅反白且落在首屏内、仓库卡为单块可点链接且含 star 标签；两个横屏均实测为
+  **双栏**（左栏身份/仓库/规格，右栏下载面板），网格两轨宽度与标题、面板边界互不重叠。
+  「架构未知 / 已识别 / 不支持」三分支的界面文案与下载 URL 由代码层 `classifyAbi` 与 `pickAsset` 用例覆盖；
 - **网络层**：真实网络下镜像测速与资产直链实测（`HEAD` 200 / `content-length` 158453224 / `accept-ranges: bytes`）；
-- **性能**：首屏 FCP 约 208 ms（本地静态服务），首屏仅 1 个文档请求，`index.html` 约 12 KB。
+- **性能**：样式与版本数据在构建期内联，HTML 文档 1 个请求即完整可读；本地静态服务实测首屏共 4 个请求
+  （`index.html` + `app.js` + `release.js` + `icon.png`，合计约 70 KB，`index.html` 约 25 KB）。
 
 **未覆盖**：真机浏览器（Android Chrome / 微信内置浏览器 / 国产浏览器）实测、Pages 线上真实部署后的
 可达性与自定义域名。前者建议在正式对外前补一次，后者待 Pages 开启后验证。

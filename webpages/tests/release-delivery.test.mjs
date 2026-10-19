@@ -32,6 +32,11 @@ globalThis.fetch = async url => {
       const html = fs.readFileSync(path.join(scratch, 'dist/index.html'), 'utf8');
       assert.equal(data.tag, tag);
       assert.match(html, /"tag":"v0.14.7"/);
+      // 占位符必须一个不留。真因（2026-10-19）：模板新增 release 参数行时用了 `__TAG__`，
+      // 但 render() 的替换表与 assertRendered 的守卫清单都没带上它，于是字面量 `__TAG__`
+      // 被原样发到线上 —— 页面正常渲染、参数行却显示占位符，而现有构建不会判红。
+      // 这里直接对**构建产物**断言，不看替换表怎么实现，任何漏替换的 token 都会被抓到。
+      assert.doesNotMatch(html, /__[A-Z][A-Z0-9_]*__/, '构建产物里残留未替换的占位符');
       return data;
     };
     assert.equal(run(true).source, 'seed');

@@ -113,6 +113,7 @@ function render(indexHtml, styles, data, jsonLd) {
   return indexHtml
     .replace('/*__STYLES__*/', () => styles)
     .replace('__JSONLD__', () => JSON.stringify(jsonLd))
+    .replace('__TAG__', () => data.tag)
     .replace('__RELEASE_DATA__', () => JSON.stringify(data));
 }
 
@@ -163,9 +164,9 @@ function buildJsonLd(data) {
   };
 }
 
-/** 极简校验：模板占位符必须被完全替换。 */
+/** 极简校验：模板占位符必须被完全替换。新增占位符必须同时进这里与 render()。 */
 function assertRendered(html) {
-  for (const token of ['__STYLES__', '__RELEASE_DATA__', '__JSONLD__']) {
+  for (const token of ['__STYLES__', '__RELEASE_DATA__', '__JSONLD__', '__TAG__']) {
     if (html.includes(token)) throw new Error('占位符未被替换：' + token);
   }
 }
@@ -205,7 +206,7 @@ async function main() {
   fs.writeFileSync(p(DIST, '.nojekyll'), '');
   fs.writeFileSync(p(DIST, 'assets', 'release.js'), read('src/assets/release.js'));
   fs.writeFileSync(p(DIST, 'assets', 'app.js'), read('src/assets/app.js'));
-  fs.writeFileSync(p(DIST, 'assets', 'icon.svg'), read('src/assets/icon.svg'));
+  fs.writeFileSync(p(DIST, 'assets', 'icon.png'), fs.readFileSync(p('src/assets/icon.png')));
 
   // 运行期兜底数据源（与内联数据同源，供内联解析失败时使用）
   fs.writeFileSync(p(DIST, 'data', 'releases.json'), JSON.stringify(data, null, 2) + '\n');
@@ -242,7 +243,7 @@ async function main() {
     log('已刷新种子 ' + SEED_FILE);
   }
 
-  const total = ['index.html', 'assets/release.js', 'assets/app.js', 'assets/icon.svg', 'data/releases.json']
+  const total = ['index.html', 'assets/release.js', 'assets/app.js', 'assets/icon.png', 'data/releases.json']
     .map((f) => fs.statSync(p(DIST, f)).size)
     .reduce((a, b) => a + b, 0);
 
