@@ -100,7 +100,7 @@ describe('GeneralSettings 沉浸式开关的失败回执（S3-17）', () => {
     // 壳桥接受调用但不改变真值（宿主拒绝）——旧实现 refresh 一下，开关自己弹回去，屏上无解释。
     const el = await render({ getImmersiveMode: () => true, setImmersiveMode: () => {} })
     await act(async () => { el.click() })
-    expect(host!.textContent).toContain('沉浸式状态栏没有')
+    expect(host!.textContent).toContain('状态栏没有恢复')
   })
 
   it('桥抛错时给失败回执（不假装已生效）', async () => {
@@ -145,5 +145,29 @@ describe('GeneralSettings 左右侧栏滑动开关（#335）', () => {
     await render()
     expect(host!.querySelector<HTMLInputElement>('[data-dsh-sidebar-swipe="left"] input')!.checked).toBe(false)
     expect(host!.querySelector<HTMLInputElement>('[data-dsh-sidebar-swipe="right"] input')!.checked).toBe(true)
+  })
+})
+
+// ── 语言三键（#424）：桥方法必须带着 androidBridge 这个接收者调用 ───────────────
+describe('GeneralSettings 语言三键（#424）', () => {
+  it('点击语言键时保留桥对象接收者，选中态跟随写入结果', async () => {
+    const calls: string[] = []
+    // 模拟 Java 注入对象：解构后调用会丢掉接收者，这里直接断言接收者仍是桥对象。
+    const bridge = {
+      getImmersiveMode: () => true,
+      getUiLanguage: () => (calls.length === 0 ? 'system' : calls[calls.length - 1]),
+      setUiLanguage(this: { calls: string[] }, mode: string) {
+        expect(this.calls).toBe(calls)
+        calls.push(mode)
+        return mode
+      },
+      calls,
+    }
+    await render(bridge)
+    const english = [...host!.querySelectorAll('[data-ui-language-mode]')]
+      .find(e => e.getAttribute('data-ui-language-mode') === 'en') as HTMLButtonElement
+    await act(async () => { english.click() })
+    expect(calls).toEqual(['en'])
+    expect(english.getAttribute('aria-pressed')).toBe('true')
   })
 })

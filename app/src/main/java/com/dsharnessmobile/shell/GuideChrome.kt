@@ -459,7 +459,7 @@ internal fun buildGuideChrome(activity: ComponentActivity, callbacks: GuideCallb
       DsUi.oval(color(R.color.ds_surface)), DsUi.oval(android.graphics.Color.WHITE),
     )
     clipToOutline = true
-    contentDescription = "打开管理中心"
+    contentDescription = UiText.t(activity, "打开管理中心", "Open management")
     setPadding(dp(16f), dp(16f), dp(16f), dp(16f))
     setOnClickListener { callbacks.onManagement() }
   }

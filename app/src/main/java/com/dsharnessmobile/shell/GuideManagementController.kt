@@ -31,16 +31,17 @@ internal class GuideManagementController(
   val isOpen get() = destination != "home" || progress > 0f
   val savedPage get() = destination
   private fun dp(n: Int) = (n * activity.resources.displayMetrics.density).toInt()
+  private fun t(zh: String, en: String) = UiText.t(activity, zh, en)
 
   fun build() {
     management = column()
-    management.addView(label("管理中心", 26f))
-    management.addView(label("DeepCode · 应用与运行环境管理", 14f))
+    management.addView(label(t("管理中心", "Management"), 26f))
+    management.addView(label(t("DeepCode · 应用与运行时", "DeepCode · App and runtime"), 14f))
     // Keep the same update Button instance so ApkUpdateController retains all states and actions.
-    row("打开控制台", "查看终端与运行日志") {
+    row(t("打开控制台", "Open console"), t("终端与运行日志", "Terminal and logs")) {
       activity.startActivity(Intent(activity, ConsoleActivity::class.java))
     }
-    row("插件管理", "启停插件与编辑配置") { showPlugins() }
+    row(t("插件管理", "Plugins"), t("启停与配置", "Enable and configure")) { showPlugins() }
     (chrome.updateButton.parent as? ViewGroup)?.removeView(chrome.updateButton)
     management.addView(chrome.updateButton.apply {
       minHeight = dp(72)
@@ -50,7 +51,8 @@ internal class GuideManagementController(
       background = DsUi.ripple(DsUi.roundRect(activity.getColor(R.color.ds_surface), dp(8).toFloat()), activity.getColor(R.color.ds_accent_soft))
       layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
     })
-    row("存储管理", "私有数据、容量与公共导出目录") { showStorage() }
+    row(t("存储管理", "Storage"), t("数据、容量与导出", "Data, space, exports")) { showStorage() }
+    languageRow()
     feedback = label("", 14f)
     management.addView(feedback)
     val scroll = ScrollView(activity).apply {
@@ -103,10 +105,55 @@ internal class GuideManagementController(
   fun toggle() {
     if (destination == "home") navigate("management") else navigate("home")
   }
+
+  /** Language row: a tap cycles system -> zh -> en for both the shell and dsh. */
+  private fun languageRow() {
+    val words = column().apply { setPadding(dp(20), dp(12), dp(20), dp(12)) }
+    val title = label(t("界面语言", "Language"), 16f).apply { setPadding(0, 0, 0, 0) }
+    val value = label(languageSummary(), 13f).apply {
+      setPadding(0, dp(4), 0, 0)
+      setTextColor(activity.getColor(R.color.ds_text_secondary))
+    }
+    words.addView(title)
+    words.addView(value)
+    val card = LinearLayout(activity).apply {
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER_VERTICAL
+      setPadding(dp(20), dp(12), dp(20), dp(12))
+      minimumHeight = dp(72)
+      background = DsUi.ripple(DsUi.roundRect(activity.getColor(R.color.ds_surface), dp(8).toFloat()), activity.getColor(R.color.ds_accent_soft))
+      layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
+      isClickable = true
+      isFocusable = true
+      contentDescription = t("界面语言", "Language") + "，" + languageSummary()
+      addView(words, LinearLayout.LayoutParams(0, -2, 1f))
+      addView(label(t("切换", "Change"), 14f).apply { setTextColor(activity.getColor(R.color.ds_accent)) })
+      setOnClickListener {
+        val next = when (AppLanguage.mode(activity)) {
+          AppLanguage.MODE_SYSTEM -> AppLanguage.MODE_ZH
+          AppLanguage.MODE_ZH -> AppLanguage.MODE_EN
+          else -> AppLanguage.MODE_SYSTEM
+        }
+        AppLanguage.setMode(activity, next)
+        AppLanguage.syncDshLocale(activity)
+        // A language change rebuilds native resources; restart the activity so the
+        // guide page and the WebView both come back in the new language.
+        activity.recreate()
+      }
+    }
+    management.addView(card)
+  }
+
+  /** The three modes are named in both languages: the user must recognise the target mode. */
+  private fun languageSummary(): String = when (AppLanguage.mode(activity)) {
+    AppLanguage.MODE_ZH -> t("中文", "Chinese")
+    AppLanguage.MODE_EN -> "English"
+    else -> t("跟随系统", "Follow system")
+  }
   private fun navigate(next: String) {
     destination = next
     if (next == "home" || next == "management") removeDetail()
-    chrome.gear.contentDescription = if (next == "home") "打开管理中心" else "关闭管理中心"
+    chrome.gear.contentDescription = if (next == "home") t("打开管理中心", "Open management") else t("关闭管理中心", "Close management")
     chrome.primaryButton.visibility = if (next == "home") View.VISIBLE else View.GONE
     animateTo(if (next == "home") 0f else 1f)
   }
@@ -155,30 +202,43 @@ internal class GuideManagementController(
   }
   private fun showStorage() {
     val body = column()
-    body.addView(Button(activity).apply { text = "返回管理中心"; setOnClickListener { back() } })
-    body.addView(label("存储管理", 24f))
+    body.addView(Button(activity).apply { text = t("返回管理中心", "Back to management"); setOnClickListener { back() } })
+    body.addView(label(t("存储管理", "Storage"), 24f))
     val data = activity.engineManager.dshDataDir
     val stats = StatFs(activity.filesDir.absolutePath)
-    body.addView(label("公共导出目录\n${data.absolutePath}\n\n应用私有数据\n${activity.engineManager.homeDir.absolutePath}\n\n应用私有运行时\n${activity.engineManager.usrDir.absolutePath}\n\n可用空间：${android.text.format.Formatter.formatFileSize(activity, stats.availableBytes)}", 14f))
-    body.addView(label("引擎在应用私有目录运行，无需公共存储授权。访问公共工作目录时才需要额外授权。此页不会清理工作区、插件配置或对话。", 14f))
+    body.addView(label(
+      t("公共导出目录", "Shared export folder") + "\n" + data.absolutePath +
+        "\n\n" + t("应用私有数据", "App private data") + "\n" + activity.engineManager.homeDir.absolutePath +
+        "\n\n" + t("应用私有运行时", "App private runtime") + "\n" + activity.engineManager.usrDir.absolutePath +
+        "\n\n" + t("可用空间：", "Free space: ") + android.text.format.Formatter.formatFileSize(activity, stats.availableBytes),
+      14f,))
+    body.addView(label(
+      t(
+        "引擎在应用私有目录运行，无需公共存储授权。访问公共工作目录时才需要额外授权。此页不会清理工作区、插件配置或对话。",
+        "The engine runs in app-private storage; no shared-storage grant is needed. Grant access only to read or write shared folders. This page never clears workspaces, plugin settings, or chats.",
+      ),
+      14f,))
     body.addView(Button(activity).apply {
-      text = "复制公共导出目录"
-      setOnClickListener { activity.copyTextNative(data.absolutePath); android.widget.Toast.makeText(activity, "目录已复制", 0).show() }
+      text = t("复制公共导出目录", "Copy shared export folder")
+      setOnClickListener { activity.copyTextNative(data.absolutePath); android.widget.Toast.makeText(activity, t("目录已复制", "Folder copied"), 0).show() }
     })
     body.addView(Button(activity).apply {
-      text = "授权公共工作目录访问"
+      text = t("授权公共工作目录访问", "Grant shared folder access")
       setOnClickListener {
-        android.app.AlertDialog.Builder(activity).setTitle("公共目录访问")
-          .setMessage("导出会话文件到 Documents/dshdata 时需要直接写入公共目录。仅在需要此功能时授权；拒绝不会阻止私有运行时启动。")
-          .setPositiveButton("前往授权") { _, _ -> activity.dirPickerController.requestStorageGrant() }
-          .setNegativeButton("取消", null).show()
+        android.app.AlertDialog.Builder(activity).setTitle(t("公共目录访问", "Shared folder access"))
+          .setMessage(t(
+            "导出会话文件到 Documents/dshdata 时需要直接写入公共目录。仅在需要此功能时授权；拒绝不会阻止私有运行时启动。",
+            "Exporting sessions to Documents/dshdata writes into a shared folder. Grant it only for this feature; declining does not block the private runtime.",
+          ))
+          .setPositiveButton(t("前往授权", "Open settings")) { _, _ -> activity.dirPickerController.requestStorageGrant() }
+          .setNegativeButton(t("取消", "Cancel"), null).show()
       }
     })
     body.addView(Button(activity).apply {
-      text = "重新检查公共目录"
+      text = t("重新检查公共目录", "Recheck shared folder")
       setOnClickListener {
         activity.provisionPublicRepoAndRefreshChip(PublicRepoProvision.TRIGGER_ON_RESUME)
-        android.widget.Toast.makeText(activity, "正在检查公共目录，结果见下方状态", 0).show()
+        android.widget.Toast.makeText(activity, t("正在检查公共目录，结果见下方状态", "Checking the shared folder; the result appears below"), 0).show()
         postDelayed({ if (destination == "storage") showStorage() }, 1000)
       }
     })
@@ -203,11 +263,11 @@ internal class GuideManagementController(
   fun refreshStorage() {
     if (destination != "storage") return
     val presentation = PublicRepoProvision.presentation(activity.engineManager.publicRepoStatus())
-    storageStatus?.text = "公共导出目录：" + when (presentation) {
-      PublicRepoPresentation.READY -> "可用"
-      PublicRepoPresentation.PENDING -> "尚未检查"
-      PublicRepoPresentation.NEEDS_GRANT -> "需要授权，可在下方恢复访问"
-      PublicRepoPresentation.WRITE_FAILED -> "写入失败，请在控制台查看详细原因"
+    storageStatus?.text = t("公共导出目录：", "Shared export folder: ") + when (presentation) {
+      PublicRepoPresentation.READY -> t("可用", "ready")
+      PublicRepoPresentation.PENDING -> t("尚未检查", "not checked")
+      PublicRepoPresentation.NEEDS_GRANT -> t("需要授权，可在下方恢复访问", "needs access; restore it below")
+      PublicRepoPresentation.WRITE_FAILED -> t("写入失败，请在控制台查看详细原因", "write failed; see the console for details")
     }
   }
   fun back(): Boolean = when (destination) {

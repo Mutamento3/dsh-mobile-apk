@@ -75,7 +75,7 @@ class W3ShellContractTest {
     val code = codeOnly(source("EngineStartFlow.kt"))
     assertTrue("预算常量必须存在", code.contains("internal const val ENGINE_BOOT_BUDGET_MS = 90_000L"))
     assertTrue("轮询必须读该常量", code.contains("val pollBudgetMs = ENGINE_BOOT_BUDGET_MS"))
-    assertTrue("文案必须由同源时钟派生", code.contains("engineBootProgressText(clock)"))
+    assertTrue("文案必须由同源时钟派生", code.contains("engineBootProgressText(clock"))
     assertFalse("E-9：不得再出现 60 - s 的硬编码换算", code.contains("60 - s"))
     assertFalse("不得再出现字面量预算秒数", code.contains("\${60"))
   }

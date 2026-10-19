@@ -50,6 +50,7 @@ import { PhoneControlSection } from './dev-section/phone-control.tsx'
 import { NotifySettingsSection } from './dev-section/notify-settings.tsx'
 import { DEV_SECTION_CSS } from './dev-section/dev-section.css.ts'
 import { GeneralSettings } from './general-settings/GeneralSettings.tsx'
+import { tr } from './i18n.ts'
 import { ThemeBridge } from './theme-bridge.ts'
 import { EnterGuard } from './enter-guard.ts'
 import { KeyboardBoundary } from './keyboard-boundary.ts'
@@ -291,7 +292,7 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.section',
     id: 'android-dev',
     order: 99,
-    label: () => '开发者选项',
+    label: () => tr('开发者选项', 'Developer options'),
     // 开发者选项子区（2026-08-23）：ADB 授权面板等安卓调试设施挂进此槽——不开独立导航行。
     children: { 'settings.dev.item': { kind: 'list', scope: 'root' } },
   }, DevSection))
@@ -302,7 +303,7 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.section',
     id: 'android-notify',
     order: 97,
-    label: () => '通知',
+    label: () => tr('通知', 'Notifications'),
   }, NotifySettingsSection))
 
   // 手机控制（0.14.0 用户定例）：把屏幕/Shizuku/虚拟屏/浮窗/无障碍/强制销毁收进独立设置页。
@@ -310,7 +311,7 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.section',
     id: 'android-phone-control',
     order: 98,
-    label: () => '手机控制',
+    label: () => tr('手机控制', 'Phone control'),
   }, PhoneControlSection))
 
   // Linux 环境（实验性内部插件）**不由本文件注册**：该分区的唯一注册方是 vendored 的
@@ -330,7 +331,7 @@ export function apply(ctx: ClientContext): void {
     name: 'settings.general.item',
     id: 'android-general',
     order: 90,
-    label: () => 'Android 显示',
+    label: () => tr('Android 显示', 'Android display'),
   }, GeneralSettings))
 
   ctx.inject(['resources', 'sidebarRight', 'sidebarRightTabs'], scope => { registerConversationDock(scope) })

@@ -20,6 +20,7 @@
 import { useCallback, useState } from 'react'
 import { useShellState } from '../mobile/use-shell-state.ts'
 import { describeImportance, describeNotifyWriteFailure, noticeDataAttrs, type Notice } from '../user-copy.ts'
+import { tr } from '../i18n.ts'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '../android-bridge.ts'
@@ -49,11 +50,11 @@ interface NotifySnapshot {
  * 否则用户仍在按旧语义做决定。
  */
 const CATEGORY_LABELS: ReadonlyArray<readonly [string, string, string]> = [
-  ['report', '工作汇报', '关闭后不再提醒；任务本身不受影响'],
-  ['question', '提问', '关闭 = 不弹窗、不响铃；提问仍会出现在通知栏、可直接作答（AI 在等你的回答）'],
-  ['approval', '授权请求', '关闭 = 不弹窗、不响铃；仍需你在通知栏或应用内批准，工具不会自动放行'],
-  ['todo', '待办进度', '关闭后不再显示步骤进度；任务本身不受影响'],
-  ['silent', '后台动态', '关闭后不再显示看门狗与引擎状态；只影响提示，不影响引擎'],
+  ['report', tr('工作汇报', 'Reports'), tr('关闭后不再提醒；任务本身不受影响', 'Off stops the alert; the task itself keeps running')],
+  ['question', tr('提问', 'Questions'), tr('关闭 = 不弹窗、不响铃；提问仍会出现在通知栏、可直接作答（AI 在等你的回答）', 'Off stops pop-ups and sound; the question still appears in the shade and the model waits')],
+  ['approval', tr('授权请求', 'Approvals'), tr('关闭 = 不弹窗、不响铃；仍需你在通知栏或应用内批准，工具不会自动放行', 'Off stops pop-ups and sound; you still have to approve, tools never auto-approve')],
+  ['todo', tr('待办进度', 'Progress'), tr('关闭后不再显示步骤进度；任务本身不受影响', 'Off hides step progress; the task keeps running')],
+  ['silent', tr('后台动态', 'Background'), tr('关闭后不再显示看门狗与引擎状态；只影响提示，不影响引擎', 'Off hides watchdog and engine status; the engine is unaffected')],
 ]
 
 /**
@@ -153,7 +154,7 @@ export function NotifySettingsRow() {
       reply = null
     }
     if (reply === null) {
-      setMessage({ text: '写入失败：应用内连接不可用（仅安卓应用内可用）——请重新打开应用后重试' })
+      setMessage({ text: tr('写入失败：应用内连接不可用（仅安卓应用内可用）——请重新打开应用后重试', 'Write failed: the app bridge is unavailable. Reopen the app and try again.') })
       refresh()
       return
     }
@@ -173,7 +174,7 @@ export function NotifySettingsRow() {
   if (snapshot === null) {
     return (
       <div className="dsh-dev-notify" data-plugin="dev-notify-settings">
-        <p className="dsh-dev-hint">通知设置不可用（桥未装配或壳侧上下文未绑定）。</p>
+        <p className="dsh-dev-hint">{tr('通知设置不可用（桥未装配或壳侧上下文未绑定）。', 'Notification settings are unavailable (bridge missing or not bound).')}</p>
       </div>
     )
   }
@@ -195,19 +196,18 @@ export function NotifySettingsRow() {
         <input
           type="checkbox"
           role="switch"
-          aria-label="前台抑制通知"
+          aria-label={tr('前台抑制通知', 'Suppress while in front')}
           checked={suppress}
           onChange={(event) => { write('suppressForeground', event.target.checked) }}
         />
-        <span>应用在前台时不弹工作汇报（改为延后，回后台补投）</span>
+        <span>{tr('应用在前台时不弹工作汇报（改为延后，回后台补投）', 'No report pop-ups while the app is in front; they are queued and delivered later')}</span>
       </label>
       {/* 精简（0.14.7-B D5）：两段合成一段——开关行已经说明「开启 = 前台不弹」，这里只补
           「延后到哪、什么时候补投、哪些分类永不受影响」。 */}
       <p className="dsh-dev-hint">
-        当前：{suppress ? '前台抑制开启（工作汇报延后）' : '前台照常推送'}
-        {isDefault ? '；等于本版默认值' : '；已偏离本版默认值'}
-        。开启后命中的工作汇报进入待投队列，回后台或再次关闭抑制时补投（队列有 TTL 与容量上限）；
-        提问与授权请求永不受此项影响。
+        {tr('当前：', 'Now: ')}{suppress ? tr('前台抑制开启（工作汇报延后）', 'suppressed in front (reports queued)') : tr('前台照常推送', 'delivered in front too')}
+        {isDefault ? tr('；等于本版默认值', '; this is the default') : tr('；已偏离本版默认值', '; changed from the default')}
+        {tr('。开启后命中的工作汇报进入待投队列，回后台或再次关闭抑制时补投（队列有 TTL 与容量上限）；提问与授权请求永不受此项影响。', '. Queued reports are delivered when the app goes back or suppression is turned off (the queue is bounded). Questions and approvals are never suppressed.')}
       </p>
 
       <div className="dsh-dev-notify-cats">
@@ -236,7 +236,7 @@ export function NotifySettingsRow() {
             setSelfCheck(readSelfCheck())
           }}
         >
-          通知自检
+          {tr('通知自检', 'Check notifications')}
         </button>
         <button
           type="button"
@@ -248,10 +248,10 @@ export function NotifySettingsRow() {
             } catch {
               ok = false
             }
-            if (!ok) setMessage({ text: '该系统没有「应用通知设置」页——请在系统设置里手动找到本应用的通知项' })
+            if (!ok) setMessage({ text: tr('该系统没有「应用通知设置」页——请在系统设置里手动找到本应用的通知项', 'This system has no app notification page. Find this app in system settings instead.') })
           }}
         >
-          系统通知设置
+          {tr('系统通知设置', 'System notification settings')}
         </button>
       </div>
       {/* S3-26：自证「哪几类真的能到达」。渠道状态看上面的自检，这里看**实际到达效果**——
@@ -269,40 +269,39 @@ export function NotifySettingsRow() {
             }
             setMessage(
               posted > 0
-                ? { text: '已发送 ' + String(posted) + ' 条测试通知（五类各一条）——请到通知栏看哪几条真的到了、哪几条是静默的' }
-                : { text: '一条也没发出去：通知权限未授予或渠道不可用——请先在上面的自检里看渠道状态，并到系统设置里允许通知' },
+                ? { text: tr('已发送 ', 'Sent ') + String(posted) + tr(' 条测试通知（五类各一条）——请到通知栏看哪几条真的到了、哪几条是静默的', ' test notifications (one per category). Check the shade to see which arrived.') }
+                : { text: tr('一条也没发出去：通知权限未授予或渠道不可用——请先在上面的自检里看渠道状态，并到系统设置里允许通知', 'Nothing was sent: notification permission is missing or the channel is unavailable. Check the status above and allow notifications in system settings.') },
             )
           }}
         >
-          发送测试通知
+          {tr('发送测试通知', 'Send a test notification')}
         </button>
       </div>
       {selfCheckTried && selfCheck === null && (
-        <p className="dsh-dev-warn">自检不可用（桥未装配或壳侧上下文未绑定）。</p>
+        <p className="dsh-dev-warn">{tr('自检不可用（桥未装配或壳侧上下文未绑定）。', 'The self-check is unavailable (bridge missing or not bound).')}</p>
       )}
       {selfCheck !== null && (
         <div className="dsh-dev-notify-check">
           {/* 总开关与权限：任务完成却不提醒时，用户至少能在这里看到是哪一层被关了。 */}
           <p className="dsh-dev-hint">
-            应用通知总开关：{selfCheck.notificationsEnabled === false ? '系统已关闭' : '已开启'}
-            {'；'}通知权限：{selfCheck.permissionLabel ?? (selfCheck.permissionGranted === true ? '已授予' : '未授予（任务完成不会提醒）')}
+            {tr('应用通知总开关：', 'App notifications: ')}{selfCheck.notificationsEnabled === false ? tr('系统已关闭', 'off in system') : tr('已开启', 'on')}
+            {tr('；', '; ')}{tr('通知权限：', 'permission: ')}{selfCheck.permissionLabel ?? (selfCheck.permissionGranted === true ? tr('已授予', 'granted') : tr('未授予（任务完成不会提醒）', 'not granted (no alerts)'))}
           </p>
           {degradedRows.length > 0 ? (
             <p className="dsh-dev-warn">
-              系统已降级以下通知：「{degradedRows.map((row) => row.label ?? row.category ?? '未知渠道').join('、')}」——
-              应用无法调回，需在系统设置里恢复（可从右侧按钮进入）。
+              {tr('系统已降级以下通知：', 'The system muted these channels: ')}{degradedRows.map((row) => row.label ?? row.category ?? tr('未知渠道', 'unknown channel')).join(tr('、', ', '))}{tr('。应用无法调回，需在系统设置里恢复（可从右侧按钮进入）。', '. The app cannot undo this; restore it in system settings (use the button on the right).')}
             </p>
           ) : (
-            <p className="dsh-dev-hint">系统未降级任何通知渠道。</p>
+            <p className="dsh-dev-hint">{tr('系统未降级任何通知渠道。', 'No notification channel is muted by the system.')}</p>
           )}
           {channelRows.map((c) => (
             <div key={String(c.selected ?? c.category)} className="dsh-dev-row dsh-dev-check-row">
               <span>
-                {(c.label ?? c.category ?? '未知渠道')}
+                {(c.label ?? c.category ?? tr('未知渠道', 'unknown channel'))}
                 {'：'}
                 {c.degraded === true
-                  ? '系统已降级'
-                  : (c.exists === false ? '渠道不存在' : '正常')}
+                  ? tr('系统已降级', 'muted by system')
+                  : (c.exists === false ? tr('渠道不存在', 'channel missing') : tr('正常', 'normal'))}
                 {/* 档位口径优先取壳侧人话（P3-1：两侧同源，不各自翻译一遍）。 */}
                 {importanceTextOf(c) === '' ? '' : '（' + importanceTextOf(c) + '）'}
               </span>
@@ -317,10 +316,10 @@ export function NotifySettingsRow() {
                   } catch {
                     ok = false
                   }
-                  if (!ok) setMessage({ text: '无法打开该渠道的系统设置页——请在系统设置里手动查找' })
+                  if (!ok) setMessage({ text: tr('无法打开该渠道的系统设置页——请在系统设置里手动查找', 'The channel settings page did not open. Find it in system settings.') })
                 }}
               >
-                打开该渠道设置
+                {tr('打开该渠道设置', 'Open channel settings')}
               </button>
             </div>
           ))}
@@ -351,8 +350,8 @@ export function NotifySettingsSection(_props: PropsRuntime<'settings.section'>) 
     <section className="dsh-screen-control-card" aria-labelledby="dsh-notify-title">
       <header className="dsh-screen-control-header">
         <span>
-          <strong id="dsh-notify-title">通知</strong>
-          <small>任务汇报、提问与授权请求的提醒方式；模型改不了这里的设置。</small>
+          <strong id="dsh-notify-title">{tr('通知', 'Notifications')}</strong>
+          <small>{tr('任务汇报、提问与授权请求的提醒方式；模型改不了这里的设置。', 'How reports, questions, and approvals alert you. The model cannot change this.')}</small>
         </span>
       </header>
       <NotifySettingsRow />
