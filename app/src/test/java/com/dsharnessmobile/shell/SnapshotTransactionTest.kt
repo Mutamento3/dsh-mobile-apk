@@ -1,6 +1,7 @@
 package com.dsharnessmobile.shell
 
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1079,6 +1080,70 @@ class SnapshotTransactionTest {
     }
   }
 
+  @Test
+  fun spacePrecheckIncludesPreservedFactoryOverwriteCopies() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "old-profile")
+      writeRuntime(stage, "new-node", "new-profile")
+      val liveProfiles = File(live, "home/.dsh/profiles")
+      val stagedProfiles = File(stage, "home/.dsh/profiles")
+      File(liveProfiles, "web/node_modules/p/cordis.yml").apply {
+        parentFile!!.mkdirs()
+        writeBytes(ByteArray(512 * 1024))
+      }
+      File(stagedProfiles, "web/node_modules/p/cordis.yml").apply { parentFile!!.mkdirs(); writeText("factory\n") }
+      var asked = 0L
+      runCatching {
+        SnapshotTransaction.swap(
+          filesDir, stage, File(live, "usr"), File(live, "home"), preserved, "fp-preserve-space", 1L,
+          spaceCheck = { required -> asked = required; "stop" },
+        )
+      }
+      val backupBytes = SnapshotFs.sizeOf(liveProfiles)
+      assertTrue("preserved overwrite bytes must be reserved", asked >= backupBytes + 512L * 1024)
+      val ownDiff = SnapshotTransaction.preservedBytes(
+        stagedProfiles,
+        liveProfiles,
+        SnapshotTransaction.profileUserFacingFiles(stagedProfiles),
+      )
+      assertTrue("our 512 KiB user file must be in the reservation", ownDiff >= 512L * 1024)
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
+
+  @Test
+  fun preservationFailureAbortsBeforeTheLiveFileIsReplaced() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "old-profile")
+      writeRuntime(stage, "new-node", "new-profile")
+      val rel = "home/.dsh/profiles/web/node_modules/p/big.bin"
+      val liveFile = File(live, rel).apply { parentFile!!.mkdirs(); writeText("user data") }
+      File(stage, rel).apply { parentFile!!.mkdirs(); writeText("factory") }
+      val error = runCatching {
+        SnapshotTransaction.swap(
+          filesDir = filesDir,
+          stagedRoot = stage,
+          usrDir = File(live, "usr"),
+          homeDir = File(live, "home"),
+          preservedNames = preserved,
+          fingerprint = "fp-preserve-fail",
+          startedAt = 1L,
+          preserveCopy = { _, _ -> throw IOException("simulated disk full") },
+        )
+      }.exceptionOrNull()
+      assertTrue("preserve failure must abort", error != null)
+      assertEquals("user data", liveFile.readText())
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
 
   // ── 0.14.1 D-1 设备侧收尾：已摘除插件的存量迁移 ────────────────────────────────
   //
