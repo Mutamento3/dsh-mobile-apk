@@ -2075,6 +2075,7 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 注入成员检查：plugin-dirs 的 externals 是当前注入集，retiredExternals 只保留历史源码位置。check-inject-completeness 对每个活动包和两个装配 profile 继续全量判定；自检包含缺活动包和缺成员的拒绝反例。
 
 <!-- COVERAGE
+scripts/build-injection-staging.test.mjs
 scripts/check-inject-completeness.test.mjs
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts

@@ -314,7 +314,7 @@ foreach ($abi in @('arm64', 'x86_64')) {
         # 拒绝路径」（check-build-chain-abort.mjs），而「该源没有浏览器 bundle」是正常跳过不是拒绝；
         # 且嵌套 foreach 里的 continue 只会继续内层循环、不会跳过本 ABI。故失败只记明细，
         # 统一在段末用一条 `Deny-Abi $abi "..."; continue` 记账并跳过本 ABI。
-        foreach ($pair in @(@('market-degraded', $market))) {
+        foreach ($pair in ,@('market-degraded', $market)) {
             $leaf = $pair[0]; $src = $pair[1]
             if (Test-Path (Join-Path $src "lib\client.js")) {
                 $dst = Join-Path $degradeStaged $leaf

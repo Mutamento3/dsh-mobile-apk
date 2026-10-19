@@ -25,7 +25,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(HERE)
 const argv = process.argv.slice(2)
 if (argv.includes('--self-test')) {
-  const result = spawnSync(process.execPath, ['--test', join(HERE, 'check-inject-completeness.test.mjs')], { stdio: 'inherit' })
+  const result = spawnSync(process.execPath, ['--test', join(HERE, 'check-inject-completeness.test.mjs'), join(HERE, 'build-injection-staging.test.mjs')], { stdio: 'inherit' })
   process.exit(result.status ?? 1)
 }
 const tar = argv[0]
