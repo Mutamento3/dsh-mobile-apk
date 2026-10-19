@@ -74,13 +74,173 @@ class NotifySuppressQueueTest {
     NotifySuppressQueue.decodeJournal("{\"version\":2,\"pending\":[],\"settled\":{}}")
   }
 
-  @Test(expected = IllegalArgumentException::class)
-  fun oversizedJournalIsRejected() {
+  @Test
+  fun strictDecodeKeepsOversizeJournalForBackupAndSalvage() {
     val q = List(NotifySuppressQueue.MAX_PENDING + 1) { NotifySuppressQueue.Pending("key$it", entry("e$it"), 1L) }
-    NotifySuppressQueue.decodeJournal(NotifySuppressQueue.encodeJournal(q, emptyMap()))
+    val raw = NotifySuppressQueue.encodeJournal(q, emptyMap())
+    assertTrue(NotifySuppressQueue.readJournal(raw) is NotifySuppressQueue.JournalRead.Invalid)
+    val salvaged = NotifySuppressQueue.salvageJournal(raw)
+    assertEquals("all waiting records must remain recoverable", q.size, salvaged.pending.size)
+    assertEquals(1, salvaged.oversized)
   }
 
-  @Test fun corruptOrUnknownJournalIsReadOnlyAndNeverOverwritten() {
+  @Test
+  fun damagedParentEnvelopeRetainsValidWaitingQuestions() {
+    val item = NotifyEntry(kind = "question", eventId = "q-1", title = "还等你回答")
+    val raw = "{\"version\":1,\"pending\":[{\"key\":\"retry:q-1\",\"at\":1,\"entry\":" +
+      NotifySuppressQueue.encodeEntry(item).toString() + "}],\"settled\":[]}"
+    val salvage = NotifySuppressQueue.salvageJournal(raw)
+    assertEquals(1, salvage.pending.size)
+    assertEquals(item, salvage.pending[0].entry)
+    assertTrue(salvage.settled.isEmpty())
+    assertTrue("the parent envelope still fails strict decode", NotifySuppressQueue.readJournal(raw) is NotifySuppressQueue.JournalRead.Invalid)
+  }
+
+  @Test
+  fun backupKeyIsStableAndIndependentOfTheLiveJournalKey() {
+    val raw = "{\"version\":2,\"pending\":[]}"
+    assertEquals(NotifySuppressQueue.backupKey(raw), NotifySuppressQueue.backupKey(raw))
+    assertTrue(NotifySuppressQueue.backupKey(raw).startsWith("notify.deferred.backup."))
+    assertFalse("the original journal key must remain available for the backup", NotifySuppressQueue.backupKey(raw) == "notify.deferred.v1")
+    var wroteKey = ""
+    var wroteValue = ""
+    assertTrue(NotifySuppressQueue.backupJournal(raw) { k, v -> wroteKey = k; wroteValue = v; true })
+    assertEquals(NotifySuppressQueue.backupKey(raw), wroteKey)
+    assertEquals(raw, wroteValue)
+    assertFalse("failed backup must not unlock the journal", NotifySuppressQueue.backupJournal(raw) { _, _ -> false })
+  }
+
+  @Test
+  fun permissionDeferredQuestionDoesNotExpireWithReportTtl() {
+    val t0 = 1_000L
+    val q = NotifyEntry(kind = "question", eventId = "q-1", title = "等待回答")
+    val pending = listOf(NotifySuppressQueue.Pending("retry:q-1", q, t0))
+    val later = t0 + NotifySuppressQueue.TTL_MS + 1
+    assertFalse("交互事件不得被报告 TTL 清掉", NotifySuppressQueue.expiredAt(pending[0], later))
+    val (deliver, expired) = NotifySuppressQueue.takeForFlush(pending, later)
+    assertEquals(1, deliver.size)
+    assertEquals(0, expired)
+  }
+
+  @Test
+  fun anOldQuestionAndANewReportNeverDisplaceTheQuestion() {
+    val q = NotifyEntry(kind = "question", eventId = "q-old", title = "仍等你回答")
+    val old = listOf(NotifySuppressQueue.Pending("retry:q-old", q, 1_000L))
+    val now = 1_000L + NotifySuppressQueue.TTL_MS * 2
+    val next = NotifySuppressQueue.merge(old, entry("new-report"), "report:s1", now)
+    assertTrue("an unexpired waiting question must survive report housekeeping", next.any { it.entry == q })
+    assertEquals("the new report is also retained", 2, next.size)
+  }
+
+  @Test
+  fun nineDistinctQuestionsAreAllRetained() {
+    var q = emptyList<NotifySuppressQueue.Pending>()
+    for (i in 0 until 9) {
+      val e = NotifyEntry(kind = "question", eventId = "q$i", title = "question $i")
+      q = NotifySuppressQueue.merge(q, e, "retry:q$i", 1_000L + i)
+    }
+    assertEquals("capacity must never evict waiting questions", 9, q.size)
+    assertEquals(9, q.map { it.entry.eventId }.toSet().size)
+  }
+
+  @Test
+  fun nineDistinctWaitingQuestionsSurviveStrictDecodeAfterRestart() {
+    val q = List(9) { i ->
+      NotifySuppressQueue.Pending("retry:q$i", NotifyEntry(kind = "question", eventId = "q$i", title = "question $i"), i.toLong())
+    }
+    val raw = NotifySuppressQueue.encodeJournal(q, emptyMap())
+    val strict = NotifySuppressQueue.readJournal(raw)
+    assertTrue("a legitimate interactive journal must not be treated as corrupt on restart", strict is NotifySuppressQueue.JournalRead.Valid)
+    val (decoded, settled) = NotifySuppressQueue.decodeJournal(raw)
+    assertEquals(9, decoded.size)
+    assertEquals(9, decoded.map { it.entry.eventId }.toSet().size)
+    assertTrue(settled.isEmpty())
+  }
+
+  @Test
+  fun captureThenExpectedEventOrderUsesThePureRetirementPredicate() {
+    val q = NotifyEntry(kind = "question", eventId = "q-done", title = "waiting")
+    val queued = NotifySuppressQueue.Pending("retry:q-done", q, 1_000L)
+    assertFalse("an answer still waiting must not be retired",
+      NotifySuppressQueue.shouldRetire(queued, resolveEventId = "", answeredEventId = ""))
+    assertTrue("engine resolve retires the matching durable item",
+      NotifySuppressQueue.shouldRetire(queued, resolveEventId = "q-done", answeredEventId = ""))
+    assertTrue("a locally accepted answer retires the same item",
+      NotifySuppressQueue.shouldRetire(queued, resolveEventId = "", answeredEventId = "q-done"))
+  }
+
+  @Test
+  fun aFullReportQueueEvictsOnlyReports() {
+    var q = emptyList<NotifySuppressQueue.Pending>()
+    for (i in 0 until NotifySuppressQueue.MAX_PENDING) {
+      q = NotifySuppressQueue.merge(q, entry("r$i", "s$i"), "report:s$i", 1_000L + i)
+    }
+    val question = NotifyEntry(kind = "question", eventId = "critical", title = "answer me")
+    q = NotifySuppressQueue.merge(q, question, "retry:critical", 2_000L)
+    assertTrue("the question is retained", q.any { it.entry == question })
+    assertEquals("report capacity is independent of waiting questions", NotifySuppressQueue.MAX_PENDING + 1, q.size)
+    assertTrue("adding a question does not consume report capacity", q.any { it.entry.eventId == "r0" })
+  }
+
+  @Test fun mixedQueueKeepsReportsBoundedAndMergedAcrossRestart() {
+    val questions = List(9) { i ->
+      NotifySuppressQueue.Pending("retry:q$i", NotifyEntry(kind = "question", eventId = "q$i"), 1L)
+    }
+    var q = questions
+    for (i in 0 until 20) {
+      q = requireNotNull(NotifySuppressQueue.admit(q, entry("r$i", "s$i"), "report:s$i", 100L + i))
+    }
+    q = requireNotNull(NotifySuppressQueue.admit(q, entry("updated", "s19"), "report:s19", 200L))
+    assertEquals(questions, q.filter { it.entry.kind == "question" })
+    assertEquals(8, q.count { it.entry.kind == "report" })
+    assertEquals(1, q.count { it.key == "report:s19" })
+    assertEquals("updated", q.last().entry.eventId)
+    assertEquals(q, NotifySuppressQueue.decodeJournal(NotifySuppressQueue.encodeJournal(q, emptyMap())).first)
+  }
+
+  @Test fun rescuedOversizeReportsAreNotEvictedByAdmission() {
+    val rescued = List(12) { i -> NotifySuppressQueue.Pending("report:s$i", entry("r$i", "s$i"), 1L) }
+    assertEquals(null, NotifySuppressQueue.admit(rescued, entry("new"), "report:new", 2L))
+    val question = NotifyEntry(kind = "question", eventId = "waiting")
+    val q = requireNotNull(NotifySuppressQueue.admit(rescued, question, "retry:waiting", 2L))
+    assertEquals(rescued, q.take(rescued.size))
+    assertEquals(question, q.last().entry)
+  }
+
+  @Test
+  fun deferredRetryNeverSettlesTheDurableItem() {
+    assertFalse(NotifySuppressQueue.isSettledResult(NotifyCenter.Result.DEFERRED_RETRY))
+    assertFalse(NotifySuppressQueue.isSettledResult(NotifyCenter.Result.PERMISSION_DENIED))
+    assertFalse(NotifySuppressQueue.isSettledResult(NotifyCenter.Result.ERROR))
+    assertTrue(NotifySuppressQueue.isSettledResult(NotifyCenter.Result.POSTED))
+    assertTrue(NotifySuppressQueue.isSettledResult(NotifyCenter.Result.RESOLVED))
+  }
+
+  @Test
+  fun enqueueIsIdempotentForTheSameEntry() {
+    val e = entry("event-id")
+    val first = NotifySuppressQueue.merge(emptyList(), e, "retry:" + NotifySuppressQueue.identity(e), 1L)
+    val again = NotifySuppressQueue.merge(first, e, "retry:" + NotifySuppressQueue.identity(e), 2L)
+    assertEquals("replaying the same source event must not duplicate it", 1, again.size)
+  }
+
+  @Test
+  fun interactiveOverflowIsValidAndDeliveredInBoundedBatches() {
+    val q = List(NotifySuppressQueue.MAX_PENDING + 4) {
+      NotifySuppressQueue.Pending("retry:$it", NotifyEntry(kind = "question", eventId = "q$it"), 1L)
+    }
+    val raw = NotifySuppressQueue.encodeSalvagedJournal(q, emptyMap())
+    val strict = NotifySuppressQueue.readJournal(raw)
+    assertTrue("waiting questions above the report bound remain valid", strict is NotifySuppressQueue.JournalRead.Valid)
+    val decoded = NotifySuppressQueue.decodeJournal(raw).first
+    assertEquals("no waiting question may be truncated away", q.size, decoded.size)
+    val (batch, expired) = NotifySuppressQueue.takeForFlush(decoded, 2L)
+    assertEquals("delivery remains bounded", NotifySuppressQueue.MAX_DELIVER_PER_FLUSH, batch.size)
+    assertEquals(0, expired)
+    assertEquals("the remainder stays queued", q.size - batch.size, decoded.size - batch.size)
+  }
+
+  @Test fun corruptOrUnknownJournalIsRetainedUntilBackupGate() {
     val malformed = "{not-json"
     val invalid = NotifySuppressQueue.readJournal(malformed) as NotifySuppressQueue.JournalRead.Invalid
     assertEquals(malformed, invalid.original)
@@ -90,11 +250,11 @@ class NotifySuppressQueueTest {
     assertTrue(NotifySuppressQueue.readJournal(null) is NotifySuppressQueue.JournalRead.Valid)
 
     var writes = 0
-    val committed = NotifySuppressQueue.commitJournalIfAllowed(
+    val blocked = NotifySuppressQueue.commitJournalIfAllowed(
       listOf(NotifySuppressQueue.Pending("report:s", entry("e"), 1L)), emptyMap(), allowed = false,
     ) { writes++; true }
-    assertFalse(committed)
-    assertEquals("invalid persisted bytes must remain untouched", 0, writes)
+    assertFalse("a failed backup must keep the live journal untouched", blocked)
+    assertEquals(0, writes)
   }
 
   private fun entry(id: String, session: String = "s1") = NotifyEntry(
