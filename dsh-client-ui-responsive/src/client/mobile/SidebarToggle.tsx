@@ -16,10 +16,10 @@ import { useEffect, useState } from 'react'
 import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { BROWSER_PENDING_ATTR } from './browser-auto-place.ts'
 import css from './MobileChrome.module.css'
+import { tr } from '../i18n.ts'
 
-/** Copy (the Android layer's product strings are Chinese; see DevSection/ExportResultDialog). */
-const TOGGLE_OPEN = '打开导航'
-const TOGGLE_CLOSE = '关闭导航'
+/** Copy follows the active UI language (see i18n.ts). */
+const toggleLabel = (open: boolean): string => (open ? tr('关闭导航', 'Close navigation') : tr('打开导航', 'Open navigation'))
 
 /** The apply-world callbacks this entry may use. */
 export interface SidebarToggleInjected {
@@ -108,8 +108,8 @@ export function SidebarToggle({ toggleSidebar }: SidebarToggleProps) {
       data-dsh-sidebar-toggle=""
       aria-label={
         browserPending && !open
-          ? TOGGLE_OPEN + '（有一个浏览器标签在等你展开侧栏）'
-          : (open ? TOGGLE_CLOSE : TOGGLE_OPEN)
+          ? tr('打开导航', 'Open navigation') + tr('（有一个浏览器标签在等你展开侧栏）', ' (a browser tab is waiting behind the sidebar)')
+          : toggleLabel(open)
       }
       aria-expanded={open}
       onClick={() => { toggleSidebar() }}
@@ -125,7 +125,7 @@ export function SidebarToggle({ toggleSidebar }: SidebarToggleProps) {
         title row keeps its width the rest of the time. */}
     {browserPending && !open && (
       <span className={css.pendingHint} data-dsh-browser-pending-hint="">
-        有浏览器标签待展开
+        {tr('有浏览器标签待展开', 'A browser tab is ready')}
       </span>
     )}
     </>

@@ -227,14 +227,14 @@ class EngineManager(private val context: Context, private val pickToken: String?
     val startedAt = System.currentTimeMillis()
     val stage = SnapshotTransaction.stageRoot(filesDir)
     try {
-      onStage("正在检查上次更新…")
+      onStage(UiText.t(context, "正在检查上次更新…", "Checking the last update…"))
       applyRecovery(SnapshotTransaction.recover(filesDir, stage, usrDir, homeDir))
       if (snapshotFresh()) {
         // A rolled-forward transaction already activated this snapshot.
         return true
       }
 
-      onStage("正在解压运行时…")
+      onStage(UiText.t(context, "正在解压运行时…", "Unpacking the runtime…"))
       // 清理上次残留。deletePath 现在逐项容错（见 SnapshotFs），但**删不掉的条目仍会挡住解压**：
       // 0.14.0 模拟器实锤——解压中途掉线留下的 \`.snapshot-stage/home\` 内部元数据损坏，
       // root 都删不掉（\`Not a data message\`），于是之后**每次启动都失败**，用户只能清应用数据。
@@ -307,7 +307,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
         return false
       }
 
-      onStage("正在恢复用户数据…")
+      onStage(UiText.t(context, "正在恢复用户数据…", "Restoring your data…"))
       restoreLegacyUserData(File(homeDir, ".dsh"))
       // 0.13.5 W1a（issue #126 P1 的兜底诉求）：换树前留一份 settings.yaml 快照。
       // 事务化本身从不触碰用户数据，这份副本是「万一」时的取证/回滚来源——
@@ -316,7 +316,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       val userDataNotes = SnapshotUserData.prepareStagedSnapshot(File(stage, "home/.dsh"), File(homeDir, ".dsh"))
       for (note in userDataNotes) LogCollector.log(TAG, "snapshot user-data policy: " + note)
 
-      onStage("正在完成运行时更新…")
+      onStage(UiText.t(context, "正在完成运行时更新…", "Finishing the runtime update…"))
       // issue #271 ⑤：**事务自己**清理上一轮的失败残渣（不依赖 30 分钟年龄门槛）。
       // 上一轮已结束 ⇒ 它留下的 *.failed-* 确定不再被任何进行中事务引用；不清就会与本次事务
       // 争空间，形成「失败→残渣→空间紧→更易失败」的自我强化。
@@ -339,7 +339,8 @@ class EngineManager(private val context: Context, private val pickToken: String?
         preservedNames = SnapshotUserData.preservedNames.toSet(),
         fingerprint = fingerprint,
         startedAt = startedAt,
-        onEntry = { onStage("正在更新 " + it) },
+        onEntry = { onStage(UiText.t(context, "正在更新 ", "Updating ") + it) },
+        english = UiText.isEnglish(context),
         spaceCheck = { required -> insufficientSpaceReason(filesDir, required) },
       )
       // #214：profiles 合并期间的工厂语义纠正逐条留档（升级现场可追溯，不只依赖 UI 文案）。
@@ -351,7 +352,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       return true
     } catch (t: Throwable) {
       Log.e(TAG, "snapshot refresh failed; rolling back", t)
-      onStage("运行时更新失败，正在回滚…")
+      onStage(UiText.t(context, "运行时更新失败，正在回滚…", "Runtime update failed; rolling back…"))
       // 【0.14.1 升级路径 P0】把真因留存给 boot-fail.log。
       // 旧实现只 `return false`，调用方（EngineStartFlow）只能拿到一个布尔值 → boot-fail.log
       // 里 `error=none(boolean-failure-path)`、detail 只有「返回 false」。设备实测该形态下

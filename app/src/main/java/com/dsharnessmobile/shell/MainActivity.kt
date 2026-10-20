@@ -34,6 +34,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewCompat
 import java.io.File
 import kotlin.math.ceil
 
@@ -46,6 +47,14 @@ import kotlin.math.ceil
  * 文件选择/SAF→DirectoryPickerController/MediaPickController、窗口 UI chrome→WebUiChrome。
  */
 class MainActivity : ComponentActivity() {
+
+  /**
+   * Resolve shell resources in the selected UI language before any view exists.
+   * Following the system keeps the untouched base context.
+   */
+  override fun attachBaseContext(newBase: Context) {
+    super.attachBaseContext(AppLanguage.wrap(newBase))
+  }
 
   internal lateinit var webView: WebView
     private set
@@ -226,7 +235,11 @@ class MainActivity : ComponentActivity() {
     if (isFinishing || isDestroyed) return
     if (RepairState.required(this)) {
       showGuide()
-      applyGuidePhase(GuidePhase.Error, "引擎仍无法启动", "已自动重试两次。可启动修复助手，自动读取本轮诊断并修复运行时。")
+      applyGuidePhase(
+        GuidePhase.Error,
+        UiText.t(this, "引擎仍无法启动", "The engine still will not start"),
+        UiText.t(this, "已自动重试两次。可启动修复助手，自动读取本轮诊断并修复运行时。", "Automatic retry failed twice. The repair assistant can read this failure and repair the runtime."),
+      )
       return
     }
     // CONTRACT §4：显式启动出口（用户点「重试」/错误页的「安全模式启动」）先解除插件失败 latch，
@@ -276,7 +289,11 @@ class MainActivity : ComponentActivity() {
     pendingWebPresentation = false
     if (enginePageFailed) {
       if (!pageRecovery.claimLoadErrorRetry()) {
-        applyGuidePhase(GuidePhase.Error, "页面加载失败", "前台自动重试后仍未恢复；可手动刷新界面或打开日志排查，不会循环重载。")
+        applyGuidePhase(
+          GuidePhase.Error,
+          UiText.t(this, "页面加载失败", "Page failed to load"),
+          UiText.t(this, "前台自动重试后仍未恢复；可手动刷新界面或打开日志排查，不会循环重载。", "Automatic retry in the foreground did not recover it. Refresh manually or open the log; the page will not reload in a loop."),
+        )
         return
       }
       reloadEnginePage()
@@ -302,8 +319,15 @@ class MainActivity : ComponentActivity() {
     applyGuidePhase(
       GuidePhase.Error,
       getString(R.string.ds_client_plugin_fail_title),
-      getString(R.string.ds_client_plugin_fail_hint, engineFlow.clientPluginFailureReason),
+      getString(R.string.ds_client_plugin_fail_hint, clientPluginFailureReason()),
     )
+  }
+
+  /** Failed plugin ids in the active language; the hint template owns the surrounding sentence. */
+  private fun clientPluginFailureReason(): String {
+    val ids = engineFlow.clientPluginFailureIds
+    if (ids.isEmpty()) return UiText.t(this, "未点名具体条目", "unnamed entries")
+    return UiText.t(this, "条目 " + ids.joinToString(","), "entries " + ids.joinToString(","))
   }
 
   /** Automatic page refreshes coalesce while paused and never issue background navigation. */
@@ -334,7 +358,11 @@ class MainActivity : ComponentActivity() {
       }
       ForegroundPageRecoveryPolicy.Recovery.NATIVE_ERROR -> {
         showGuide()
-        applyGuidePhase(GuidePhase.Error, "页面渲染失败", "自动重建已尝试一次；请在此手动重试或查看日志，不会循环重建页面。")
+        applyGuidePhase(
+          GuidePhase.Error,
+          UiText.t(this, "页面渲染失败", "Page failed to render"),
+          UiText.t(this, "自动重建已尝试一次；请在此手动重试或查看日志，不会循环重建页面。", "An automatic rebuild was tried once. Retry here or check the log; the page will not be rebuilt in a loop."),
+        )
         true // onResume must not access the dead WebView after exposing the native recovery outlet.
       }
       ForegroundPageRecoveryPolicy.Recovery.RECREATE -> {
@@ -546,7 +574,11 @@ class MainActivity : ComponentActivity() {
     runOnUiThread {
       if (!pageUiActive) return@runOnUiThread
       try {
-        Toast.makeText(this, "无法打开对应的会话（可能已被删除）——请从会话列表手动选择", Toast.LENGTH_LONG).show()
+        Toast.makeText(
+          this,
+          UiText.t(this, "无法打开对应的会话（可能已被删除）——请从会话列表手动选择", "Could not open that session (it may have been deleted). Pick it from the session list."),
+          Toast.LENGTH_LONG,
+        ).show()
       } catch (_: Throwable) {
       }
     }
@@ -562,7 +594,11 @@ class MainActivity : ComponentActivity() {
     pageRecovery.resume()
     if (!RepairState.active && RepairState.required(this)) {
       showGuide()
-      applyGuidePhase(GuidePhase.Error, "引擎仍无法启动", "已自动重试两次。可启动修复助手，自动读取本轮诊断并修复运行时。")
+      applyGuidePhase(
+        GuidePhase.Error,
+        UiText.t(this, "引擎仍无法启动", "The engine still will not start"),
+        UiText.t(this, "已自动重试两次。可启动修复助手，自动读取本轮诊断并修复运行时。", "Automatic retry failed twice. The repair assistant can read this failure and repair the runtime."),
+      )
       return
     }
     if (recoverPageIfPending()) {
@@ -580,7 +616,7 @@ class MainActivity : ComponentActivity() {
         applyGuidePhase(
           GuidePhase.Error,
           getString(R.string.ds_client_plugin_fail_title),
-          getString(R.string.ds_client_plugin_fail_hint, engineFlow.clientPluginFailureReason),
+          getString(R.string.ds_client_plugin_fail_hint, clientPluginFailureReason()),
         )
       }
     }
@@ -888,6 +924,23 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  /**
+   * Install the document-start locale bootstrap for dsh.
+   *
+   * dsh resolves its locale from __DSH_LOCALE__ inside the WebView. Without it the
+   * page falls back to the browser language and the settings page can show a
+   * language the shell never applied. The script reads the shell preference on
+   * every document, so the reload after a switch is enough to converge.
+   */
+  private fun installLocaleBootstrap() {
+    try {
+      val script = AppLanguage.bootstrapScript(AppLanguage.mode(this), AppLanguage.systemLanguages(this))
+      WebViewCompat.addDocumentStartJavaScript(webView, script, setOf("*"))
+    } catch (t: Throwable) {
+      Log.w(TAG, "locale bootstrap could not be installed: " + t.message)
+    }
+  }
+
   private fun configureWebView() {
     // WebView 远程调试（debug 构建）：真机/模拟器 CDP 自动化验证 UI 行为。
     // AGP 8 默认不生成 BuildConfig，用 debuggable 标志判断。
@@ -896,6 +949,10 @@ class MainActivity : ComponentActivity() {
     // 版本敏感设置全部走 WebViewShim（单面真源）；引擎页吃共享 baseline 档。
     // 0.13.3：textZoom 持久化退役（D6 收益省略）——上游 ui-theme fontSize 原生管内容字号。
     WebViewShim.applyBaseline(webView.settings, appOwnsTheme = true)
+    // Locale bootstrap: dsh reads its preference through __DSH_LOCALE__ inside
+    // the page. Inject it before the first load so the engine UI and the shell
+    // agree on the language from the first frame.
+    installLocaleBootstrap()
     webView.webViewClient = object : WebViewClient() {
       override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
         val url = request.url.toString()
@@ -1177,6 +1234,14 @@ class MainActivity : ComponentActivity() {
         },
         // ST-10：桥 setter 走 ShellState.ImmersiveMode（偏好 + 应用成对，单一真源）。
         onSetImmersiveRequest = { enable -> ImmersiveMode.setEnabled(this, enable) },
+        // UI language: the shell preference is the truth source; the setter also
+        // mirrors it into the dsh profile patch so the engine UI follows.
+        onGetUiLanguage = { AppLanguage.mode(this) },
+        onSetUiLanguage = { mode ->
+          val stored = AppLanguage.setMode(this, mode)
+          AppLanguage.syncDshLocale(this)
+          stored
+        },
         onSettingsPathRequest = { engineManager.settingsDocumentPath() },
         onExportSettingsDocument = { engineManager.settingsDocumentExport() },
         onCopyTextRequest = { text -> copyTextNative(text) },

@@ -14,6 +14,20 @@
 export const VD_OPS = ['vdCreate', 'vdDestroy', 'vdLaunch', 'vdMoveTask', 'vdInfo', 'vdLaunchApp', 'vdInput'] as const
 export type VdOp = (typeof VD_OPS)[number]
 
+/**
+ * Panel copy in the active page language.
+ *
+ * This module is also imported by the host half, where there is no DOM; the
+ * lookup therefore degrades to Chinese instead of throwing.
+ */
+function tr(zh: string, en: string): string {
+  try {
+    return document.documentElement.lang.toLowerCase().startsWith('en') ? en : zh
+  } catch {
+    return zh
+  }
+}
+
 /** 能力状态。 */
 export type VdState = 'disabled' | 'blocked' | 'ready' | 'active'
 
@@ -288,13 +302,18 @@ export async function readPanelState(fetchImpl: FetchLike): Promise<VdPanelState
     if (!r.ok) {
       return {
         state: 'blocked', code: VD_STATUS_UNAVAILABLE,
-        detail: '状态端点返回 HTTP ' + r.status + '（fail-closed）。', ops: [], screens: [], viewers: [],
+        detail: tr('状态端点返回 HTTP ', 'Status endpoint returned HTTP ') + r.status
+          + tr('（fail-closed）。', ' (fail-closed).'), ops: [], screens: [], viewers: [],
       }
     }
     return mapStatusPayload(await r.json())
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    return { state: 'blocked', code: VD_STATUS_UNAVAILABLE, detail: '状态端点不可达（fail-closed）：' + msg, ops: [], screens: [], viewers: [] }
+    return {
+      state: 'blocked', code: VD_STATUS_UNAVAILABLE,
+      detail: tr('状态端点不可达（fail-closed）：', 'Status endpoint unreachable (fail-closed): ') + msg,
+      ops: [], screens: [], viewers: [],
+    }
   }
 }
 
@@ -305,7 +324,11 @@ export async function readPanelState(fetchImpl: FetchLike): Promise<VdPanelState
  */
 export function mapStatusPayload(payload: unknown): VdPanelState {
   if (payload === null || typeof payload !== 'object') {
-    return { state: 'blocked', code: VD_STATUS_UNAVAILABLE, detail: '状态端点返回体不是对象（fail-closed）。', ops: [], screens: [], viewers: [] }
+    return {
+      state: 'blocked', code: VD_STATUS_UNAVAILABLE,
+      detail: tr('状态端点返回体不是对象（fail-closed）。', 'Status endpoint did not return an object (fail-closed).'),
+      ops: [], screens: [], viewers: [],
+    }
   }
   const p = payload as VdStatusPayload
   const ops = Array.isArray(p.ops) ? p.ops.filter((x): x is string => typeof x === 'string') : []
