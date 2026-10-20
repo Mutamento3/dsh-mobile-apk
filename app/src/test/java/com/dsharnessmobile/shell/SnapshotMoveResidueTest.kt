@@ -283,6 +283,54 @@ class SnapshotMoveResidueTest {
     }
   }
 
+  @Test
+  fun failedResidueCleanupRequiresARealWriteSlotAndAStrictTimestamp() {
+    val filesDir = tempDir()
+    try {
+      val oldUsr = File(filesDir, "usr.failed-1790100675609").apply { mkdirs() }
+      File(oldUsr, "bin/node").apply { parentFile?.mkdirs() }.writeText("factory residue")
+      val oldProfiles = File(filesDir, "home/.dsh/profiles.failed-1790100675609").apply { mkdirs() }
+      File(oldProfiles, "web/package.json").apply { parentFile?.mkdirs() }.writeText("factory residue")
+      val rootProfiles = File(filesDir, "profiles.failed-1790100675609").apply { mkdirs() }
+      File(rootProfiles, "web/package.json").apply { parentFile?.mkdirs() }.writeText("factory residue")
+
+      val unknownBytes = byteArrayOf(0, 1, 2, 127, -1, 10)
+      val report = File(filesDir, "report.failed-123").apply { mkdirs() }
+      File(report, "report.bin").writeBytes(unknownBytes)
+      val unknownProfiles = File(filesDir, "home/.dsh/report.failed-123").apply { mkdirs() }
+      File(unknownProfiles, "notes.txt").writeText("user-owned")
+      val unknownHome = File(filesDir, "home/sessions.failed-123").apply { mkdirs() }
+      File(unknownHome, "session.json").writeText("user-owned")
+
+      val malformed = listOf(
+        File(filesDir, "usr.failed-legacy"),
+        File(filesDir, "usr.failed-0"),
+        File(filesDir, "usr.failed--1"),
+        File(filesDir, "home/.dsh/profiles.failed-1790100675609.extra"),
+        File(filesDir, SnapshotTransaction.STAGE_ORPHAN_PREFIX + "legacy"),
+      ).onEach { it.mkdirs() }
+      val oldOrphan = File(filesDir, SnapshotTransaction.STAGE_ORPHAN_PREFIX + "1790100675609").apply { mkdirs() }
+
+      val cleared = SnapshotTransaction.clearFailedResidue(filesDir)
+
+      assertFalse("真实 usr 写点仍须回收", oldUsr.exists())
+      assertFalse("真实 profiles 写点仍须回收", oldProfiles.exists())
+      assertFalse("compensateFailedProfilesMerge 的 root profiles 写点仍须回收", rootProfiles.exists())
+      assertTrue("clearFailedResidue 不得越权清 stage orphan", oldOrphan.exists())
+      assertTrue("未知名称必须视为用户数据", report.exists())
+      assertTrue("未知名称必须逐字节保留", unknownBytes.contentEquals(File(report, "report.bin").readBytes()))
+      assertTrue("home/.dsh 下的未知名称也必须保留", unknownProfiles.exists())
+      assertTrue("home 顶层不是 .failed 写点", unknownHome.exists())
+      for (entry in malformed) assertTrue("畸形后缀必须保留: " + entry.name, entry.exists())
+      assertEquals("回收三个真实 failed 写点", 3, cleared.size)
+      val reclaimed = SnapshotTransaction.reclaimResidue(filesDir, 1_790_100_675_609L + 31L * 60L * 1000L)
+      assertFalse("reclaimResidue 的年龄窗口仍须回收 stage orphan", oldOrphan.exists())
+      assertEquals("年龄窗口只回收 stage orphan", 1, reclaimed.size)
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
+
   // ── F. 归类码可归因（issue #271 ④） ──────────────────────────────────────────────
 
   @Test

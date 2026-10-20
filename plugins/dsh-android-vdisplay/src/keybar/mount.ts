@@ -22,6 +22,7 @@ import {
   pressKeybarKey,
   type KeyEffect,
   type KeybarKey,
+  type KeySpec,
   type LatchState,
 } from './keymap.ts'
 import {
@@ -65,11 +66,43 @@ export interface KeybarHandle {
   notice(): string | undefined
 }
 
-/** 文案（产品可见字符串；与 UI 同源，后续可接 locale）。 */
+/** True when the page language is English (dsh writes it on the root element). */
+function isEnglish(doc: Document | undefined): boolean {
+  try {
+    return (doc?.documentElement.lang ?? '').toLowerCase().startsWith('en')
+  } catch {
+    return false
+  }
+}
+
+/** Chinese or English copy for the active page language. */
+export function keybarText(zh: string, en: string, doc?: Document): string {
+  return isEnglish(doc) ? en : zh
+}
+
+/** Visible and accessible label for one key in the active language. */
+export function keybarLabel(spec: KeySpec, doc?: Document): { label: string; ariaLabel: string } {
+  const english = isEnglish(doc)
+  return {
+    label: english ? (spec.labelEn ?? spec.label) : spec.label,
+    ariaLabel: english ? (spec.ariaLabelEn ?? spec.ariaLabel) : spec.ariaLabel,
+  }
+}
+
+const KEYBAR_NOTICES = {
+  unsupported: '该组合不支持：Ctrl 只能与字母或 @ [ \\ ] ^ _ ? 组合。',
+  unsupportedEn: 'Unsupported: Ctrl only combines with a letter or @ [ \\ ] ^ _ ?.',
+  keyboardFailed: '无法唤起软键盘，请直接点终端区域。',
+  keyboardFailedEn: 'Could not open the keyboard. Tap the terminal directly.',
+  noPath: '终端输入面尚未就绪，按键未发送。请点一下终端区域后重试。',
+  noPathEn: 'Terminal input is not ready, so the key was not sent. Tap the terminal and try again.',
+} as const
+
+/** Chinese notice copy; kept for existing importers and tests. */
 export const KEYBAR_TEXT = {
-  noticeUnsupported: '该组合不支持：Ctrl 只能与字母或 @ [ \\ ] ^ _ ? 组合。',
-  noticeKeyboardFailed: '无法唤起软键盘，请直接点终端区域。',
-  noticeNoPath: '终端输入面尚未就绪，按键未发送。请点一下终端区域后重试。',
+  noticeUnsupported: KEYBAR_NOTICES.unsupported,
+  noticeKeyboardFailed: KEYBAR_NOTICES.keyboardFailed,
+  noticeNoPath: KEYBAR_NOTICES.noPath,
 } as const
 
 function ensureStyle(doc: Document): () => void {
@@ -118,8 +151,8 @@ export function defineLegacyKeyFields(event: { readonly keyCode?: number }, keyC
  * @returns 提示文案（无提示则 undefined）。
  */
 function applyEffect(host: KeybarHost, effect: KeyEffect): string | undefined {
+  const doc = host.root.ownerDocument
   if (effect.type === 'focus') {
-    const doc = host.root.ownerDocument
     const textarea = host.root.querySelector<HTMLTextAreaElement>(XTERM_TEXTAREA)
       ?? doc.querySelector<HTMLTextAreaElement>(XTERM_TEXTAREA)
     // 顺序很重要（0.14.2 实测结论）：本函数在 click 处理器的**同一次用户手势内**同步执行。
@@ -127,7 +160,7 @@ function applyEffect(host: KeybarHost, effect: KeyEffect): string | undefined {
     if (textarea === null || textarea === undefined) {
       // 连输入面都没有：仍然试着走桥，但无论如何都要给可见提示。
       try { host.bridge?.showSoftInput?.() } catch { /* 已是失败路径，提示优先 */ }
-      return KEYBAR_TEXT.noticeKeyboardFailed
+      return keybarText(KEYBAR_NOTICES.keyboardFailed, KEYBAR_NOTICES.keyboardFailedEn, doc)
     }
     textarea.focus()
     // 三态：'ok' 桥明确成功 / 'unavailable' 没有桥 / 'failed' 桥抛错或明确返回 false。
@@ -140,15 +173,16 @@ function applyEffect(host: KeybarHost, effect: KeyEffect): string | undefined {
         bridgeOutcome = 'failed'
       }
     }
-    if (bridgeOutcome === 'failed') return KEYBAR_TEXT.noticeKeyboardFailed
+    if (bridgeOutcome === 'failed') {
+      return keybarText(KEYBAR_NOTICES.keyboardFailed, KEYBAR_NOTICES.keyboardFailedEn, doc)
+    }
     // 无桥时：focus 已落在 textarea 上（真手势下 IME 会弹出），不吓用户。
     return undefined
   }
-  if (effect.type === 'reject') return KEYBAR_TEXT.noticeUnsupported
+  if (effect.type === 'reject') return keybarText(KEYBAR_NOTICES.unsupported, KEYBAR_NOTICES.unsupportedEn, doc)
   if (effect.type !== 'send') return undefined
 
   // 优先通路 (c)：合成 keydown，让 xterm 自己映射（跟随 DECCKM）。
-  const doc = host.root.ownerDocument
   const textarea = host.root.querySelector<HTMLTextAreaElement>(XTERM_TEXTAREA)
     ?? doc.querySelector<HTMLTextAreaElement>(XTERM_TEXTAREA)
   if (effect.xterm !== null && textarea !== null && textarea !== undefined) {
@@ -178,7 +212,7 @@ function applyEffect(host: KeybarHost, effect: KeyEffect): string | undefined {
     ? effect.data  // 拿不到模式：CSI 是普通模式的默认（实测当前即 CSI）
     : (acck ? (KEYBAR_SPECS[effect.key].ss3 ?? effect.data) : (KEYBAR_SPECS[effect.key].csi ?? effect.data))
   // 两条通路都不可用（无 textarea 且无兜底写回调）：必须**可见提示**，绝不静默丢键。
-  return host.write(data) ? undefined : KEYBAR_TEXT.noticeNoPath
+  return host.write(data) ? undefined : keybarText(KEYBAR_NOTICES.noPath, KEYBAR_NOTICES.noPathEn, doc)
 }
 
 /**
@@ -208,10 +242,11 @@ export function mountKeybar(host: KeybarHost): KeybarHandle {
   const buttons = new Map<KeybarKey, HTMLButtonElement>()
   for (const key of KEYBAR_KEYS) {
     const spec = KEYBAR_SPECS[key]
+    const label = keybarLabel(spec, doc)
     const button = doc.createElement('button')
     button.type = 'button'
-    button.textContent = spec.label
-    button.setAttribute('aria-label', spec.ariaLabel)
+    button.textContent = label.label
+    button.setAttribute('aria-label', label.ariaLabel)
     button.dataset.key = key
     // 防抢焦点：键条点击不得把焦点从 xterm 的 textarea 上夺走（否则通路 (c) 失效）。
     button.addEventListener('mousedown', (event) => { event.preventDefault() })

@@ -16,7 +16,7 @@
 // 退出码：0 = 通过；1 = 成员缺失/导入悬空/残留；2 = 用法或 tar 不可读。
 import { existsSync, readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from 'node:fs'
 import { TAR } from './lib/shell.mjs'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +24,10 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(HERE)
 const argv = process.argv.slice(2)
+if (argv.includes('--self-test')) {
+  const result = spawnSync(process.execPath, ['--test', join(HERE, 'check-inject-completeness.test.mjs'), join(HERE, 'build-injection-staging.test.mjs')], { stdio: 'inherit' })
+  process.exit(result.status ?? 1)
+}
 const tar = argv[0]
 const argOf = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? (argv[i + 1] ?? d) : d }
 const PROFILES = argOf('profiles', 'web,headless').split(',').map((s) => s.trim()).filter(Boolean)

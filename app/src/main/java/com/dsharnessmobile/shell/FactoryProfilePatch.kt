@@ -458,7 +458,8 @@ internal object FactoryProfilePatch {
       val hits = block.entries.filter { it.id in retired }
       val factoryIndexes = block.entries.indices.filter { index ->
         val entry = block.entries[index]
-        retiredFactories[entry.id] == entryName(block, entry)
+        val expectedName = retiredFactories[entry.id] ?: return@filter false
+        expectedName == entryName(block, entry)
       }.toSet()
       if (hits.isNotEmpty() || factoryIndexes.isNotEmpty()) {
         val replacements = HashMap<Int, String>()

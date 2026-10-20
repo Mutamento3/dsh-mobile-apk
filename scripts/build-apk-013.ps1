@@ -275,7 +275,7 @@ foreach ($abi in @('arm64', 'x86_64')) {
         New-Item -ItemType Directory -Force -Path (Join-Path $Root ".deploy-tmp\plugins") | Out-Null
         # 根级注入源同样来自 plugin-dirs.json.externals：marketplace 是固化修复版（上游 0.1.5
         # pre-execute 守卫不调 next() 导致全工具崩溃，见其 PATCHES.md）。undo-savepoint 在 0.14.8
-        # 已从装配面退役；vendor 目录与历史条目保留，供手动急救与升级迁移识别。
+        # 已从装配面退役；vendor 目录与 retiredExternals 历史登记保留，供手动急救与升级迁移识别。
         $market = $externByName['dshmarketplace-plugin']
         if (-not (Test-Path (Join-Path $market "package.json"))) { Deny-Abi $abi "缺 marketplace 注入源 $market（vendor 固化副本）"; continue }
         # 统一补丁门禁（Phase 2a）：marketplace A-D + undo E1-E7 幂等施加与校验，
@@ -314,7 +314,7 @@ foreach ($abi in @('arm64', 'x86_64')) {
         # 拒绝路径」（check-build-chain-abort.mjs），而「该源没有浏览器 bundle」是正常跳过不是拒绝；
         # 且嵌套 foreach 里的 continue 只会继续内层循环、不会跳过本 ABI。故失败只记明细，
         # 统一在段末用一条 `Deny-Abi $abi "..."; continue` 记账并跳过本 ABI。
-        foreach ($pair in @(@('market-degraded', $market))) {
+        foreach ($pair in ,@('market-degraded', $market)) {
             $leaf = $pair[0]; $src = $pair[1]
             if (Test-Path (Join-Path $src "lib\client.js")) {
                 $dst = Join-Path $degradeStaged $leaf

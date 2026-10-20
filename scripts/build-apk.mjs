@@ -56,7 +56,7 @@ const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 const pluginDirs = manifest.dirs.map((d) => join(ROOT, d))
 const externalDirs = manifest.externals.map((d) => join(ROOT, d))
 const externalNamed = (name) => externalDirs.find((p) => p.replace(/\\/g, '/').endsWith('/' + name))
-// 0.14.8：dsh-undo-savepoint 已从新快照装配面退役。plugin-dirs.json 保留历史条目供升级迁移与
+// 0.14.8：dsh-undo-savepoint 已从新快照装配面退役。plugin-dirs.json 的 retiredExternals 保留历史条目供升级迁移与
 // 手动急救，但它不再进入注入集或 patch 挂载集。
 const market = externalNamed('dshmarketplace-plugin')
 

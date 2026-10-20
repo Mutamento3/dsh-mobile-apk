@@ -56,6 +56,10 @@ export interface AndroidShellBridge {
   /** ST-10: current immersive state from the shell truth source (ShellState.ImmersiveMode).
    *  Prefer this over any page-side copy; absent on desktop / older shells (storage fallback applies). */
   getImmersiveMode?: () => boolean
+  /** UI language preference from the shell: system, zh, or en. */
+  getUiLanguage?: () => string
+  /** Store a UI language in the shell and sync it to dsh; returns the stored mode. */
+  setUiLanguage?: (mode: string) => string
   /** 0.13.7: open a path through the Android system chooser (MT Manager, system files).
    *  Returns a JSON `{ok, launched?, reason?}` answer; `folder` targets the directory. */
   openPathChooser?: (path: string, mode?: OpenPathMode) => string

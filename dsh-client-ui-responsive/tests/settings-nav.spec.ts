@@ -17,7 +17,11 @@ function ownRegisteredLabels(): string[] {
   return source
     .split("ctx.slots.inject('settings.section'")
     .slice(1)
-    .map(block => block.match(/label:\s*\(\)\s*=>\s*'([^']+)'/)?.[1])
+    // Labels are bilingual now: `() => tr('中文', 'English')`; the key stays the Chinese one.
+    .map(block =>
+      block.match(/label:\s*\(\)\s*=>\s*tr\('([^']+)'/)?.[1]
+        ?? block.match(/label:\s*\(\)\s*=>\s*'([^']+)'/)?.[1],
+    )
     .filter((label): label is string => label !== undefined)
 }
 

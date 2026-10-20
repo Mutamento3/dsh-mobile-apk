@@ -129,7 +129,7 @@ object RootAccess {
         .put("label", mgr?.second ?: "")
         .put("installed", mgr != null),
     )
-    out.put("guidance", guidance(effective, mgr?.second))
+    out.put("guidance", guidance(effective, mgr?.second, UiText.isEnglish(context)))
     out.put("ownership", RootOwnershipJobs.state(context))
     return out
   }
@@ -142,17 +142,36 @@ object RootAccess {
    * **不承诺"点一下就会弹窗"** ✗（旧文案这么写，是把管理器行为当成了统一的 ✗）。
    * 管理器名只在**识别到时**作为提示带上（识别不到就说"你使用的 Root 管理器"，不猜 ✗）。
    */
-  private fun guidance(state: String, managerLabel: String?): String = when (state) {
-    STATE_GRANTED -> "已获得 root 授权（uid 0）。"
-    STATE_REQUESTING -> "正在等待 root 授权结果——若管理器没有弹出授权框，请自己打开" +
-      (managerLabel ?: "你使用的 Root 管理器") + "允许本应用。"
-    STATE_DENIED -> "root 授权被拒绝——请在" + (managerLabel ?: "你使用的 Root 管理器") +
-      "里允许本应用使用 root，然后回到本页重新检测。"
-    STATE_TIMEOUT -> "root 授权没有结果——请在" + (managerLabel ?: "你使用的 Root 管理器") +
-      "里允许本应用后重试。"
-    STATE_NO_SU -> "本机没有可用的 su（未 root 或未安装 Root 管理器）——请先在" +
-      (managerLabel ?: "你使用的 Root 管理器") + "中完成 root，再回到本页。"
-    else -> "尚未检测——点「检测 root 授权」会尝试取一次 root 身份（多数管理器不会自动弹授权框，需你在管理器里允许）。"
+  private fun guidance(state: String, managerLabel: String?, english: Boolean): String {
+    val manager = managerLabel ?: if (english) "your root manager" else "你使用的 Root 管理器"
+    return when (state) {
+      STATE_GRANTED -> if (english) "Root access granted (uid 0)." else "已获得 root 授权（uid 0）。"
+      STATE_REQUESTING -> if (english) {
+        "Waiting for the root grant. If no dialog appeared, open $manager and allow this app."
+      } else {
+        "正在等待 root 授权结果——若管理器没有弹出授权框，请自己打开" + manager + "允许本应用。"
+      }
+      STATE_DENIED -> if (english) {
+        "Root access was denied. Allow this app in $manager, then check again here."
+      } else {
+        "root 授权被拒绝——请在" + manager + "里允许本应用使用 root，然后回到本页重新检测。"
+      }
+      STATE_TIMEOUT -> if (english) {
+        "The root request returned no result. Allow this app in $manager and retry."
+      } else {
+        "root 授权没有结果——请在" + manager + "里允许本应用后重试。"
+      }
+      STATE_NO_SU -> if (english) {
+        "No usable su on this device (not rooted or no root manager). Set up root in $manager, then return here."
+      } else {
+        "本机没有可用的 su（未 root 或未安装 Root 管理器）——请先在" + manager + "中完成 root，再回到本页。"
+      }
+      else -> if (english) {
+        "Not checked yet. Check root access tries once; most managers need you to allow this app yourself."
+      } else {
+        "尚未检测——点「检测 root 授权」会尝试取一次 root 身份（多数管理器不会自动弹授权框，需你在管理器里允许）。"
+      }
+    }
   }
 
   /**
