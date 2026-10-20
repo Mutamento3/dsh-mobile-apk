@@ -1103,7 +1103,8 @@ class SnapshotTransactionTest {
         )
       }
       val backupBytes = SnapshotFs.sizeOf(liveProfiles)
-      assertTrue("preserved overwrite bytes must be reserved", asked >= backupBytes + 512L * 1024)
+      assertTrue("preserved overwrite bytes must be added to the existing safety allowance",
+        asked >= backupBytes + backupBytes / 4 + 64L * 1024 * 1024 + 512L * 1024)
       val ownDiff = SnapshotTransaction.preservedBytes(
         stagedProfiles,
         liveProfiles,
