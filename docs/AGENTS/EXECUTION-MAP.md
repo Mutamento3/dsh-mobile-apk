@@ -2072,9 +2072,10 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 覆盖全域（脚本里定义，构建产物与第三方目录除外）：`app/src/**/*.kt` 与 `AndroidManifest.xml`、`plugins/*/{src,test}/**`、三个子仓 src/lib、`scripts/{check-,verify-,build-,inject-}*` 与 `scripts/patches/**`、`scripts/snapshot-config/**`。
 
-通知延后恢复：NotifyCenter 在投递失败或交互通知无权限时先持久提交，NotifyStore 再推进来源游标；NotifySuppressQueue 先备份损坏原文，再抢救可读记录。普通报告与待答项独立限额，未真正投递的交互项不得结算。
+设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
 
 <!-- COVERAGE
+scripts/verify-webview-settings.test.mjs
 app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt
 app/src/test/java/com/dsharnessmobile/shell/NotifyPermissionRetryTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/NotifyDeferredRecoveryTest.kt
