@@ -2072,9 +2072,13 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 覆盖全域（脚本里定义，构建产物与第三方目录除外）：`app/src/**/*.kt` 与 `AndroidManifest.xml`、`plugins/*/{src,test}/**`、三个子仓 src/lib、`scripts/{check-,verify-,build-,inject-}*` 与 `scripts/patches/**`、`scripts/snapshot-config/**`。
 
-设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
+注入成员检查：plugin-dirs 的 externals 是当前注入集，retiredExternals 只保留历史源码位置。check-inject-completeness 对每个活动包和两个装配 profile 继续全量判定；自检包含缺活动包和缺成员的拒绝反例。
 
 <!-- COVERAGE
+scripts/check-api-route-auth-artifact.test.mjs
+scripts/lib/snapshot-route-auth.mjs
+scripts/build-injection-staging.test.mjs
+scripts/check-inject-completeness.test.mjs
 app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotPreservationSafetyTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/FactoryRetirementSafetyTest.kt
 scripts/verify-webview-settings.test.mjs
@@ -2082,6 +2086,11 @@ app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt
 app/src/test/java/com/dsharnessmobile/shell/NotifyPermissionRetryTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/NotifyDeferredRecoveryTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/IncomingRetentionTest.kt
+-->
+
+设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
+
+<!-- COVERAGE
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
 scripts/verify-mobile-workspaces.mjs
