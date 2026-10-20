@@ -478,6 +478,8 @@ internal object SnapshotTransaction {
     fingerprint: String,
     startedAt: Long,
     onEntry: (String) -> Unit = {},
+    /** UI language for the entries reported through [onEntry]; defaults to Chinese. */
+    english: Boolean = false,
     /**
      * 空间前置检查（审查 §7.2-F-4 / B12）：入参是**本次交换需要保留的可用字节**，
      * 返回拒绝文案（null = 放行）。注入式而非直接调 Android StatFs，是为了让事务保持纯 JVM 可测
@@ -561,7 +563,7 @@ internal object SnapshotTransaction {
             val liveChild = File(liveDsh, child.name)
             if (child.name in preservedNames && SnapshotFs.exists(liveChild)) {
               // User data stays exactly where it is.
-              onEntry("保留用户数据 " + child.name)
+              onEntry(if (english) "Keeping user data " + child.name else "保留用户数据 " + child.name)
               continue
             }
             if (child.name == "profiles" && SnapshotFs.exists(liveChild)) {
@@ -575,7 +577,7 @@ internal object SnapshotTransaction {
             if (SnapshotFs.exists(liveChild) && child.name !in SnapshotUserData.factorySnapshotNames) {
               // Unknown .dsh entries can belong to newer app versions or user extensions.
               // Seed absent paths, but never let a factory archive erase an unclassified collision.
-              onEntry("保留未分类DSH数据 " + child.name)
+              onEntry(if (english) "Keeping unclassified dsh data " + child.name else "保留未分类DSH数据 " + child.name)
               continue
             }
             replaceEntry(
@@ -590,7 +592,7 @@ internal object SnapshotTransaction {
           // （白名单机制只作用于 .dsh 子项，对本分支无效，见坑 67 之前的取证）。
           val liveEntry = File(homeDir, entry.name)
           if (SnapshotFs.exists(liveEntry)) {
-            onEntry("保留用户数据 home/" + entry.name)
+            onEntry(if (english) "Keeping user data home/" + entry.name else "保留用户数据 home/" + entry.name)
             continue
           }
           replaceEntry(
@@ -1039,26 +1041,34 @@ internal object SnapshotTransaction {
    * @param validate 写前对**将写入的内容**做可解析性校验（抛异常即中止、不落盘）。
    * @throws SnapshotFsException code=`snapshot-atomic-write` —— 写入或校验失败。
    */
-  private fun writeTextAtomic(target: File, text: String, label: String, validate: (String) -> Unit) {
+  internal fun writeTextAtomic(
+    target: File,
+    text: String,
+    label: String,
+    publish: (File, File) -> Boolean = AtomicFileReplace::publish,
+    validate: (String) -> Unit,
+  ) {
     validate(text)
-    val tmp = File(target.parentFile, "." + target.name + ".tmp-" + android.os.Process.myPid())
+    var tmp: File? = null
     try {
-      tmp.writeText(text)
-      if (!tmp.renameTo(target)) {
-        target.writeText(text)
-        SnapshotFs.deletePath(tmp)
+      val parent = target.absoluteFile.parentFile ?: throw IOException("missing target parent")
+      val temporary = Files.createTempFile(parent.toPath(), "." + target.name + "-", ".tmp").toFile()
+      tmp = temporary
+      java.io.FileOutputStream(temporary).use { output ->
+        output.write(text.toByteArray(Charsets.UTF_8))
+        output.flush()
+        output.fd.sync()
       }
+      if (!publish(temporary, target)) throw IOException("atomic replacement failed")
     } catch (e: Throwable) {
-      SnapshotFs.deletePath(tmp)
       // 失败留 `.pre-*` 备份（issue #274 ② 要求「失败留证」）：把当前 live 内容另存，
       // 用户/排障者能顺着它找回原状。
-      val live = if (SnapshotFs.exists(target)) target.readText() else null
-      if (live != null) {
-        try {
-          File(target.parentFile, ".pre-" + target.name + "-" + System.currentTimeMillis()).writeText(live)
-        } catch (_: Throwable) {
-          // 留证失败不掩盖真因。
+      try {
+        if (SnapshotFs.exists(target)) {
+          target.copyTo(File(target.parentFile, ".pre-" + target.name + "-" + java.util.UUID.randomUUID()))
         }
+      } catch (_: Throwable) {
+        // 留证失败不掩盖真因；原目标从未以截断方式打开。
       }
       if (e is SnapshotFsException) throw e
       throw SnapshotFsException(
@@ -1068,6 +1078,8 @@ internal object SnapshotTransaction {
           + "（" + (e.message ?: e.javaClass.simpleName) + "）",
         cause = e,
       )
+    } finally {
+      tmp?.let { SnapshotFs.deletePath(it) }
     }
   }
 

@@ -821,7 +821,7 @@ class BootDiagnosticsContractTest {
     )
     assertTrue(
       "D3：放行面必须给如实文案（safeModeRestartHint）",
-      hintBody.contains("safeModeRestartHint(decision)"),
+      hintBody.contains("safeModeRestartHint(decision,"),
     )
     assertTrue(
       "D3：拒绝面停在可读错误页（Error 相位保留安全模式出口）",

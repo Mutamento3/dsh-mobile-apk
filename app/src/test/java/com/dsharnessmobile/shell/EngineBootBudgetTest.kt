@@ -20,7 +20,7 @@ class EngineBootBudgetTest {
     assertEquals(90, c.budgetSeconds)
     assertEquals(90, c.remainingSeconds)
     assertEquals(
-      "引擎启动中（已等待 0s / 剩余 90s，冷启动较慢属正常）",
+      "引擎启动中（已等待 0s，剩余 90s）",
       engineBootProgressText(c),
     )
   }

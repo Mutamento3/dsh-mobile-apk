@@ -41,10 +41,14 @@ export interface XtermKey { readonly key: string; readonly code: string; readonl
 /** 一个键的静态语义。sends=false 的键不产出字节（keyboard 只聚焦，ctrl 只闩锁）。 */
 export interface KeySpec {
   readonly id: KeybarKey
-  /** 键条上的可见文字。 */
+  /** 键条上的可见文字（中文默认）。 */
   readonly label: string
+  /** English visible text; absent when the label is a symbol. */
+  readonly labelEn?: string
   /** 无障碍名（与 label 分开：label 可能是紧凑符号）。 */
   readonly ariaLabel: string
+  /** English accessible name. */
+  readonly ariaLabelEn?: string
   readonly sends: boolean
   /** 优先通路用的 xterm 键身份；null = 该键不产字节。 */
   readonly xterm: XtermKey | null
@@ -61,39 +65,39 @@ export interface KeySpec {
  */
 export const KEYBAR_SPECS: Readonly<Record<KeybarKey, KeySpec>> = {
   keyboard: {
-    id: 'keyboard', label: '键盘', ariaLabel: '唤起软键盘',
+    id: 'keyboard', label: '键盘', labelEn: 'Keys', ariaLabel: '唤起软键盘', ariaLabelEn: 'Show keyboard',
     sends: false, xterm: null, csi: null, ss3: null,
   },
   tab: {
-    id: 'tab', label: 'Tab', ariaLabel: 'Tab 键，补全',
+    id: 'tab', label: 'Tab', ariaLabel: 'Tab 键，补全', ariaLabelEn: 'Tab key, complete',
     sends: true, xterm: { key: 'Tab', code: 'Tab', keyCode: 9 }, csi: '\t', ss3: '\t',
   },
   ctrl: {
-    id: 'ctrl', label: 'Ctrl', ariaLabel: 'Ctrl 组合键，粘滞',
+    id: 'ctrl', label: 'Ctrl', ariaLabel: 'Ctrl 组合键，粘滞', ariaLabelEn: 'Ctrl combination, sticky',
     sends: false, xterm: null, csi: null, ss3: null,
   },
   esc: {
-    id: 'esc', label: 'Esc', ariaLabel: 'Esc 键，取消',
+    id: 'esc', label: 'Esc', ariaLabel: 'Esc 键，取消', ariaLabelEn: 'Esc key, cancel',
     sends: true, xterm: { key: 'Escape', code: 'Escape', keyCode: 27 }, csi: '\u001b', ss3: '\u001b',
   },
   left: {
-    id: 'left', label: '\u2190', ariaLabel: '光标左移',
+    id: 'left', label: '\u2190', ariaLabel: '光标左移', ariaLabelEn: 'Move cursor left',
     sends: true, xterm: { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37 }, csi: '\u001b[D', ss3: '\u001bOD',
   },
   right: {
-    id: 'right', label: '\u2192', ariaLabel: '光标右移',
+    id: 'right', label: '\u2192', ariaLabel: '光标右移', ariaLabelEn: 'Move cursor right',
     sends: true, xterm: { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 }, csi: '\u001b[C', ss3: '\u001bOC',
   },
   up: {
-    id: 'up', label: '\u2191', ariaLabel: '上一条历史',
+    id: 'up', label: '\u2191', ariaLabel: '上一条历史', ariaLabelEn: 'Previous history entry',
     sends: true, xterm: { key: 'ArrowUp', code: 'ArrowUp', keyCode: 38 }, csi: '\u001b[A', ss3: '\u001bOA',
   },
   down: {
-    id: 'down', label: '\u2193', ariaLabel: '下一条历史',
+    id: 'down', label: '\u2193', ariaLabel: '下一条历史', ariaLabelEn: 'Next history entry',
     sends: true, xterm: { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 }, csi: '\u001b[B', ss3: '\u001bOB',
   },
   enter: {
-    id: 'enter', label: '\u23ce', ariaLabel: '回车',
+    id: 'enter', label: '\u23ce', ariaLabel: '回车', ariaLabelEn: 'Enter',
     sends: true, xterm: { key: 'Enter', code: 'Enter', keyCode: 13 }, csi: '\r', ss3: '\r',
   },
 }
