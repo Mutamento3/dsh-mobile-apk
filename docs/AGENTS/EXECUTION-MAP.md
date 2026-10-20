@@ -2091,6 +2091,8 @@ app/src/androidTest/java/com/dsharnessmobile/shell/IncomingRetentionTest.kt
 设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
 
 <!-- COVERAGE
+dsh-client-ui-responsive/src/client/mobile/incoming-runtime.ts
+dsh-client-ui-responsive/tests/incoming-runtime.spec.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
 scripts/verify-mobile-workspaces.mjs
