@@ -26,6 +26,13 @@ class AndroidBridge(
   /** apk #168：把活动 settings.yaml 导出为公共副本并返回其路径（私有目录不对外开放）。 */
   private val onExportSettingsDocument: () -> String = { "" },
   private val onSetImmersiveRequest: (enable: Boolean) -> Unit = {},
+  /** UI language: system, zh, or en; the shell preference is the truth source. */
+  private val onGetUiLanguage: () -> String = { AppLanguage.MODE_SYSTEM },
+  /**
+   * Persist a UI language and mirror it into the dsh profile patch.
+   * Returns the mode that is now stored (an unknown value falls back to system).
+   */
+  private val onSetUiLanguage: (mode: String) -> String = { AppLanguage.MODE_SYSTEM },
   /** ST-10：沉浸式**读**面（缺它就是三方分裂 #1：壳偏好与页面 localStorage 互不校验）。
    *  默认实现直接读壳侧单一真源（ShellAppContext 由 EngineAuth.initContext 绑定），
    *  因此 MainActivity 无需传参即可返回真实值。 */
@@ -245,6 +252,17 @@ class AndroidBridge(
    */
   @JavascriptInterface
   fun getImmersiveMode(): Boolean = onGetImmersiveMode()
+
+  /** Current UI language mode (system / zh / en); the shell preference is the truth source. */
+  @JavascriptInterface
+  fun getUiLanguage(): String = onGetUiLanguage()
+
+  /**
+   * Store a UI language and sync it to dsh; returns the stored mode.
+   * The caller reloads the page, so the new language is visible immediately.
+   */
+  @JavascriptInterface
+  fun setUiLanguage(mode: String): String = onSetUiLanguage(mode)
 
   /**
    * Native clipboard write (navigator.clipboard.writeText in WebView is always rejected on Android

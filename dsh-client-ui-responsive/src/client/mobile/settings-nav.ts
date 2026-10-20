@@ -63,6 +63,14 @@ const OWN_SECTION_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
   ['模型能力', '补齐第三方模型的思考档位'],
 ])
 
+/** English descriptions for the same own sections; the keys stay the registered labels. */
+const OWN_SECTION_DESCRIPTIONS_EN: ReadonlyMap<string, string> = new Map([
+  ['开发者选项', 'Console, logs, and updates'],
+  ['手机控制', 'Screen, virtual displays, and privileged channels'],
+  ['通知', 'Task alerts and approval requests'],
+  ['模型能力', 'Thinking levels for third-party models'],
+])
+
 /**
  * 我方自有分区的图标，键同上表。
  *
@@ -455,7 +463,9 @@ export class MobileSettingsNav {
         row.appendChild(chevron)
       }
       const label = rowLabel(row)
-      const description = OWN_SECTION_DESCRIPTIONS.get(label)
+      const description = (document.documentElement.lang.toLowerCase().startsWith('en')
+        ? OWN_SECTION_DESCRIPTIONS_EN
+        : OWN_SECTION_DESCRIPTIONS).get(label)
       const existing = row.querySelector<HTMLElement>(':scope > [' + DESC_ATTR + ']')
       if (description === undefined) {
         // 未知 / 上游 / 第三方 id：只有上游本来的 icon + label 与我们的箭头，一个字都不加。

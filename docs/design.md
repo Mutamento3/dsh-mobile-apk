@@ -38,6 +38,8 @@
 | copyText | (text) → Boolean | 写入系统剪贴板（WebView clipboard 被拒的回退） |
 | getDevLogEnabled | () → Boolean | dev 日志开关**事实** = 偏好 && 采集器在跑（ST-11：EngineService.onDestroy 停采集器后不再乐观显示「开」） |
 | getImmersiveMode | () → Boolean | 沉浸式状态栏开关的壳侧权威值（ST-10：真源 = `dsh_settings/immersive_mode`；页面以它为唯一初值） |
+| getUiLanguage | () → String | 界面语言模式：`system` / `zh` / `en`（真源 = `dsh_settings/ui_language`） |
+| setUiLanguage | (mode) → String | 写入语言模式并把 dsh 的 `locale.preference` 同步到 profile patch；返回实际存下的模式 |
 
 **命令**
 

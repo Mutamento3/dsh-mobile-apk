@@ -56,6 +56,7 @@ internal class PluginManagementPage(
   private val gray4 = activity.getColor(R.color.ds_surface)
   private val accent = activity.getColor(R.color.ds_accent)
   private val textOnAccent = activity.getColor(R.color.ds_text_on_accent)
+  private fun t(zh: String, en: String) = UiText.t(activity, zh, en)
 
   private val root = LinearLayout(activity).apply {
     orientation = LinearLayout.VERTICAL
@@ -67,13 +68,13 @@ internal class PluginManagementPage(
   }
   private val query = EditText(activity).apply {
     setSingleLine(true)
-    hint = "搜索插件"
+    hint = t("搜索插件", "Search plugins")
     setHintTextColor(gray3)
     setTextColor(white)
     textSize = 15f
     setPadding(dp(14), 0, dp(14), 0)
     background = rounded(gray4, 8)
-    contentDescription = "搜索插件"
+    contentDescription = t("搜索插件", "Search plugins")
   }
   private val countLabel = TextView(activity).apply {
     textSize = 12f
@@ -88,7 +89,7 @@ internal class PluginManagementPage(
     background = rounded(activity.getColor(R.color.ds_danger_soft), 8)
     visibility = View.GONE
     isFocusable = true
-    contentDescription = "插件管理错误"
+    contentDescription = t("插件管理错误", "Plugin management error")
   }
   private val list = ListView(activity).apply {
     divider = android.graphics.drawable.ColorDrawable(0xFF262626.toInt())
@@ -121,14 +122,14 @@ internal class PluginManagementPage(
       textSize = 32f
       setTextColor(white)
       gravity = Gravity.CENTER
-      contentDescription = "返回"
+      contentDescription = t("返回", "Back")
       isClickable = true
       isFocusable = true
       setOnClickListener { if (!back()) onBack() }
       layoutParams = LinearLayout.LayoutParams(dp(42), dp(48))
     }
     val title = TextView(activity).apply {
-      text = "插件管理"
+      text = t("插件管理", "Plugins")
       textSize = 20f
       typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
       setTextColor(white)
@@ -136,11 +137,11 @@ internal class PluginManagementPage(
       layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
     }
     val refresh = TextView(activity).apply {
-      text = "刷新"
+      text = t("刷新", "Refresh")
       textSize = 14f
       setTextColor(white)
       gravity = Gravity.CENTER
-      contentDescription = "刷新插件列表"
+      contentDescription = t("刷新插件列表", "Refresh the plugin list")
       isClickable = true
       isFocusable = true
       setOnClickListener { load() }
@@ -209,7 +210,11 @@ internal class PluginManagementPage(
   private enum class Filter { ALL, ENABLED, DISABLED }
 
   private fun filterChip(item: Filter): TextView = TextView(activity).apply {
-    text = when (item) { Filter.ALL -> "全部"; Filter.ENABLED -> "已启用"; Filter.DISABLED -> "已停用" }
+    text = when (item) {
+      Filter.ALL -> t("全部", "All")
+      Filter.ENABLED -> t("已启用", "Enabled")
+      Filter.DISABLED -> t("已停用", "Disabled")
+    }
     textSize = 13f
     gravity = Gravity.CENTER
     isClickable = true
@@ -287,8 +292,8 @@ internal class PluginManagementPage(
               showEngineAvailability(PluginEngineAvailability.STARTING)
             } else {
               showList()
-              countLabel.text = "清单暂不可用"
-              showError("暂时无法读取插件，请稍后刷新。${t.message.orEmpty()}", retry = true)
+              countLabel.text = t("清单暂不可用", "List unavailable")
+              showError(t("暂时无法读取插件，请稍后刷新。", "Could not read plugins right now; refresh later. ") + t.message.orEmpty(), retry = true)
             }
           }
         }
@@ -360,14 +365,14 @@ internal class PluginManagementPage(
       setPadding(dp(24), dp(32), dp(24), dp(24))
     }
     panel.addView(label(when {
-      waiting -> "正在启动引擎"
-      failed -> "引擎尚未启动成功"
-      else -> "引擎未启动"
+      waiting -> t("正在启动引擎", "Starting the engine")
+      failed -> t("引擎尚未启动成功", "The engine did not start")
+      else -> t("引擎未启动", "The engine is stopped")
     }, 20, white, true))
     panel.addView(label(when {
-      waiting -> "就绪后会自动加载插件。首次准备运行时可能需要几分钟。"
-      failed -> "请返回启动页重试，或打开控制台查看原因。"
-      else -> "启动引擎后，即可读取插件列表并管理运行状态。"
+      waiting -> t("就绪后会自动加载插件。首次准备运行时可能需要几分钟。", "Plugins load as soon as the engine is ready. Preparing the runtime for the first time can take a few minutes.")
+      failed -> t("请返回启动页重试，或打开控制台查看原因。", "Go back and retry, or open the console for the reason.")
+      else -> t("启动引擎后，即可读取插件列表并管理运行状态。", "Start the engine to list plugins and manage them.")
     }, 14, gray1).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(20)) })
     if (waiting) {
       panel.addView(ProgressBar(activity).apply {
@@ -375,7 +380,7 @@ internal class PluginManagementPage(
       }, LinearLayout.LayoutParams(dp(28), dp(28)))
       root.postDelayed(retryLoad, 1_500L)
     } else {
-      panel.addView(actionButton(if (failed) "返回管理中心" else "启动引擎") {
+      panel.addView(actionButton(if (failed) t("返回管理中心", "Back to management") else t("启动引擎", "Start engine")) {
         if (failed) onBack() else launchEngineFromHere()
       }.apply {
         setTextColor(textOnAccent)
@@ -390,10 +395,15 @@ internal class PluginManagementPage(
   private fun changeEnabled(row: PluginRow, enabled: Boolean) {
     if (!enabled) {
       android.app.AlertDialog.Builder(activity)
-        .setTitle("停用插件")
-        .setMessage("将重新加载插件，并检查其他插件的运行状态。若造成其他插件失活，会尝试恢复并报告结果。确认停用 ${row.moduleName}？")
-        .setNegativeButton("取消") { _, _ -> adapter.notifyDataSetChanged() }
-        .setPositiveButton("停用") { _, _ -> performEnabledChange(row, enabled) }
+        .setTitle(t("停用插件", "Disable plugin"))
+        .setMessage(
+          t(
+            "将重新加载插件，并检查其他插件的运行状态。若造成其他插件失活，会尝试恢复并报告结果。确认停用 ${row.moduleName}？",
+            "Plugins reload and the others are checked. If one stops working, it is restored and the result is reported. Disable ${row.moduleName}?",
+          ),
+        )
+        .setNegativeButton(t("取消", "Cancel")) { _, _ -> adapter.notifyDataSetChanged() }
+        .setPositiveButton(t("停用", "Disable")) { _, _ -> performEnabledChange(row, enabled) }
         .setOnCancelListener { adapter.notifyDataSetChanged() }
         .show()
       return
@@ -455,14 +465,14 @@ internal class PluginManagementPage(
       isFocusableInTouchMode = true
     }
     page.addView(label(rowTitle(row), 22, white, true))
-    page.addView(label("模块名：${row.moduleName}", 14, gray1))
-    page.addView(label("${stateSummary(row)} · 实际状态：${if (row.enabled) "已启用" else "已停用"}", 14, gray1))
-    page.addView(label("运行阶段：${row.fiberPhase.ifBlank { "未知" }}", 14, gray1))
-    val description = rowDescription(row).ifBlank { "暂无描述" }
-    page.addView(label("描述：$description", 14, gray1))
+    page.addView(label(t("模块名：", "Module: ") + row.moduleName, 14, gray1))
+    page.addView(label(stateSummary(row) + t(" · 实际状态：", " · actual: ") + (if (row.enabled) t("已启用", "enabled") else t("已停用", "disabled")), 14, gray1))
+    page.addView(label(t("运行阶段：", "Phase: ") + row.fiberPhase.ifBlank { t("未知", "unknown") }, 14, gray1))
+    val description = rowDescription(row).ifBlank { t("暂无描述", "No description") }
+    page.addView(label(t("描述：", "Description: ") + description, 14, gray1))
     row.patchId?.takeIf { it.isNotBlank() }?.let { page.addView(label("补丁：$it", 13, gray3)) }
     row.readOnlyReason?.takeIf { it.isNotBlank() }?.let { page.addView(label("只读原因：$it", 13, gray3)) }
-    val configStatus = label("正在读取配置…", 14, gray3)
+    val configStatus = label(t("正在读取配置…", "Reading settings…"), 14, gray3)
     page.addView(configStatus)
     content.removeAllViews()
     content.addView(ScrollView(activity).apply {
@@ -729,7 +739,7 @@ internal class PluginManagementPage(
       statusOk && (needle.isEmpty() || searchable.contains(needle))
     }
     adapter.rows = rows
-    countLabel.text = "${rows.size} 个插件"
+    countLabel.text = if (UiText.isEnglish(activity)) rows.size.toString() + " plugins" else rows.size.toString() + " 个插件"
     adapter.notifyDataSetChanged()
   }
 
@@ -761,17 +771,17 @@ internal class PluginManagementPage(
       }
       holder.name.text = rowTitle(row)
       holder.id.text = row.entryId
-      holder.description.text = rowDescription(row).ifBlank { "暂无描述" }
+      holder.description.text = rowDescription(row).ifBlank { t("暂无描述", "No description") }
       holder.switch.setOnCheckedChangeListener(null)
       val desiredEnabled = row.desiredEnabled ?: row.enabled
       holder.switch.isChecked = desiredEnabled
       holder.switch.isEnabled = row.readOnlyReason.isNullOrBlank()
-      holder.switch.contentDescription = "${rowTitle(row)}，${stateSummary(row)}，启用开关"
+      holder.switch.contentDescription = rowTitle(row) + ", " + stateSummary(row) + ", " + t("启用开关", "enable switch")
       holder.switch.setOnCheckedChangeListener { _, enabled ->
         if (enabled != desiredEnabled) changeEnabled(row, enabled)
       }
       holder.state.text = stateSummary(row)
-      holder.root.contentDescription = "${rowTitle(row)}，${stateSummary(row)}，${holder.description.text}。查看详情"
+      holder.root.contentDescription = rowTitle(row) + ", " + stateSummary(row) + ", " + holder.description.text + ". " + t("查看详情", "Open details")
       holder.root.isFocusable = true
       holder.root.isClickable = true
       holder.root.setOnClickListener { openDetail(row) }
@@ -826,10 +836,12 @@ internal class PluginManagementPage(
 
   private fun stateSummary(row: PluginRow): String {
     val desired = row.desiredEnabled ?: row.enabled
-    if (row.pendingRestart || desired != row.enabled) return "等待重启 · 将${if (desired) "启用" else "停用"}"
-    if (!row.enabled) return "已停用"
-    val phase = row.fiberPhase.ifBlank { "未知" }
-    return if (phase.equals("active", ignoreCase = true)) "已启用" else "已启用 · $phase"
+    if (row.pendingRestart || desired != row.enabled) {
+      return t("等待重启 · 将", "Restart pending · will be ") + (if (desired) t("启用", "enabled") else t("停用", "disabled"))
+    }
+    if (!row.enabled) return t("已停用", "Disabled")
+    val phase = row.fiberPhase.ifBlank { t("未知", "unknown") }
+    return if (phase.equals("active", ignoreCase = true)) t("已启用", "Enabled") else t("已启用 · ", "Enabled · ") + phase
   }
 
   private fun label(value: String, size: Int, color: Int, medium: Boolean = false) = TextView(activity).apply {

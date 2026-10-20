@@ -27,6 +27,20 @@ import { watchTerminalKeybars } from '../keybar/mount.ts'
 
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 
+/** True when the dsh page language is English. */
+function isEnglish(): boolean {
+  try {
+    return document.documentElement.lang.toLowerCase().startsWith('en')
+  } catch {
+    return false
+  }
+}
+
+/** Chinese or English copy for the active page language. */
+function tr(zh: string, en: string): string {
+  return isEnglish() ? en : zh
+}
+
 /** SlotMap 本地 augmentation：与上游 keyed/session 语义一致（临时性见文件头注释）。 */
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
@@ -200,7 +214,8 @@ function VdPanel(props: { sessionId?: unknown }): ReactElement {
   const sessionKey = typeof props.sessionId === 'string' ? props.sessionId : ''
   const stageRef = useRef<HTMLDivElement>(null)
   const [snap, setSnap] = useState<VdPanelState>({
-    state: 'blocked', code: VD_STATUS_UNAVAILABLE, detail: '正在读取状态…', ops: [...VD_OPS], screens: [], viewers: [],
+  state: 'blocked', code: VD_STATUS_UNAVAILABLE,
+  detail: tr('正在读取状态…', 'Reading status...'), ops: [...VD_OPS], screens: [], viewers: [],
   })
   const [tick, setTick] = useState(0)
   const occupied = snap.ownerSessionId !== undefined && sessionKey !== '' && snap.ownerSessionId !== sessionKey
@@ -325,12 +340,13 @@ function VdPanel(props: { sessionId?: unknown }): ReactElement {
   if (occupied) {
     return createElement('div', { className: 'dsh-vdisplay-panel', 'data-state': snap.state },
       createElement('p', { className: 'dsh-vdisplay-empty' },
-        '由会话 ' + String(snap.ownerSessionId ?? '').slice(-6) + ' 使用中'))
+        tr('由会话 ', 'In use by session ') + String(snap.ownerSessionId ?? '').slice(-6)
+          + tr(' 使用中', '')))
   }
 
   return createElement('div', { className: 'dsh-vdisplay-panel', 'data-state': snap.state },
     screens.length === 0
-      ? createElement('p', { className: 'dsh-vdisplay-empty' }, '暂无虚拟屏')
+      ? createElement('p', { className: 'dsh-vdisplay-empty' }, tr('暂无虚拟屏', 'No virtual screens'))
       : createElement('div', { className: 'dsh-vdisplay-list' },
         screens.map((screen) => createElement('button', {
           key: screen.alias,
@@ -345,18 +361,18 @@ function VdPanel(props: { sessionId?: unknown }): ReactElement {
           key: '__shutdown__',
           type: 'button',
           className: 'dsh-vdisplay-item dsh-vdisplay-shutdown',
-          'aria-label': '关闭全部虚拟屏',
-          title: '关闭全部虚拟屏（释放系统资源）',
+          'aria-label': tr('关闭全部虚拟屏', 'Close all virtual screens'),
+          title: tr('关闭全部虚拟屏（释放系统资源）', 'Close all virtual screens (frees system resources)'),
           'data-action': 'shutdown-all',
           onClick: shutdownAll,
-        }, '关闭全部')),
+        }, tr('关闭全部', 'Close all'))),
     createElement('div', { ref: stageRef, className: 'dsh-vdisplay-stage', 'data-testid': 'vdisplay-stage' }),
   )
 }
 
 /** chip 标题：与「工作区文件」同类。 */
 function VdTitle(): ReactElement {
-  return createElement('span', { className: 'dsh-vdisplay-title' }, '虚拟屏')
+  return createElement('span', { className: 'dsh-vdisplay-title' }, tr('虚拟屏', 'Virtual screen'))
 }
 
 /**
@@ -431,13 +447,14 @@ export function apply(ctx: ClientContext): void {
       id: VD_TAB_ID,
       kind: VD_TAB_KIND,
       priority: 'extension',
-      title: () => '虚拟屏',
+    title: () => tr('虚拟屏', 'Virtual screen'),
       guide: [{
         // 0.1.7 起 guide 条目必填 id（上游按 [providerId, entry.id] 键控，唯一性只在 provider 内判定）
         id: 'open',
         order: 40,
-        title: () => '虚拟屏',
-        description: () => '在独立屏幕上运行第三方 App（Shizuku 特权通道），不挤占用户前台。',
+    title: () => tr('虚拟屏', 'Virtual screen'),
+    description: () => tr('在独立屏幕上运行第三方 App（Shizuku 特权通道），不挤占用户前台。',
+      'Run third-party apps on a separate display through Shizuku without taking over the foreground.'),
       }],
     })
   }, 'dsh-android-vdisplay: tab type')
