@@ -2157,6 +2157,7 @@ app/src/main/java/com/dsharnessmobile/shell/EngineProbe.kt
 app/src/main/java/com/dsharnessmobile/shell/LiveProbe.kt
 app/src/main/java/com/dsharnessmobile/shell/WatchdogV2.kt
 app/src/main/java/com/dsharnessmobile/shell/LogCollector.kt
+app/src/main/java/com/dsharnessmobile/shell/AtomicFileReplace.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotTransaction.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotFs.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotRefreshPolicy.kt
@@ -2215,6 +2216,7 @@ app/src/main/java/com/dsharnessmobile/shell/VdisplayOps.kt
 app/src/main/java/com/dsharnessmobile/shell/VirtualDisplayProbe.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/VdisplayProbeTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/ShizukuReconnectTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotAtomicRecoveryTest.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicy.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserOverlayPolicy.kt

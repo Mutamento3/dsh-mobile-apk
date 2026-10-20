@@ -1041,26 +1041,34 @@ internal object SnapshotTransaction {
    * @param validate 写前对**将写入的内容**做可解析性校验（抛异常即中止、不落盘）。
    * @throws SnapshotFsException code=`snapshot-atomic-write` —— 写入或校验失败。
    */
-  private fun writeTextAtomic(target: File, text: String, label: String, validate: (String) -> Unit) {
+  internal fun writeTextAtomic(
+    target: File,
+    text: String,
+    label: String,
+    publish: (File, File) -> Boolean = AtomicFileReplace::publish,
+    validate: (String) -> Unit,
+  ) {
     validate(text)
-    val tmp = File(target.parentFile, "." + target.name + ".tmp-" + android.os.Process.myPid())
+    var tmp: File? = null
     try {
-      tmp.writeText(text)
-      if (!tmp.renameTo(target)) {
-        target.writeText(text)
-        SnapshotFs.deletePath(tmp)
+      val parent = target.absoluteFile.parentFile ?: throw IOException("missing target parent")
+      val temporary = Files.createTempFile(parent.toPath(), "." + target.name + "-", ".tmp").toFile()
+      tmp = temporary
+      java.io.FileOutputStream(temporary).use { output ->
+        output.write(text.toByteArray(Charsets.UTF_8))
+        output.flush()
+        output.fd.sync()
       }
+      if (!publish(temporary, target)) throw IOException("atomic replacement failed")
     } catch (e: Throwable) {
-      SnapshotFs.deletePath(tmp)
       // 失败留 `.pre-*` 备份（issue #274 ② 要求「失败留证」）：把当前 live 内容另存，
       // 用户/排障者能顺着它找回原状。
-      val live = if (SnapshotFs.exists(target)) target.readText() else null
-      if (live != null) {
-        try {
-          File(target.parentFile, ".pre-" + target.name + "-" + System.currentTimeMillis()).writeText(live)
-        } catch (_: Throwable) {
-          // 留证失败不掩盖真因。
+      try {
+        if (SnapshotFs.exists(target)) {
+          target.copyTo(File(target.parentFile, ".pre-" + target.name + "-" + java.util.UUID.randomUUID()))
         }
+      } catch (_: Throwable) {
+        // 留证失败不掩盖真因；原目标从未以截断方式打开。
       }
       if (e is SnapshotFsException) throw e
       throw SnapshotFsException(
@@ -1070,6 +1078,8 @@ internal object SnapshotTransaction {
           + "（" + (e.message ?: e.javaClass.simpleName) + "）",
         cause = e,
       )
+    } finally {
+      tmp?.let { SnapshotFs.deletePath(it) }
     }
   }
 
