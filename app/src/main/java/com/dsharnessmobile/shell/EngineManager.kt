@@ -1876,22 +1876,24 @@ class EngineManager(private val context: Context, private val pickToken: String?
           failed = true
           continue
         }
-        val backup = File(target.parentFile, target.name + ".pre-" + BuildConfig.VERSION_NAME + ".bak")
-        if (!backup.exists()) {
-          try { backup.writeText(live) } catch (_: Throwable) {}
-        }
-        // 原子写（review C8）：旧实现 writeText 直接覆盖，写盘中被杀会留截断 YAML（引擎装配直接失败）。
-        val tmp = File(target.parentFile, target.name + ".repair.tmp")
+        // Each retirement attempt keeps its exact prior text in a unique, synchronized backup.
+        // A failed backup or publication must leave the live profile untouched and retry next boot.
+        val backup = File(target.parentFile, target.name + ".pre-" + BuildConfig.VERSION_NAME + "-" + java.util.UUID.randomUUID() + ".bak")
         try {
-          tmp.writeText(result.text)
-          if (!tmp.renameTo(target)) {
-            target.writeText(result.text)
-            SnapshotFs.deletePath(tmp)
+          java.io.FileOutputStream(backup).use { output ->
+            output.write(live.toByteArray(Charsets.UTF_8))
+            output.flush()
+            output.fd.sync()
+          }
+          SnapshotTransaction.writeTextAtomic(target, result.text, "退役工厂配置") { candidate ->
+            val requiredIds = before - FactoryProfilePatch.RETIRED_DISABLED_ROW_IDS - FactoryProfilePatch.RETIRED_FACTORY_ENTRIES.keys
+            require(FactoryProfilePatch.blockIds(candidate).toSet().containsAll(requiredIds)) {
+              "retirement would remove an unrelated profile entry"
+            }
           }
         } catch (t: Throwable) {
           failed = true
-          SnapshotFs.deletePath(tmp)
-          Log.w(TAG, "profile patch repair write failed (retried next boot): " + target.absolutePath, t)
+          Log.w(TAG, "profile patch repair write failed (old profile retained; retried next boot): " + target.absolutePath, t)
           continue
         }
         repaired++

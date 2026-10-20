@@ -2076,6 +2076,7 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 <!-- COVERAGE
 app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotPreservationSafetyTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/FactoryRetirementSafetyTest.kt
 scripts/verify-webview-settings.test.mjs
 app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt
 app/src/test/java/com/dsharnessmobile/shell/NotifyPermissionRetryTest.kt
