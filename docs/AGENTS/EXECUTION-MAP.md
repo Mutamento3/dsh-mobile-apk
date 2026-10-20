@@ -65,7 +65,7 @@ flowchart TD
 - 快照准入由SnapshotFingerprintPolicy严格64hex决定；fresh需node与durable commit一致，当前锚点见§6 K03。
 - shared ownership prelude已结算后先恢复事务再probe/strictSHA/fresh；不新鲜暂存解压→用户配置stage过滤→factory交换→提交指纹，pending不提前读事务。
 - 交换内还要合并用户面：`SnapshotTransaction.kt:626`（`mergeProfiles`）、`SnapshotTransaction.kt:546`（`reconcileRemovedProfilePlugins`，已摘除插件的存量迁移）；残渣按年龄回收 `SnapshotTransaction.kt:196`（`reclaimResidue`）；
-  **0.14.2-fx-2 缺陷 I（apk #271）在交换前新增了两道闸门**：`SnapshotTransaction.kt:313`（`requireDeletableResidue` 可写性预检，点名非应用属主残留）与 `SnapshotTransaction.kt:242`（`clearFailedResidue` 无年龄门槛地清上一轮 `*.failed-*`）；`SnapshotFs.kt:177`（`move`）自保——目标非空先 `SnapshotFs.kt:83`（`deletePathStrict`）删净、删不净即抛（`snapshot-delete-residue` / `snapshot-move-blocked`）；
+  **0.14.2-fx-2 缺陷 I（apk #271）在交换前新增了两道闸门**：`SnapshotTransaction.kt:313`（`requireDeletableResidue` 可写性预检，点名非应用属主残留）与 `clearFailedResidue`（无年龄门槛地清上一轮 `.failed-` 残渣）；它只认真实写点的严格槽名与正毫秒后缀——`files/usr.failed-<ts>`、`files/profiles.failed-<ts>`、`files/home/.dsh/profiles.failed-<ts>`；未知名称和畸形后缀视为用户数据保留。stage orphan（`files/.snapshot-stage-orphan-<ts>`）仍只由 `reclaimResidue` 按 30 分钟年龄回收。`SnapshotFs.kt:177`（`move`）自保——目标非空先 `SnapshotFs.kt:83`（`deletePathStrict`）删净、删不净即抛（`snapshot-delete-residue` / `snapshot-move-blocked`）；
 - **0.14.2-fx-2 缺陷 D（安全模式）**：启动失败页主按钮变「安全模式启动」→ `GuidePageRenderer.kt` 的 `enterSafeMode()`；Kotlin `SafeMode.kt`、离线 `scripts/dsh-undo-emergency.mjs`、vendor `dsh-undo-savepoint/lib/core.mjs` 共用 `safe-mode.json` / 主备份命名契约与内容寻址副本。默认 web 新状态用平铺 `undo-snapshots/auto` 与 Kotlin 共享；Safe Mode 单独识别唯一既有 scoped marker 并绑定其原目录，平铺与 scoped 同时有 marker（损坏也算）则 fail closed。显式 custom autoDir 与非 web profile 不参与解析，普通 snapshot 布局不变。副本在所选 auto 的 sibling `safe-mode-recovery/`。vendor 实现由 `scripts/patches/data/undo-safe-transaction-snippet.mjs` 生成，S2 门禁要求 CAS + resolver 契约。Marker 绑定 profile；Kotlin exit 兼容恢复 vendor 写入的 home/package 备份。Safe Mode ON 同时筛选 rc2 `package.json` 的 profile bundles：只保留权威 HardManifest 给出的 exact `{name,version,patchSha256}` 工厂元组，摘要按 `DSHBNDL1`、声明顺序和路径/内容长度帧计算；缺少活跃 bundle 身份即拒绝修改。完整 package bytes 进入 primary 与 SHA 寻址恢复副本，OFF 原字节还原。退出先将全部必需 live bytes 读入并校验，任一来源主副本均失效就不写 live 文件；成功时写回已校验的同一组内存字节。S2 patch gate 的 S5 判据同时要求 bundle selector/hash 实现，避免旧 S4 core 被误判为已更新。控制台命令解析在 `SafeConsole.kt`（纯函数，命中即不落 bash，接线 `ConsoleActivity.kt`）。
 - 引擎经snapshotRefreshing/STARTING/runtime完整性/端口归属闸门与runtime patches再spawn，当前锚点见§6 K02/K03。
 
@@ -2072,10 +2072,14 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 覆盖全域（脚本里定义，构建产物与第三方目录除外）：`app/src/**/*.kt` 与 `AndroidManifest.xml`、`plugins/*/{src,test}/**`、三个子仓 src/lib、`scripts/{check-,verify-,build-,inject-}*` 与 `scripts/patches/**`、`scripts/snapshot-config/**`。
 
-来件持久清单：写入、重读和确认后移除共用 pendingLock，临时文件同步后替换。TTL 清扫先于投递预留，保护 pending 和 .sessions 引用；清单不可读则停止清扫。投递结束在 finally 归还计数。
+设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
 
 <!-- COVERAGE
 app/src/androidTest/java/com/dsharnessmobile/shell/FactoryRetirementSafetyTest.kt
+scripts/verify-webview-settings.test.mjs
+app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt
+app/src/test/java/com/dsharnessmobile/shell/NotifyPermissionRetryTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/NotifyDeferredRecoveryTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/IncomingRetentionTest.kt
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
@@ -2221,6 +2225,7 @@ app/src/main/java/com/dsharnessmobile/shell/VirtualDisplayProbe.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/VdisplayProbeTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/ShizukuReconnectTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotAtomicRecoveryTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotResidueOwnershipTest.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicy.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserOverlayPolicy.kt
