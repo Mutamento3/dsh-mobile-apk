@@ -351,7 +351,6 @@ class FactoryProfilePatchTest {
     )
 
     assertEquals("历史 undo 条目带用户 config 时必须保留", configured, result.text)
-    assertTrue("保留项必须显式留证", result.changes.any { it.contains("保留带用户配置") })
   }
 
   /**

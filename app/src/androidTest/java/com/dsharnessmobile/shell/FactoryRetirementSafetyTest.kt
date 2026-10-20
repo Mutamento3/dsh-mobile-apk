@@ -10,9 +10,10 @@ import org.junit.Test
 /** Real Android regression over the retirement transformer and failed profile publication. */
 class FactoryRetirementSafetyTest {
   @Test fun unrelatedUnnamedEntriesSurviveAndFailedPublicationPreservesOldProfile() {
-    val input = "- id: user-row\n  config:\n    value: keep-exactly\n- insert:\n    - id: dsh-undo-savepoint\n      name: dsh-undo-savepoint\n"
+    val input = "- id: ordinary-row\n  disabled: false\n- id: user-row\n  config:\n    value: keep-exactly\n- insert:\n    - id: dsh-undo-savepoint\n      name: dsh-undo-savepoint\n"
     val result = FactoryProfilePatch.repairRetiredEntries(input, emptySet(), FactoryProfilePatch.RETIRED_FACTORY_ENTRIES)
-    assertTrue("ordinary unnamed row must survive retirement", result.text.contains("- id: user-row\n  config:\n    value: keep-exactly\n"))
+    assertTrue("ordinary unnamed row without config must survive retirement", result.text.contains("- id: ordinary-row\n  disabled: false\n"))
+    assertTrue("ordinary configured row must survive retirement", result.text.contains("- id: user-row\n  config:\n    value: keep-exactly\n"))
     assertFalse("unconfigured factory undo must be retired", result.text.contains("- id: dsh-undo-savepoint"))
     val context = InstrumentationRegistry.getInstrumentation().targetContext
     val root = File(context.cacheDir, "factory-retirement-" + System.nanoTime()).apply { mkdirs() }
