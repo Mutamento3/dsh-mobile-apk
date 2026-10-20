@@ -275,6 +275,85 @@ class FactoryProfilePatchTest {
     )
   }
 
+  @Test
+  fun retiredFactoryMigrationOnlyOwnsNamedEntriesWithNoUserConfig() {
+    val retiredWithoutName = """
+      - insert:
+          - id: some-other-plugin
+            config:
+              keep: true
+      - insert:
+          - id: dshmarketplace
+            disabled: true
+          - id: dsh-undo-savepoint
+            name: dsh-undo-savepoint
+    """.trimIndent() + "\n"
+
+    val result = FactoryProfilePatch.repairRetiredEntries(
+      retiredWithoutName,
+      retiredFactories = FactoryProfilePatch.RETIRED_FACTORY_ENTRIES,
+    )
+
+    assertFalse("仅已知 id 且名称匹配的 undo 工厂条目才可移除", result.text.contains("id: dsh-undo-savepoint"))
+    assertTrue("无 name 的正常 id 条目必须保留", result.text.contains("id: some-other-plugin"))
+    assertTrue("无 name 的普通 disabled 行必须保留", result.text.contains("id: dshmarketplace"))
+    assertTrue("用户 config 必须原样保留", result.text.contains("keep: true"))
+  }
+
+  @Test
+  fun emptyRetiredFactoriesNeverRemovesAnEntryWithoutAName() {
+    val live = """
+      - insert:
+          - id: dsh-undo-savepoint
+            disabled: true
+    """.trimIndent() + "\n"
+
+    val result = FactoryProfilePatch.repairRetiredEntries(
+      live,
+      retired = emptySet(),
+      retiredFactories = emptyMap(),
+    )
+
+    assertEquals("空退役表是纯 no-op", live, result.text)
+    assertTrue(result.changes.isEmpty())
+  }
+
+  @Test
+  fun nameLessRetiredIdWithoutConfigIsPreservedBecauseOwnershipIsNotProven() {
+    val live = """
+      - insert:
+          - id: dsh-undo-savepoint
+            disabled: true
+    """.trimIndent() + "\n"
+
+    val result = FactoryProfilePatch.repairRetiredEntries(
+      live,
+      retiredFactories = FactoryProfilePatch.RETIRED_FACTORY_ENTRIES,
+    )
+
+    assertEquals("键在场但 name 缺失时不能凭 null==null 判定为工厂条目", live, result.text)
+    assertTrue(result.changes.isEmpty())
+  }
+
+  @Test
+  fun retiredFactoryMigrationKeepsUserConfiguredUndoEvenWhenNameMatches() {
+    val configured = """
+      - insert:
+          - id: dsh-undo-savepoint
+            name: dsh-undo-savepoint
+            config:
+              keep: true
+    """.trimIndent() + "\n"
+
+    val result = FactoryProfilePatch.repairRetiredEntries(
+      configured,
+      retiredFactories = FactoryProfilePatch.RETIRED_FACTORY_ENTRIES,
+    )
+
+    assertEquals("历史 undo 条目带用户 config 时必须保留", configured, result.text)
+    assertTrue("保留项必须显式留证", result.changes.any { it.contains("保留带用户配置") })
+  }
+
   /**
    * 维护约束守卫：权威装配清单（本仓镜像）当前不得把退役行重新写成 disabled。
    * 若未来工厂真的要禁用某行，必须同时把它从 RETIRED_DISABLED_ROW_IDS 移出并另行走查。
