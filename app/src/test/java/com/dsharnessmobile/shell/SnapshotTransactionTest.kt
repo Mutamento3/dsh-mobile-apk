@@ -1145,6 +1145,30 @@ class SnapshotTransactionTest {
     }
   }
 
+  @Test
+  fun sameSizedCorruptPreservationAbortsBeforeReplacingUserBytes() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "same-profile")
+      writeRuntime(stage, "new-node", "same-profile")
+      val rel = "home/.dsh/profiles/web/node_modules/p/user.bin"
+      val original = byteArrayOf(1, 2, 3, 4, 5)
+      val target = File(live, rel).apply { parentFile!!.mkdirs(); writeBytes(original) }
+      File(stage, rel).apply { parentFile!!.mkdirs(); writeText("factory") }
+      val error = runCatching {
+        SnapshotTransaction.swap(
+          filesDir, stage, File(live, "usr"), File(live, "home"), preserved, "fp-bad-copy", 1L,
+          preserveCopy = { from, to -> to.writeBytes(ByteArray(from.length().toInt())) },
+        )
+      }.exceptionOrNull()
+      assertTrue("same-size corruption must reject preservation", error is SnapshotFsException)
+      assertEquals(CODE_PRESERVE_FAILED, (error as SnapshotFsException).code)
+      assertTrue("original bytes must survive", target.readBytes().contentEquals(original))
+    } finally { SnapshotFs.deletePath(filesDir) }
+  }
+
   // ── 0.14.1 D-1 设备侧收尾：已摘除插件的存量迁移 ────────────────────────────────
   //
   // 设备实测（16416 覆盖安装本轮构建）：`profiles/web/node_modules/@aiwayds/dsh-model-sync` 与

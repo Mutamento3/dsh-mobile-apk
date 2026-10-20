@@ -542,9 +542,9 @@ internal object SnapshotTransaction {
     links: LinkPrimitives = PRODUCTION_LINKS,
     purpose: Purpose = Purpose.FACTORY,
     priorFingerprint: String = "",
-    /** Injected only for JVM fault coverage of the pre-overwrite preservation path. */
-    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
     baseFingerprint: String = "",
+    /** Fault-injection seam for preservation; appended to keep existing positional arguments stable. */
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ): List<String> {
     val stagedUsr = File(stagedRoot, "usr")
     if (!SnapshotFs.exists(stagedUsr)) throw IOException("staged runtime is missing usr/")
@@ -567,6 +567,7 @@ internal object SnapshotTransaction {
     // 「解压前」检查用的，而本检查跑在解压**之后**：stage 的空间已经付过了，再按整树要 2.5 倍
     // 会把「本可成功」的刷新拒掉，属过度拦截）。swap 的新分配来自：
     //   · `mergeProfiles` 把 live 的 profiles 树整份拷成 previous（主导项，且**必须**留得下）；
+    //   · 覆盖差异工厂文件前保留的 `.pre-*` 副本；
     //   · `mergeTree` 把 staged 里 live 缺的文件补进去（相对小）。
     // 其余（usr/home 顶层条目、profiles 换位）都是 rename，不占新空间。
     // 余量取 25% + 64MB：覆盖补入文件与文件系统元数据（小文件多时块开销可观）。
@@ -1003,7 +1004,7 @@ internal object SnapshotTransaction {
    * 覆盖前把「被抹掉的用户版本」另存为**可发现**的副本（issue #274 ③）。
    *
    * 判据：只在 live 存在**且内容与工厂不同**时才留（内容相同 = 用户没改过，留一份纯属噪声）。
-   * 落点与命名：同目录 `.pre-<name>-<时间戳>`，与 [writeTextAtomic] 的失败留证同款，
+   * 落点与命名：同目录 `.pre-<name>-<时间戳>-<UUID>`，与 [writeTextAtomic] 的失败留证同款，
    * 用户用文件管理器就能看到。
    *
    * @param notes 追加一条叙述（调用方写日志/UI）。
@@ -1022,8 +1023,19 @@ internal object SnapshotTransaction {
     val temporary = File(live.parentFile, ".pre-" + live.name + ".tmp-" + java.util.UUID.randomUUID())
     try {
       copy(live, temporary)
-      if (temporary.length() != liveSize) throw IOException("preserved copy size mismatch")
-      Files.move(temporary.toPath(), backup.toPath(), REPLACE_EXISTING)
+      if (!temporary.isFile || temporary.length() != liveSize || !sameContent(live, temporary)) {
+        throw IOException("preserved copy content mismatch")
+      }
+      // Files.copy may preserve a read-only user mode. Change only our private temporary,
+      // then restore that mode before publishing the backup; the live file is never chmodded.
+      val wasWritable = temporary.canWrite()
+      if (!wasWritable && !temporary.setWritable(true, true)) throw IOException("cannot synchronize preserved copy")
+      try {
+        java.io.FileOutputStream(temporary, true).use { it.fd.sync() }
+      } finally {
+        if (!wasWritable && !temporary.setWritable(false, true)) throw IOException("cannot restore preserved copy mode")
+      }
+      if (!AtomicFileReplace.publish(temporary, backup)) throw IOException("preserved copy publication failed")
     } catch (failure: Throwable) {
       try { SnapshotFs.deletePath(temporary) } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
       throw SnapshotFsException(
@@ -1069,6 +1081,8 @@ internal object SnapshotTransaction {
     var total = 0L
     val children = staged.listFiles() ?: return 0L
     for (child in children) {
+      // mergeTree never follows staged links; the reservation must use the same boundary.
+      if (SnapshotFs.isSymbolicLink(child)) continue
       val existing = File(live, child.name)
       if (child.isDirectory) {
         if (existing.isDirectory) total += preservedBytes(child, existing, userFacingFiles)
