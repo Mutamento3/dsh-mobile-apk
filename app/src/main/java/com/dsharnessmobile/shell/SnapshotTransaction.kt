@@ -1030,11 +1030,13 @@ internal object SnapshotTransaction {
       // then restore that mode before publishing the backup; the live file is never chmodded.
       val wasWritable = temporary.canWrite()
       if (!wasWritable && !temporary.setWritable(true, true)) throw IOException("cannot synchronize preserved copy")
+      var modeRestored = true
       try {
         java.io.FileOutputStream(temporary, true).use { it.fd.sync() }
       } finally {
-        if (!wasWritable && !temporary.setWritable(false, true)) throw IOException("cannot restore preserved copy mode")
+        if (!wasWritable) modeRestored = temporary.setWritable(false, true)
       }
+      if (!modeRestored) throw IOException("cannot restore preserved copy mode")
       if (!AtomicFileReplace.publish(temporary, backup)) throw IOException("preserved copy publication failed")
     } catch (failure: Throwable) {
       try { SnapshotFs.deletePath(temporary) } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
