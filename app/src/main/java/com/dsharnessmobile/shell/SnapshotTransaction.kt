@@ -545,6 +545,8 @@ internal object SnapshotTransaction {
     purpose: Purpose = Purpose.FACTORY,
     priorFingerprint: String = "",
     baseFingerprint: String = "",
+    /** Fault-injection seam for preservation; appended to keep existing positional arguments stable. */
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ): List<String> {
     val stagedUsr = File(stagedRoot, "usr")
     if (!SnapshotFs.exists(stagedUsr)) throw IOException("staged runtime is missing usr/")
@@ -567,13 +569,16 @@ internal object SnapshotTransaction {
     // 「解压前」检查用的，而本检查跑在解压**之后**：stage 的空间已经付过了，再按整树要 2.5 倍
     // 会把「本可成功」的刷新拒掉，属过度拦截）。swap 的新分配来自：
     //   · `mergeProfiles` 把 live 的 profiles 树整份拷成 previous（主导项，且**必须**留得下）；
+    //   · 覆盖差异工厂文件前保留的 `.pre-*` 副本；
     //   · `mergeTree` 把 staged 里 live 缺的文件补进去（相对小）。
     // 其余（usr/home 顶层条目、profiles 换位）都是 rename，不占新空间。
     // 余量取 25% + 64MB：覆盖补入文件与文件系统元数据（小文件多时块开销可观）。
     if (spaceCheck != null && purpose == Purpose.FACTORY) {
       val liveProfiles = File(File(homeDir, ".dsh"), "profiles")
       val backupBytes = SnapshotFs.sizeOf(liveProfiles)
-      val required = backupBytes + backupBytes / 4 + 64L * 1024L * 1024L
+      val stagedProfiles = File(File(stagedRoot, "home/.dsh"), "profiles")
+      val preserved = preservedBytes(stagedProfiles, liveProfiles, profileUserFacingFiles(stagedProfiles))
+      val required = backupBytes + preserved + backupBytes / 4 + 64L * 1024L * 1024L
       val refusal = spaceCheck(required)
       if (refusal != null) throw InsufficientSpaceException(required, refusal)
     }
@@ -610,7 +615,10 @@ internal object SnapshotTransaction {
               // 更新、用户条目（第三方依赖/.npmrc/自打补丁/追加块）保留。
               // 0.14.0 #214：工厂对同 id 的 disabled 语义改为权威（旧规则「以 live 为基」使
               // 旧版遗留的 ui-layout disable 永不被纠正 → 根服务 layout 不 activate）。
-              mergeProfiles(filesDir, moved, fingerprint, startedAt, child, liveChild, File(previousDsh, "profiles"), onEntry, notes, links)
+              mergeProfiles(
+                filesDir, moved, fingerprint, startedAt, child, liveChild,
+                File(previousDsh, "profiles"), onEntry, notes, links, preserveCopy,
+              )
               continue
             }
             if (SnapshotFs.exists(liveChild) && child.name !in SnapshotUserData.factorySnapshotNames) {
@@ -777,6 +785,7 @@ internal object SnapshotTransaction {
     onEntry: (String) -> Unit,
     notes: MutableList<String>,
     links: LinkPrimitives = PRODUCTION_LINKS,
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ) {
     // ① 备份先写临时名（拷贝失败/被杀 = live 与 journal 都不受影响）
     val copying = File(previousProfiles.parentFile, previousProfiles.name + ".copying")
@@ -800,12 +809,8 @@ internal object SnapshotTransaction {
       // 旧实现把「并集」规则递归套到嵌套清单，只合并 dependencies/bundles 而丢掉工厂新增的
       // exports 等字段，live 树因此变成「旧清单 + 新文件」的混合体，插件跨包 import
       // "./route-auth" 直接 ERR_PACKAGE_PATH_NOT_EXPORTED（引擎 exit=1）。
-      val userFacingFiles = HashSet<String>()
-      for (profile in stagedProfiles.listFiles() ?: emptyArray()) {
-        userFacingFiles += File(profile, "package.json").absolutePath
-        userFacingFiles += File(profile, "cordis.patch.yml").absolutePath
-      }
-      mergeTree(stagedProfiles, liveProfiles, notes, userFacingFiles)
+      val userFacingFiles = profileUserFacingFiles(stagedProfiles)
+      mergeTree(stagedProfiles, liveProfiles, notes, userFacingFiles, preserveCopy)
       reconcileRemovedProfilePlugins(liveProfiles, notes)
       val suffix = if (notes.isEmpty()) "" else "；工厂语义纠正 " + notes.size + " 处"
       onEntry("home/.dsh/profiles (merged" + suffix + ")")
@@ -1001,25 +1006,106 @@ internal object SnapshotTransaction {
    * 覆盖前把「被抹掉的用户版本」另存为**可发现**的副本（issue #274 ③）。
    *
    * 判据：只在 live 存在**且内容与工厂不同**时才留（内容相同 = 用户没改过，留一份纯属噪声）。
-   * 落点与命名：同目录 `.pre-<name>-<时间戳>`，与 [writeTextAtomic] 的失败留证同款，
+   * 落点与命名：同目录 `.pre-<name>-<时间戳>-<UUID>`，与 [writeTextAtomic] 的失败留证同款，
    * 用户用文件管理器就能看到。
    *
    * @param notes 追加一条叙述（调用方写日志/UI）。
    */
-  private fun preserveOverwrittenUserFile(staged: File, live: File, notes: MutableList<String>) {
+  private fun preserveOverwrittenUserFile(
+    staged: File,
+    live: File,
+    notes: MutableList<String>,
+    copy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
+  ) {
     if (!SnapshotFs.exists(live)) return
     if (SnapshotFs.isSymbolicLink(live)) return
-    val stagedBytes = try { staged.readBytes() } catch (_: Throwable) { return }
-    val liveBytes = try { live.readBytes() } catch (_: Throwable) { return }
-    if (stagedBytes.contentEquals(liveBytes)) return
-    val backup = File(live.parentFile, ".pre-" + live.name + "-" + System.currentTimeMillis())
+    val liveSize = live.length()
+    if (sameContent(staged, live)) return
+    val backup = File(live.parentFile, ".pre-" + live.name + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID())
+    val temporary = File(live.parentFile, ".pre-" + live.name + ".tmp-" + java.util.UUID.randomUUID())
     try {
-      Files.copy(live.toPath(), backup.toPath(), REPLACE_EXISTING)
-      notes += "保留被工厂件覆盖的用户版本: " + live.absolutePath + " -> " + backup.name
-    } catch (_: Throwable) {
-      // 留证失败不得阻断刷新（覆盖语义本身不变），但要可见。
-      notes += "未能保留被覆盖的用户版本（写入失败）: " + live.absolutePath
+      copy(live, temporary)
+      if (!temporary.isFile || temporary.length() != liveSize || !sameContent(live, temporary)) {
+        throw IOException("preserved copy content mismatch")
+      }
+      // Files.copy may preserve a read-only user mode. Change only our private temporary,
+      // then restore that mode before publishing the backup; the live file is never chmodded.
+      val wasWritable = temporary.canWrite()
+      if (!wasWritable && !temporary.setWritable(true, true)) throw IOException("cannot synchronize preserved copy")
+      var modeRestored = true
+      try {
+        java.io.FileOutputStream(temporary, true).use { it.fd.sync() }
+      } finally {
+        if (!wasWritable) modeRestored = temporary.setWritable(false, true)
+      }
+      if (!modeRestored) throw IOException("cannot restore preserved copy mode")
+      if (!AtomicFileReplace.publish(temporary, backup)) throw IOException("preserved copy publication failed")
+    } catch (failure: Throwable) {
+      try { SnapshotFs.deletePath(temporary) } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+      throw SnapshotFsException(
+        code = CODE_PRESERVE_FAILED,
+        residue = listOf(live),
+        message = "无法在覆盖前完整保留用户版本，已中止本次事务（live 未替换）：" + live.absolutePath
+          + "（" + (failure.message ?: failure.javaClass.simpleName) + "）",
+        cause = failure,
+      )
     }
+    notes += "保留被工厂件覆盖的用户版本: " + live.absolutePath + " -> " + backup.name
+  }
+
+  private fun sameContent(left: File, right: File): Boolean {
+    if (left.length() != right.length()) return false
+    var same = true
+    java.io.FileInputStream(left).use { a ->
+      java.io.FileInputStream(right).use { b ->
+        val one = ByteArray(64 * 1024)
+        val two = ByteArray(64 * 1024)
+        while (true) {
+          val n = a.read(one)
+          val m = b.read(two)
+          if (n != m || n < 0) { same = n == m; break }
+          var differs = false
+          for (i in 0 until n) if (one[i] != two[i]) { differs = true; break }
+          if (differs) { same = false; break }
+        }
+      }
+    }
+    return same
+  }
+
+  /**
+   * Upper bound for `.pre-*` copies created by the merge. Every changed factory file is copied
+   * before replacement, so the precheck must budget for those bytes as well as the profile backup.
+   */
+  internal fun preservedBytes(staged: File, live: File): Long {
+    return preservedBytes(staged, live, emptySet())
+  }
+
+  internal fun preservedBytes(staged: File, live: File, userFacingFiles: Set<String>): Long {
+    var total = 0L
+    val children = staged.listFiles() ?: return 0L
+    for (child in children) {
+      // mergeTree never follows staged links; the reservation must use the same boundary.
+      if (SnapshotFs.isSymbolicLink(child)) continue
+      val existing = File(live, child.name)
+      if (child.isDirectory) {
+        if (existing.isDirectory) total += preservedBytes(child, existing, userFacingFiles)
+        continue
+      }
+      if (!existing.isFile || SnapshotFs.isSymbolicLink(existing)) continue
+      if (child.absolutePath in userFacingFiles) continue // these merge in place and create no copy
+      if (!sameContent(child, existing)) total += existing.length()
+    }
+    return total
+  }
+
+  internal fun profileUserFacingFiles(stagedProfiles: File): Set<String> {
+    val result = HashSet<String>()
+    for (profile in stagedProfiles.listFiles() ?: emptyArray()) {
+      result += File(profile, "package.json").absolutePath
+      result += File(profile, "cordis.patch.yml").absolutePath
+    }
+    return result
   }
 
   /**
@@ -1036,6 +1122,7 @@ internal object SnapshotTransaction {
     live: File,
     notes: MutableList<String>,
     userFacingFiles: Set<String>,
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ) {
     val attrs = Files.readAttributes(
       staged.toPath(), BasicFileAttributes::class.java, NOFOLLOW_LINKS,
@@ -1045,7 +1132,7 @@ internal object SnapshotTransaction {
       attrs.isDirectory -> {
         SnapshotFs.createDirectories(live)
         for (child in staged.listFiles() ?: emptyArray()) {
-          mergeTree(child, File(live, child.name), notes, userFacingFiles)
+          mergeTree(child, File(live, child.name), notes, userFacingFiles, preserveCopy)
         }
       }
       attrs.isRegularFile -> when {
@@ -1060,7 +1147,7 @@ internal object SnapshotTransaction {
           // 为什么不做真三方合并：node_modules 下的工厂件是**整包发行物**，字段级合并会造出
           // 「旧清单 + 新文件」的混合体（0.14.0 P0 实锤：ERR_PACKAGE_PATH_NOT_EXPORTED）。
           // 覆盖是正确的语义，缺的只是「可发现」。
-          preserveOverwrittenUserFile(staged, live, notes)
+          preserveOverwrittenUserFile(staged, live, notes, preserveCopy)
           Files.copy(
             staged.toPath(), live.toPath(),
             REPLACE_EXISTING, COPY_ATTRIBUTES,

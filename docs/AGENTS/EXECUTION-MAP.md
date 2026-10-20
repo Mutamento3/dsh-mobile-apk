@@ -2075,6 +2075,7 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
 
 <!-- COVERAGE
+app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotPreservationSafetyTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/FactoryRetirementSafetyTest.kt
 scripts/verify-webview-settings.test.mjs
 app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt

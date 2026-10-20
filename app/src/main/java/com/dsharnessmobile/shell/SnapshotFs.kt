@@ -311,6 +311,9 @@ internal const val CODE_DELETE_RESIDUE = "snapshot-delete-residue"
 /** 原子写失败（issue #274 ②）：写用户面清单时的 tmp+rename 或可解析性校验失败。 */
 internal const val CODE_ATOMIC_WRITE = "snapshot-atomic-write"
 
+/** Pre-overwrite preservation failed; the transaction must abort before replacing the live file. */
+internal const val CODE_PRESERVE_FAILED = "snapshot-preserve-failed"
+
 /** 写事务 journal（marker）失败（issue #273 ②）：恢复权威写不进去，事务必须中止。 */
 internal const val CODE_MARKER_WRITE = "snapshot-marker-write"
 
