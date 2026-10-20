@@ -2076,6 +2076,10 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 <!-- COVERAGE
 scripts/verify-webview-settings.test.mjs
+app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt
+app/src/test/java/com/dsharnessmobile/shell/NotifyPermissionRetryTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/NotifyDeferredRecoveryTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/IncomingRetentionTest.kt
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
 scripts/verify-mobile-workspaces.mjs
@@ -2160,6 +2164,7 @@ app/src/main/java/com/dsharnessmobile/shell/EngineProbe.kt
 app/src/main/java/com/dsharnessmobile/shell/LiveProbe.kt
 app/src/main/java/com/dsharnessmobile/shell/WatchdogV2.kt
 app/src/main/java/com/dsharnessmobile/shell/LogCollector.kt
+app/src/main/java/com/dsharnessmobile/shell/AtomicFileReplace.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotTransaction.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotFs.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotRefreshPolicy.kt
@@ -2182,6 +2187,8 @@ app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt
 app/src/main/java/com/dsharnessmobile/shell/ControlAudit.kt
 app/src/main/java/com/dsharnessmobile/shell/MuxClient.kt
 app/src/main/java/com/dsharnessmobile/shell/ShellState.kt
+app/src/main/java/com/dsharnessmobile/shell/AppLanguage.kt
+app/src/main/java/com/dsharnessmobile/shell/UiText.kt
 app/src/main/AndroidManifest.xml
 app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt
 app/src/main/java/com/dsharnessmobile/shell/CoordBasisPolicy.kt
@@ -2216,6 +2223,7 @@ app/src/main/java/com/dsharnessmobile/shell/VdisplayOps.kt
 app/src/main/java/com/dsharnessmobile/shell/VirtualDisplayProbe.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/VdisplayProbeTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/ShizukuReconnectTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/SnapshotAtomicRecoveryTest.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicy.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserOverlayPolicy.kt
@@ -2292,6 +2300,7 @@ glob:dsh-client-ui-responsive/src/client/*.module.css
 glob:dsh-client-ui-responsive/src/client/mobile/*
 glob:dsh-client-ui-responsive/src/client/dev-section/*
 dsh-client-ui-responsive/src/client/general-settings/GeneralSettings.tsx
+dsh-client-ui-responsive/src/client/general-settings/ui-language.ts
 dsh-host-web-compat/lib/index.js
 glob:dsh-host-web-compat/scripts/*
 dsh-shell-termux/src/index.ts

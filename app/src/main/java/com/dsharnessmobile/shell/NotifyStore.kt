@@ -412,6 +412,11 @@ object NotifyStore {
       app, TAG,
       "notify drain trigger=" + trigger + " lines=" + lines.size + " offset " + offset + "->" + next + " len=" + len,
     )
+    // Retry durable interactions after source processing. The queue is bounded and this method
+    // is already serialized, so a permission grant or channel repair can deliver immediately.
+    if (NotifySuppressQueue.pendingCount() > 0) {
+      try { NotifySuppressQueue.retryRetained(app) } catch (_: Throwable) {}
+    }
   }
 
   /** 本次消费该做什么（`offset`/`len` 的三种关系；纯逻辑，JVM 单测覆盖）。 */

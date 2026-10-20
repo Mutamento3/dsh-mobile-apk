@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { describeHttpFailure, noticeDataAttrs, type Notice } from '../user-copy.ts'
+import { tr } from '../i18n.ts'
 
 /** 扫描/执行接口返回的单项。 */
 interface CacheItem {
@@ -66,17 +67,17 @@ function fmtBytes(n: number): string {
  * 未登记的原因落到 [describeSkipReason] 的兜底句，原始串只进 `data-reason`。
  */
 const SKIP_LABEL: Record<string, string> = {
-  'not-allowlisted': '未列入白名单（本版不清理）',
-  absent: '不存在',
-  unreadable: '不可读',
-  'log-root-unresolved': '日志目录未注入（应用未提供日志目录）',
-  'current-generation-absent': '当前引擎日志不在场（引擎未启动）',
-  preserved: '属保留项',
-  'scope-rejected': '越出白名单作用域（已拒绝）',
-  vanished: '执行前已消失',
-  aborted: '被执行中断跳过',
+  'not-allowlisted': tr('未列入白名单（本版不清理）', 'Not on the allowlist; this version keeps it'),
+  absent: tr('不存在', 'Not found'),
+  unreadable: tr('不可读', 'Unreadable'),
+  'log-root-unresolved': tr('日志目录未注入（应用未提供日志目录）', 'No log folder was provided by the app'),
+  'current-generation-absent': tr('当前引擎日志不在场（引擎未启动）', 'The current engine log is absent (engine stopped)'),
+  preserved: tr('属保留项', 'Kept on purpose'),
+  'scope-rejected': tr('越出白名单作用域（已拒绝）', 'Outside the allowlist; refused'),
+  vanished: tr('执行前已消失', 'Already gone before it ran'),
+  aborted: tr('被执行中断跳过', 'Skipped because the run was interrupted'),
   // 执行期失败：原因是稳定码，OS 错误串在 `detail` 里（只进 data-detail）。
-  'remove-failed': '删除失败（文件被占用、只读或权限不足）',
+  'remove-failed': tr('删除失败（文件被占用、只读或权限不足）', 'Delete failed (in use, read-only, or not permitted)'),
 }
 
 /**
@@ -86,8 +87,8 @@ const SKIP_LABEL: Record<string, string> = {
  */
 function describe(item: CacheItem): string {
   const reason = item.reason ?? ''
-  if (reason === '') return '原因未记录'
-  return SKIP_LABEL[reason] ?? '原因未在本版登记（可复制日志反馈）'
+  if (reason === '') return tr('原因未记录', 'No reason recorded')
+  return SKIP_LABEL[reason] ?? tr('原因未在本版登记（可复制日志反馈）', 'This reason is not listed yet; copy the log and report it')
 }
 
 /**
@@ -146,10 +147,10 @@ export function RuntimeCacheRow() {
       const payload = (await response.json().catch(() => null)) as CacheReport | null
       setReport(payload)
       if (payload === null) {
-        setMessage({ text: '清理结果无法解析（响应不是预期的数据）——请重试；仍失败可复制日志反馈' })
+        setMessage({ text: tr('清理结果无法解析（响应不是预期的数据）——请重试；仍失败可复制日志反馈', 'The result could not be read. Retry, or copy the log and report it.') })
       }
     } catch {
-      setMessage({ text: '清理请求失败（仅安卓应用内有此能力）——请确认在本机应用内操作' })
+      setMessage({ text: tr('清理请求失败（仅安卓应用内有此能力）——请确认在本机应用内操作', 'Clearing is only available inside the Android app.') })
     } finally {
       setBusy(false)
       void refresh()
@@ -168,23 +169,23 @@ export function RuntimeCacheRow() {
           {scanState === 'ok'
             ? (reclaimable > 0
               // 真值：读到了，且有可回收体积。
-              ? '运行时缓存可回收：' + fmtBytes(reclaimable) + '（' + String(targets.length) + ' 项）'
+              ? tr('运行时缓存可回收：', 'Runtime cache reclaimable: ') + fmtBytes(reclaimable) + tr('（', ' (') + String(targets.length) + tr(' 项）', ' items)')
               // 真值：读到了，确实没有可清理项（这才是合法的空态）。
-              : '运行时缓存：暂无可清理项（本版白名单内没有残留）')
-            : '运行时缓存可回收：读不到（不是 0——应用内的读取通道不可用或返回异常）'}
+              : tr('运行时缓存：暂无可清理项（本版白名单内没有残留）', 'Runtime cache: nothing to clear (the allowlist found no leftovers)'))
+            : tr('运行时缓存可回收：读不到（不是 0——应用内的读取通道不可用或返回异常）', 'Runtime cache could not be read, so this is not zero: the app bridge is unavailable or returned an error')}
         </span>
         <button
           type="button"
           className="dsh-dev-btn"
           disabled={busy}
           onClick={() => { void refresh() }}
-        >重新扫描</button>
+        >{tr('重新扫描', 'Scan again')}</button>
         <button
           type="button"
           className="dsh-dev-btn dsh-dev-danger"
           disabled={busy || scanState !== 'ok' || reclaimable === 0}
           onClick={() => { setConfirming(true) }}
-        >{busy ? '清理中…' : '清理'}</button>
+        >{busy ? tr('清理中…', 'Clearing…') : tr('清理', 'Clear')}</button>
       </div>
 
       {/* S3-16（设备实测补正）：读不到时**不得**继续展示上一次的清单——那会让「读不到」的头部
@@ -194,7 +195,7 @@ export function RuntimeCacheRow() {
           {targets.map((item) => (
             <li key={item.label ?? item.id}>
               {item.label ?? item.id} — {fmtBytes(typeof item.bytes === 'number' ? item.bytes : 0)}
-              {typeof item.files === 'number' ? '（' + String(item.files) + ' 项）' : ''}
+              {typeof item.files === 'number' ? tr('（', ' (') + String(item.files) + tr(' 项）', ' items)') : ''}
             </li>
           ))}
         </ul>
@@ -202,16 +203,18 @@ export function RuntimeCacheRow() {
       {/* 精简（0.14.7-B D5）：白名单制与「哪些不碰」是数据安全说明，必须保留；此处只去掉
           「本版未纳入任何子目录」这类与上方跳过清单逐条重复的实现口径。 */}
       <p className="dsh-dev-hint">
-        白名单制：只清理本版已知安全的引擎运行时残留（引擎日志历史代 + 有据可查的缓存目录）。
-        当前引擎日志、会话与附件、凭据、用户设置、已装插件一律不触碰；白名单外的路径逐项跳过并如实列出。
+        {tr(
+          '白名单制：只清理本版已知安全的引擎运行时残留（引擎日志历史代 + 有据可查的缓存目录）。当前引擎日志、会话与附件、凭据、用户设置、已装插件一律不触碰；白名单外的路径逐项跳过并如实列出。',
+          'Only known-safe runtime leftovers are cleared. Current logs, sessions, attachments, credentials, user settings, and installed plugins are never touched; everything else is skipped and listed.',
+        )}
       </p>
 
       {skipped.length > 0 && (
         <details className="dsh-dev-hint">
-          <summary>跳过 {skipped.length} 项（未识别/保留）</summary>
+          <summary>{tr('跳过 ', 'Skipped ')}{skipped.length}{tr(' 项（未识别/保留）', ' items (unknown or kept)')}</summary>
           <ul className="dsh-dev-cache-list">
             {skipped.map((item) => (
-              <li key={item.label ?? item.id}>{item.label ?? item.id}：{describe(item)}</li>
+              <li key={item.label ?? item.id}>{item.label ?? item.id}{tr('：', ': ')}{describe(item)}</li>
             ))}
           </ul>
         </details>
@@ -224,9 +227,9 @@ export function RuntimeCacheRow() {
       {report !== null && (
         <div>
           <p className="dsh-dev-hint">
-            已清理 {String(report.removed ?? 0)} 项，释放 {fmtBytes(typeof report.removedBytes === 'number' ? report.removedBytes : 0)}
-            （扫描值 {fmtBytes(typeof report.plannedBytes === 'number' ? report.plannedBytes : 0)}）
-            {typeof report.failed === 'number' && report.failed > 0 ? '；' + String(report.failed) + ' 项失败' : ''}
+            {tr('已清理 ', 'Cleared ')}{String(report.removed ?? 0)}{tr(' 项，释放 ', ' items and freed ')}{fmtBytes(typeof report.removedBytes === 'number' ? report.removedBytes : 0)}
+            {tr('（扫描值 ', ' (scanned ')}{fmtBytes(typeof report.plannedBytes === 'number' ? report.plannedBytes : 0)}{tr('）', ')')}
+            {typeof report.failed === 'number' && report.failed > 0 ? tr('；', '; ') + String(report.failed) + tr(' 项失败', ' failed') : ''}
           </p>
           <ul className="dsh-dev-cache-list">
             {items.map((item) => (
@@ -235,9 +238,9 @@ export function RuntimeCacheRow() {
                 {...(item.reason === undefined || item.reason === '' ? {} : { 'data-reason': item.reason })}
                 {...(item.detail === undefined || item.detail === '' ? {} : { 'data-detail': item.detail })}
               >
-                {item.label ?? item.id} — {item.status === 'removed' ? '已删除 ' + fmtBytes(typeof item.bytes === 'number' ? item.bytes : 0)
-                  : item.status === 'failed' ? '失败：' + describe(item)
-                    : '跳过：' + describe(item)}
+                {item.label ?? item.id} — {item.status === 'removed' ? tr('已删除 ', 'removed ') + fmtBytes(typeof item.bytes === 'number' ? item.bytes : 0)
+                  : item.status === 'failed' ? tr('失败：', 'failed: ') + describe(item)
+                    : tr('跳过：', 'skipped: ') + describe(item)}
               </li>
             ))}
           </ul>
@@ -249,15 +252,15 @@ export function RuntimeCacheRow() {
           className="dsh-dev-modal-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="确认清除运行时缓存"
+          aria-label={tr('确认清除运行时缓存', 'Confirm clearing the runtime cache')}
           onClick={() => { setConfirming(false) }}
         >
           <div className="dsh-dev-modal" role="document" onClick={(event) => { event.stopPropagation() }}>
-            <p className="dsh-dev-modal-title">确认清除运行时缓存？</p>
+            <p className="dsh-dev-modal-title">{tr('确认清除运行时缓存？', 'Clear the runtime cache?')}</p>
             {/* 不可逆操作的后果说明必须保留：删哪几项、哪些不受影响、失败项如何处理。 */}
             <p className="dsh-dev-modal-desc">
-              删除以下 {targets.length} 项，共 {fmtBytes(reclaimable)}，无法恢复。会话、附件、凭据、
-              设置、已装插件与当前引擎日志不受影响；失败项会如实列出。
+              {tr('删除以下 ', 'Delete these ')}{targets.length}{tr(' 项，共 ', ' items, ')}{fmtBytes(reclaimable)}
+              {tr('，无法恢复。会话、附件、凭据、设置、已装插件与当前引擎日志不受影响；失败项会如实列出。', ', with no undo. Sessions, attachments, credentials, settings, plugins, and the current log are untouched; failures are listed.')}
             </p>
             <ul className="dsh-dev-cache-list">
               {targets.map((item) => (
@@ -265,8 +268,8 @@ export function RuntimeCacheRow() {
               ))}
             </ul>
             <div className="dsh-dev-modal-actions">
-              <button type="button" className="dsh-dev-btn" autoFocus onClick={() => { setConfirming(false) }}>取消</button>
-              <button type="button" className="dsh-dev-btn dsh-dev-danger" onClick={() => { void run() }}>清理</button>
+              <button type="button" className="dsh-dev-btn" autoFocus onClick={() => { setConfirming(false) }}>{tr('取消', 'Cancel')}</button>
+              <button type="button" className="dsh-dev-btn dsh-dev-danger" onClick={() => { void run() }}>{tr('清理', 'Clear')}</button>
             </div>
           </div>
         </div>
