@@ -241,6 +241,28 @@ class ShizukuBindStateTest {
     assertFalse("尚未发起时不得让人干等", text.contains("正在建立"))
   }
 
+  /** English guidance must never fall back to the Chinese sentence in an English UI. */
+  @Test
+  fun everyEnglishGuidanceStaysEnglish() {
+    val codes = listOf(
+      ShizukuBindCodes.BIND_TIMEOUT,
+      ShizukuBindCodes.NOT_BOUND,
+      ShizukuBindCodes.DISCONNECTED,
+      ShizukuBindCodes.INVALID_BINDER,
+      ShizukuBindCodes.RESET,
+      "shizuku-user-service-bind-failed:IllegalStateException",
+      "shizuku-something-new",
+    )
+    for (code in codes) {
+      val text = shizukuBindGuidance(code, binding = false, ageMs = -1L, watchdogMs = watchdog, english = true)
+      assertTrue("英文引导不得为空（code=$code）", text.isNotBlank())
+      assertFalse("英文引导不得混入中文（code=$code）：$text", Regex("[\\u4e00-\\u9fff]").containsMatchIn(text))
+    }
+    val live = shizukuBindGuidance(ShizukuBindCodes.CONNECTING, binding = true, ageMs = 3_000L, watchdogMs = watchdog, english = true)
+    assertFalse("英文进行中文案不得混入中文：$live", Regex("[\\u4e00-\\u9fff]").containsMatchIn(live))
+    assertTrue("英文进行中文案必须给出已等待秒数", live.contains("3s"))
+  }
+
   /** 进行中文案必须带已等待秒数（否则用户无法判断它到底在动还是冻住）。 */
   @Test
   fun theConnectingGuidanceReportsElapsedSeconds() {

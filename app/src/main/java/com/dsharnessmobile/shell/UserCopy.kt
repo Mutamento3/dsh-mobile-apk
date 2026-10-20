@@ -32,6 +32,9 @@ internal object UserCopy {
   /** 无障碍服务名（系统设置里用户要照着找的那一项）。 */
   const val A11Y_SERVICE_NAME = "$APP_NAME 设备控制"
 
+  /** English form of [A11Y_SERVICE_NAME], matching `values-en` `a11y_service_label`. */
+  const val A11Y_SERVICE_NAME_EN = "$APP_NAME device control"
+
   // ── 通知类别（唯一用词；同时是系统渠道名与设置页标签）──────────────────
   //
   // 五类与 `NotifyCenter.Face` 一一对应。旧形态：「需要回答」（渠道名）vs 「提问」（设置页），

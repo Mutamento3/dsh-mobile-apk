@@ -353,15 +353,16 @@ internal object SnapshotTransaction {
    * `.snapshot-previous/usr/lib` 两处残留并存）：失败残渣（全量树副本，数百 MB）→ 空间变紧 →
    * 下一次更易失败 → 又能留下新残渣。
    *
-   * 安全边界：**只删带 `.failed-` 中缀的条目**（写点只有「live 条目的兄弟位置」，见 [residueDirs]）；
-   * 不碰 `previous`/`stage`（半程事务的回滚源），也不做全树递归。
+   * 安全边界：只删 [failedResidueStamp] 确认属于 `.failed-` 写点的条目；stage orphan 仍只由
+   * [reclaimResidue] 按年龄回收。未知名称、未知目录与畸形时间戳一律保留；不碰
+   * `previous`/`stage`（半程事务的回滚源），也不做全树递归。
    */
   fun clearFailedResidue(filesDir: File): List<String> {
     val cleared = mutableListOf<String>()
     val dirs = listOf(filesDir, File(filesDir, "home"), File(filesDir, "home/.dsh"))
     for (dir in dirs) {
       for (child in dir.listFiles() ?: continue) {
-        if (!child.name.contains(".failed-")) continue
+        if (failedResidueStamp(filesDir, child) == null) continue
         if (!SnapshotFs.exists(child)) continue
         // 严格删：残渣删不掉要如实抛（否则又变成「说清了其实没清」，本 issue 的病根）。
         try {
@@ -384,12 +385,14 @@ internal object SnapshotTransaction {
     private set
 
   /**
-   * 扫描三类位置上的残渣目录（纯函数，可单测）：
-   *  - `files/` 与 `files/home/` 与 `files/home/.dsh/` 下的 `*.failed-*`（rollback/补偿挪开的 live 树）；
-   *  - `files/` 下的 `.snapshot-stage-orphan-*`（stage 删不掉时挪开的解压残渣）。
+   * 扫描残渣目录（纯函数，可单测）：
+   *  - [failedResidueStamp] 确认属于事务写点的失败残渣（rollback/补偿挪开的 live 树）；
+   *  - `files/` 下 [stageOrphanStamp] 确认的 `.snapshot-stage-orphan-<ts>`（stage 删不掉时挪开的解压残渣）。
    *
-   * 为什么只扫这三层：`.failed-*` 的写点只有「live 条目的兄弟位置」，而 live 条目全部落在
-   * `files/usr`、`files/home/<name>`、`files/home/.dsh/<name>` 三处（见 livePath）。不做全树递归 =
+   * 只在事务可能写残渣的三层里观察，但不把「带 `.failed-` 的名字」直接当成所有权。当前写点
+   * 只能把 `usr` 挪到 `files/usr.failed-<ts>`；把 profiles 合并失败的副本挪到
+   * `files/profiles.failed-<ts>`；回滚也可能把 `files/home/.dsh/profiles` 挪到
+   * `files/home/.dsh/profiles.failed-<ts>` 这一兄弟位置。因此只认这三个槽名。不做全树递归 =
    * 不把用户数据树整个走一遍（回收入口在启动路径上，必须廉价）。
    */
   fun residueDirs(filesDir: File, now: Long = System.currentTimeMillis()): List<File> {
@@ -399,17 +402,53 @@ internal object SnapshotTransaction {
       val children = dir.listFiles() ?: continue
       for (child in children) {
         val name = child.name
-        val isFailed = name.contains(".failed-")
-        val isOrphanStage = dir == filesDir && name.startsWith(STAGE_ORPHAN_PREFIX)
-        if (!isFailed && !isOrphanStage) continue
+        val failedStamp = failedResidueStamp(filesDir, child)
+        val stamp = failedStamp ?: stageOrphanStamp(filesDir, child)
+        if (stamp == null) continue
         if (!SnapshotFs.exists(child)) continue
-        // 年龄门槛：`<ts>` 后缀是写点时间戳；解析不出时间戳的（老版本命名）不删（保守）。
-        val stamp = name.substringAfterLast('-', "").toLongOrNull() ?: continue
+        // 年龄门槛：后缀必须是写点产生的正毫秒时间戳；畸形/旧命名保守保留。
         if (now - stamp < RESIDUE_MIN_AGE_MS) continue
         out += child
       }
     }
     return out
+  }
+
+  /**
+   * 失败残渣的**所有权与写点格式**判据。
+   *
+   * `.failed-` 写点都使用 `live.name + ".failed-" + System.currentTimeMillis()`：
+   *  - `rollbackEntry` 把 `usr` 挪到 `files/`；
+   *  - `compensateFailedProfilesMerge` 把 `profiles` 挪到 `files/`；
+   *  - `rollbackEntry` 也可能把 `profiles` 挪到 `files/home/.dsh/` 的兄弟位置。
+   *
+   * 其他名字即使含 `.failed-` 也没有生产写点，可能是用户自己的目录。`home/` 顶层的已知名条目
+   * 在 swap 时要么保留、要么只装载缺失项，回滚不会把它们改名移走，因此这里不接受该层残渣。
+   * 后缀必须是正十进制毫秒时间戳；解析失败或溢出的条目保守保留。
+   */
+  private fun failedResidueStamp(filesDir: File, child: File): Long? {
+    val slots = when (child.parentFile) {
+      filesDir -> listOf("usr", "profiles")
+      File(filesDir, "home/.dsh") -> listOf("profiles")
+      else -> return null
+    }
+    for (slot in slots) {
+      val prefix = slot + ".failed-"
+      if (!child.name.startsWith(prefix)) continue
+      val suffix = child.name.substring(prefix.length)
+      if (suffix.isEmpty() || suffix.any { it !in '0'..'9' }) return null
+      return suffix.toLongOrNull()?.takeIf { it > 0L }
+    }
+    return null
+  }
+
+  /** `.snapshot-stage-orphan-<ts>` 的写点格式判据；只存在于 `files/` 顶层。 */
+  private fun stageOrphanStamp(filesDir: File, child: File): Long? {
+    if (child.parentFile != filesDir) return null
+    if (!child.name.startsWith(STAGE_ORPHAN_PREFIX)) return null
+    val suffix = child.name.substring(STAGE_ORPHAN_PREFIX.length)
+    if (suffix.isEmpty() || suffix.any { it !in '0'..'9' }) return null
+    return suffix.toLongOrNull()?.takeIf { it > 0L }
   }
 
   /**
@@ -478,6 +517,8 @@ internal object SnapshotTransaction {
     fingerprint: String,
     startedAt: Long,
     onEntry: (String) -> Unit = {},
+    /** UI language for the entries reported through [onEntry]; defaults to Chinese. */
+    english: Boolean = false,
     /**
      * 空间前置检查（审查 §7.2-F-4 / B12）：入参是**本次交换需要保留的可用字节**，
      * 返回拒绝文案（null = 放行）。注入式而非直接调 Android StatFs，是为了让事务保持纯 JVM 可测
@@ -504,6 +545,8 @@ internal object SnapshotTransaction {
     purpose: Purpose = Purpose.FACTORY,
     priorFingerprint: String = "",
     baseFingerprint: String = "",
+    /** Fault-injection seam for preservation; appended to keep existing positional arguments stable. */
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ): List<String> {
     val stagedUsr = File(stagedRoot, "usr")
     if (!SnapshotFs.exists(stagedUsr)) throw IOException("staged runtime is missing usr/")
@@ -526,13 +569,16 @@ internal object SnapshotTransaction {
     // 「解压前」检查用的，而本检查跑在解压**之后**：stage 的空间已经付过了，再按整树要 2.5 倍
     // 会把「本可成功」的刷新拒掉，属过度拦截）。swap 的新分配来自：
     //   · `mergeProfiles` 把 live 的 profiles 树整份拷成 previous（主导项，且**必须**留得下）；
+    //   · 覆盖差异工厂文件前保留的 `.pre-*` 副本；
     //   · `mergeTree` 把 staged 里 live 缺的文件补进去（相对小）。
     // 其余（usr/home 顶层条目、profiles 换位）都是 rename，不占新空间。
     // 余量取 25% + 64MB：覆盖补入文件与文件系统元数据（小文件多时块开销可观）。
     if (spaceCheck != null && purpose == Purpose.FACTORY) {
       val liveProfiles = File(File(homeDir, ".dsh"), "profiles")
       val backupBytes = SnapshotFs.sizeOf(liveProfiles)
-      val required = backupBytes + backupBytes / 4 + 64L * 1024L * 1024L
+      val stagedProfiles = File(File(stagedRoot, "home/.dsh"), "profiles")
+      val preserved = preservedBytes(stagedProfiles, liveProfiles, profileUserFacingFiles(stagedProfiles))
+      val required = backupBytes + preserved + backupBytes / 4 + 64L * 1024L * 1024L
       val refusal = spaceCheck(required)
       if (refusal != null) throw InsufficientSpaceException(required, refusal)
     }
@@ -561,7 +607,7 @@ internal object SnapshotTransaction {
             val liveChild = File(liveDsh, child.name)
             if (child.name in preservedNames && SnapshotFs.exists(liveChild)) {
               // User data stays exactly where it is.
-              onEntry("保留用户数据 " + child.name)
+              onEntry(if (english) "Keeping user data " + child.name else "保留用户数据 " + child.name)
               continue
             }
             if (child.name == "profiles" && SnapshotFs.exists(liveChild)) {
@@ -569,13 +615,16 @@ internal object SnapshotTransaction {
               // 更新、用户条目（第三方依赖/.npmrc/自打补丁/追加块）保留。
               // 0.14.0 #214：工厂对同 id 的 disabled 语义改为权威（旧规则「以 live 为基」使
               // 旧版遗留的 ui-layout disable 永不被纠正 → 根服务 layout 不 activate）。
-              mergeProfiles(filesDir, moved, fingerprint, startedAt, child, liveChild, File(previousDsh, "profiles"), onEntry, notes, links)
+              mergeProfiles(
+                filesDir, moved, fingerprint, startedAt, child, liveChild,
+                File(previousDsh, "profiles"), onEntry, notes, links, preserveCopy,
+              )
               continue
             }
             if (SnapshotFs.exists(liveChild) && child.name !in SnapshotUserData.factorySnapshotNames) {
               // Unknown .dsh entries can belong to newer app versions or user extensions.
               // Seed absent paths, but never let a factory archive erase an unclassified collision.
-              onEntry("保留未分类DSH数据 " + child.name)
+              onEntry(if (english) "Keeping unclassified dsh data " + child.name else "保留未分类DSH数据 " + child.name)
               continue
             }
             replaceEntry(
@@ -590,7 +639,7 @@ internal object SnapshotTransaction {
           // （白名单机制只作用于 .dsh 子项，对本分支无效，见坑 67 之前的取证）。
           val liveEntry = File(homeDir, entry.name)
           if (SnapshotFs.exists(liveEntry)) {
-            onEntry("保留用户数据 home/" + entry.name)
+            onEntry(if (english) "Keeping user data home/" + entry.name else "保留用户数据 home/" + entry.name)
             continue
           }
           replaceEntry(
@@ -736,6 +785,7 @@ internal object SnapshotTransaction {
     onEntry: (String) -> Unit,
     notes: MutableList<String>,
     links: LinkPrimitives = PRODUCTION_LINKS,
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ) {
     // ① 备份先写临时名（拷贝失败/被杀 = live 与 journal 都不受影响）
     val copying = File(previousProfiles.parentFile, previousProfiles.name + ".copying")
@@ -759,12 +809,8 @@ internal object SnapshotTransaction {
       // 旧实现把「并集」规则递归套到嵌套清单，只合并 dependencies/bundles 而丢掉工厂新增的
       // exports 等字段，live 树因此变成「旧清单 + 新文件」的混合体，插件跨包 import
       // "./route-auth" 直接 ERR_PACKAGE_PATH_NOT_EXPORTED（引擎 exit=1）。
-      val userFacingFiles = HashSet<String>()
-      for (profile in stagedProfiles.listFiles() ?: emptyArray()) {
-        userFacingFiles += File(profile, "package.json").absolutePath
-        userFacingFiles += File(profile, "cordis.patch.yml").absolutePath
-      }
-      mergeTree(stagedProfiles, liveProfiles, notes, userFacingFiles)
+      val userFacingFiles = profileUserFacingFiles(stagedProfiles)
+      mergeTree(stagedProfiles, liveProfiles, notes, userFacingFiles, preserveCopy)
       reconcileRemovedProfilePlugins(liveProfiles, notes)
       val suffix = if (notes.isEmpty()) "" else "；工厂语义纠正 " + notes.size + " 处"
       onEntry("home/.dsh/profiles (merged" + suffix + ")")
@@ -960,25 +1006,106 @@ internal object SnapshotTransaction {
    * 覆盖前把「被抹掉的用户版本」另存为**可发现**的副本（issue #274 ③）。
    *
    * 判据：只在 live 存在**且内容与工厂不同**时才留（内容相同 = 用户没改过，留一份纯属噪声）。
-   * 落点与命名：同目录 `.pre-<name>-<时间戳>`，与 [writeTextAtomic] 的失败留证同款，
+   * 落点与命名：同目录 `.pre-<name>-<时间戳>-<UUID>`，与 [writeTextAtomic] 的失败留证同款，
    * 用户用文件管理器就能看到。
    *
    * @param notes 追加一条叙述（调用方写日志/UI）。
    */
-  private fun preserveOverwrittenUserFile(staged: File, live: File, notes: MutableList<String>) {
+  private fun preserveOverwrittenUserFile(
+    staged: File,
+    live: File,
+    notes: MutableList<String>,
+    copy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
+  ) {
     if (!SnapshotFs.exists(live)) return
     if (SnapshotFs.isSymbolicLink(live)) return
-    val stagedBytes = try { staged.readBytes() } catch (_: Throwable) { return }
-    val liveBytes = try { live.readBytes() } catch (_: Throwable) { return }
-    if (stagedBytes.contentEquals(liveBytes)) return
-    val backup = File(live.parentFile, ".pre-" + live.name + "-" + System.currentTimeMillis())
+    val liveSize = live.length()
+    if (sameContent(staged, live)) return
+    val backup = File(live.parentFile, ".pre-" + live.name + "-" + System.currentTimeMillis() + "-" + java.util.UUID.randomUUID())
+    val temporary = File(live.parentFile, ".pre-" + live.name + ".tmp-" + java.util.UUID.randomUUID())
     try {
-      Files.copy(live.toPath(), backup.toPath(), REPLACE_EXISTING)
-      notes += "保留被工厂件覆盖的用户版本: " + live.absolutePath + " -> " + backup.name
-    } catch (_: Throwable) {
-      // 留证失败不得阻断刷新（覆盖语义本身不变），但要可见。
-      notes += "未能保留被覆盖的用户版本（写入失败）: " + live.absolutePath
+      copy(live, temporary)
+      if (!temporary.isFile || temporary.length() != liveSize || !sameContent(live, temporary)) {
+        throw IOException("preserved copy content mismatch")
+      }
+      // Files.copy may preserve a read-only user mode. Change only our private temporary,
+      // then restore that mode before publishing the backup; the live file is never chmodded.
+      val wasWritable = temporary.canWrite()
+      if (!wasWritable && !temporary.setWritable(true, true)) throw IOException("cannot synchronize preserved copy")
+      var modeRestored = true
+      try {
+        java.io.FileOutputStream(temporary, true).use { it.fd.sync() }
+      } finally {
+        if (!wasWritable) modeRestored = temporary.setWritable(false, true)
+      }
+      if (!modeRestored) throw IOException("cannot restore preserved copy mode")
+      if (!AtomicFileReplace.publish(temporary, backup)) throw IOException("preserved copy publication failed")
+    } catch (failure: Throwable) {
+      try { SnapshotFs.deletePath(temporary) } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+      throw SnapshotFsException(
+        code = CODE_PRESERVE_FAILED,
+        residue = listOf(live),
+        message = "无法在覆盖前完整保留用户版本，已中止本次事务（live 未替换）：" + live.absolutePath
+          + "（" + (failure.message ?: failure.javaClass.simpleName) + "）",
+        cause = failure,
+      )
     }
+    notes += "保留被工厂件覆盖的用户版本: " + live.absolutePath + " -> " + backup.name
+  }
+
+  private fun sameContent(left: File, right: File): Boolean {
+    if (left.length() != right.length()) return false
+    var same = true
+    java.io.FileInputStream(left).use { a ->
+      java.io.FileInputStream(right).use { b ->
+        val one = ByteArray(64 * 1024)
+        val two = ByteArray(64 * 1024)
+        while (true) {
+          val n = a.read(one)
+          val m = b.read(two)
+          if (n != m || n < 0) { same = n == m; break }
+          var differs = false
+          for (i in 0 until n) if (one[i] != two[i]) { differs = true; break }
+          if (differs) { same = false; break }
+        }
+      }
+    }
+    return same
+  }
+
+  /**
+   * Upper bound for `.pre-*` copies created by the merge. Every changed factory file is copied
+   * before replacement, so the precheck must budget for those bytes as well as the profile backup.
+   */
+  internal fun preservedBytes(staged: File, live: File): Long {
+    return preservedBytes(staged, live, emptySet())
+  }
+
+  internal fun preservedBytes(staged: File, live: File, userFacingFiles: Set<String>): Long {
+    var total = 0L
+    val children = staged.listFiles() ?: return 0L
+    for (child in children) {
+      // mergeTree never follows staged links; the reservation must use the same boundary.
+      if (SnapshotFs.isSymbolicLink(child)) continue
+      val existing = File(live, child.name)
+      if (child.isDirectory) {
+        if (existing.isDirectory) total += preservedBytes(child, existing, userFacingFiles)
+        continue
+      }
+      if (!existing.isFile || SnapshotFs.isSymbolicLink(existing)) continue
+      if (child.absolutePath in userFacingFiles) continue // these merge in place and create no copy
+      if (!sameContent(child, existing)) total += existing.length()
+    }
+    return total
+  }
+
+  internal fun profileUserFacingFiles(stagedProfiles: File): Set<String> {
+    val result = HashSet<String>()
+    for (profile in stagedProfiles.listFiles() ?: emptyArray()) {
+      result += File(profile, "package.json").absolutePath
+      result += File(profile, "cordis.patch.yml").absolutePath
+    }
+    return result
   }
 
   /**
@@ -995,6 +1122,7 @@ internal object SnapshotTransaction {
     live: File,
     notes: MutableList<String>,
     userFacingFiles: Set<String>,
+    preserveCopy: (File, File) -> Unit = { from, to -> Files.copy(from.toPath(), to.toPath(), REPLACE_EXISTING) },
   ) {
     val attrs = Files.readAttributes(
       staged.toPath(), BasicFileAttributes::class.java, NOFOLLOW_LINKS,
@@ -1004,7 +1132,7 @@ internal object SnapshotTransaction {
       attrs.isDirectory -> {
         SnapshotFs.createDirectories(live)
         for (child in staged.listFiles() ?: emptyArray()) {
-          mergeTree(child, File(live, child.name), notes, userFacingFiles)
+          mergeTree(child, File(live, child.name), notes, userFacingFiles, preserveCopy)
         }
       }
       attrs.isRegularFile -> when {
@@ -1019,7 +1147,7 @@ internal object SnapshotTransaction {
           // 为什么不做真三方合并：node_modules 下的工厂件是**整包发行物**，字段级合并会造出
           // 「旧清单 + 新文件」的混合体（0.14.0 P0 实锤：ERR_PACKAGE_PATH_NOT_EXPORTED）。
           // 覆盖是正确的语义，缺的只是「可发现」。
-          preserveOverwrittenUserFile(staged, live, notes)
+          preserveOverwrittenUserFile(staged, live, notes, preserveCopy)
           Files.copy(
             staged.toPath(), live.toPath(),
             REPLACE_EXISTING, COPY_ATTRIBUTES,
@@ -1039,26 +1167,34 @@ internal object SnapshotTransaction {
    * @param validate 写前对**将写入的内容**做可解析性校验（抛异常即中止、不落盘）。
    * @throws SnapshotFsException code=`snapshot-atomic-write` —— 写入或校验失败。
    */
-  private fun writeTextAtomic(target: File, text: String, label: String, validate: (String) -> Unit) {
+  internal fun writeTextAtomic(
+    target: File,
+    text: String,
+    label: String,
+    publish: (File, File) -> Boolean = AtomicFileReplace::publish,
+    validate: (String) -> Unit,
+  ) {
     validate(text)
-    val tmp = File(target.parentFile, "." + target.name + ".tmp-" + android.os.Process.myPid())
+    var tmp: File? = null
     try {
-      tmp.writeText(text)
-      if (!tmp.renameTo(target)) {
-        target.writeText(text)
-        SnapshotFs.deletePath(tmp)
+      val parent = target.absoluteFile.parentFile ?: throw IOException("missing target parent")
+      val temporary = Files.createTempFile(parent.toPath(), "." + target.name + "-", ".tmp").toFile()
+      tmp = temporary
+      java.io.FileOutputStream(temporary).use { output ->
+        output.write(text.toByteArray(Charsets.UTF_8))
+        output.flush()
+        output.fd.sync()
       }
+      if (!publish(temporary, target)) throw IOException("atomic replacement failed")
     } catch (e: Throwable) {
-      SnapshotFs.deletePath(tmp)
       // 失败留 `.pre-*` 备份（issue #274 ② 要求「失败留证」）：把当前 live 内容另存，
       // 用户/排障者能顺着它找回原状。
-      val live = if (SnapshotFs.exists(target)) target.readText() else null
-      if (live != null) {
-        try {
-          File(target.parentFile, ".pre-" + target.name + "-" + System.currentTimeMillis()).writeText(live)
-        } catch (_: Throwable) {
-          // 留证失败不掩盖真因。
+      try {
+        if (SnapshotFs.exists(target)) {
+          target.copyTo(File(target.parentFile, ".pre-" + target.name + "-" + java.util.UUID.randomUUID()))
         }
+      } catch (_: Throwable) {
+        // 留证失败不掩盖真因；原目标从未以截断方式打开。
       }
       if (e is SnapshotFsException) throw e
       throw SnapshotFsException(
@@ -1068,6 +1204,8 @@ internal object SnapshotTransaction {
           + "（" + (e.message ?: e.javaClass.simpleName) + "）",
         cause = e,
       )
+    } finally {
+      tmp?.let { SnapshotFs.deletePath(it) }
     }
   }
 

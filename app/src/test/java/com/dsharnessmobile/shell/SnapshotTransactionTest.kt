@@ -1,6 +1,7 @@
 package com.dsharnessmobile.shell
 
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -12,6 +13,48 @@ import org.junit.Test
 class SnapshotTransactionTest {
 
   private val preserved = setOf("sessions", "settings.yaml", ".credentials.yaml")
+
+  @Test
+  fun failedAtomicTextPublicationKeepsOldBytes() {
+    val dir = tempDir()
+    try {
+      val target = File(dir, "package.json")
+      val original = File(dir, "original.json")
+      val old = "{\"用户\":\"旧配置\"}\n".toByteArray(Charsets.UTF_8)
+      original.writeBytes(old)
+      Files.copy(original.toPath(), target.toPath())
+      var calls = 0
+      try {
+        SnapshotTransaction.writeTextAtomic(target, "{\"new\":true}", "fixture", publish = { temporary, live ->
+          calls++
+          assertTrue(old.contentEquals(live.readBytes()))
+          assertEquals("{\"new\":true}", temporary.readText())
+          false
+        }) { org.json.JSONObject(it) }
+        throw AssertionError("发布失败必须中止")
+      } catch (error: SnapshotFsException) {
+        assertEquals(CODE_ATOMIC_WRITE, error.code)
+      }
+      assertEquals(1, calls)
+      assertTrue("替换失败不得截断旧配置", old.contentEquals(target.readBytes()))
+      assertFalse("失败后不得留下本次临时文件", dir.listFiles().orEmpty().any { it.name.endsWith(".tmp") })
+    } finally { dir.deleteRecursively() }
+  }
+
+  @Test
+  fun atomicTextPublicationPublishesCompleteValidatedContent() {
+    val dir = tempDir()
+    try {
+      val target = File(dir, "package.json").apply { writeText("{\"old\":true}") }
+      SnapshotTransaction.writeTextAtomic(target, "{\"new\":true}", "fixture") { org.json.JSONObject(it) }
+      assertEquals("{\"new\":true}", target.readText())
+      try {
+        SnapshotTransaction.writeTextAtomic(target, "{broken", "fixture") { org.json.JSONObject(it) }
+        throw AssertionError("非法 JSON 必须被拒绝")
+      } catch (_: org.json.JSONException) { }
+      assertEquals("{\"new\":true}", target.readText())
+    } finally { dir.deleteRecursively() }
+  }
 
   @Test
   fun activatesFactoryEntriesAndNeverTouchesUserData() {
@@ -1037,6 +1080,95 @@ class SnapshotTransactionTest {
     }
   }
 
+  @Test
+  fun spacePrecheckIncludesPreservedFactoryOverwriteCopies() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "old-profile")
+      writeRuntime(stage, "new-node", "new-profile")
+      val liveProfiles = File(live, "home/.dsh/profiles")
+      val stagedProfiles = File(stage, "home/.dsh/profiles")
+      File(liveProfiles, "web/node_modules/p/cordis.yml").apply {
+        parentFile!!.mkdirs()
+        writeBytes(ByteArray(512 * 1024))
+      }
+      File(stagedProfiles, "web/node_modules/p/cordis.yml").apply { parentFile!!.mkdirs(); writeText("factory\n") }
+      var asked = 0L
+      runCatching {
+        SnapshotTransaction.swap(
+          filesDir, stage, File(live, "usr"), File(live, "home"), preserved, "fp-preserve-space", 1L,
+          spaceCheck = { required -> asked = required; "stop" },
+        )
+      }
+      val backupBytes = SnapshotFs.sizeOf(liveProfiles)
+      assertTrue("preserved overwrite bytes must be added to the existing safety allowance",
+        asked >= backupBytes + backupBytes / 4 + 64L * 1024 * 1024 + 512L * 1024)
+      val ownDiff = SnapshotTransaction.preservedBytes(
+        stagedProfiles,
+        liveProfiles,
+        SnapshotTransaction.profileUserFacingFiles(stagedProfiles),
+      )
+      assertTrue("our 512 KiB user file must be in the reservation", ownDiff >= 512L * 1024)
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
+
+  @Test
+  fun preservationFailureAbortsBeforeTheLiveFileIsReplaced() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "old-profile")
+      writeRuntime(stage, "new-node", "new-profile")
+      val rel = "home/.dsh/profiles/web/node_modules/p/big.bin"
+      val liveFile = File(live, rel).apply { parentFile!!.mkdirs(); writeText("user data") }
+      File(stage, rel).apply { parentFile!!.mkdirs(); writeText("factory") }
+      val error = runCatching {
+        SnapshotTransaction.swap(
+          filesDir = filesDir,
+          stagedRoot = stage,
+          usrDir = File(live, "usr"),
+          homeDir = File(live, "home"),
+          preservedNames = preserved,
+          fingerprint = "fp-preserve-fail",
+          startedAt = 1L,
+          preserveCopy = { _, _ -> throw IOException("simulated disk full") },
+        )
+      }.exceptionOrNull()
+      assertTrue("preserve failure must abort", error != null)
+      assertEquals("user data", liveFile.readText())
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
+
+  @Test
+  fun sameSizedCorruptPreservationAbortsBeforeReplacingUserBytes() {
+    val filesDir = tempDir()
+    try {
+      val live = File(filesDir, "live").apply { mkdirs() }
+      val stage = SnapshotTransaction.stageRoot(filesDir)
+      writeRuntime(live, "old-node", "same-profile")
+      writeRuntime(stage, "new-node", "same-profile")
+      val rel = "home/.dsh/profiles/web/node_modules/p/user.bin"
+      val original = byteArrayOf(1, 2, 3, 4, 5)
+      val target = File(live, rel).apply { parentFile!!.mkdirs(); writeBytes(original) }
+      File(stage, rel).apply { parentFile!!.mkdirs(); writeText("factory") }
+      val error = runCatching {
+        SnapshotTransaction.swap(
+          filesDir, stage, File(live, "usr"), File(live, "home"), preserved, "fp-bad-copy", 1L,
+          preserveCopy = { from, to -> to.writeBytes(ByteArray(from.length().toInt())) },
+        )
+      }.exceptionOrNull()
+      assertTrue("same-size corruption must reject preservation", error is SnapshotFsException)
+      assertEquals(CODE_PRESERVE_FAILED, (error as SnapshotFsException).code)
+      assertTrue("original bytes must survive", target.readBytes().contentEquals(original))
+    } finally { SnapshotFs.deletePath(filesDir) }
+  }
 
   // ── 0.14.1 D-1 设备侧收尾：已摘除插件的存量迁移 ────────────────────────────────
   //

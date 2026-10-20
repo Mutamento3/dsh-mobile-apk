@@ -197,7 +197,7 @@ describe('DevSection（开发者选项设置页）', () => {
       getOverlayEnabled: () => state.overlay,
       hasAllFilesAccess: () => state.allFiles,
     })
-    const logLabel = [...el.querySelectorAll('label')].find(l => l.textContent?.includes('开发者调试日志'))!
+    const logLabel = [...el.querySelectorAll('label')].find(l => l.textContent?.includes('调试日志'))!
     const logInput = logLabel.querySelector('input') as HTMLInputElement
     expect(logInput.checked).toBe(false)
     expect(overlayToggle(el).checked).toBe(false)

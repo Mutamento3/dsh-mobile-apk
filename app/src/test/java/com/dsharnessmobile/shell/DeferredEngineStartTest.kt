@@ -164,9 +164,7 @@ class DeferredEngineStartTest {
       val text = snapshotTransactionWaitText("SWAPPING", age)
       assertTrue("文案不得为空（age=" + age + "）", text.isNotBlank())
       assertTrue("必须说明运行时正在解压（age=" + age + "）：" + text, text.contains("正在解压"))
-      assertTrue("必须说明旧引擎仍在运行（age=" + age + "）", text.contains("旧引擎仍在运行"))
-      assertTrue("必须说明事务收口后会自动继续（age=" + age + "）", text.contains("收口后"))
-      assertTrue("必须说明不会先停旧引擎（age=" + age + "）", text.contains("停止旧引擎"))
+      assertTrue("必须说明事务结束后会重启引擎（age=" + age + "）", text.contains("事务结束后会重启引擎"))
       for (claim in listOf("已就绪", "启动完成", "已启动完成", "可以开始使用", "已完成")) {
         assertFalse("不得出现就绪类词「" + claim + "」（age=" + age + "）：" + text, text.contains(claim))
       }
@@ -179,6 +177,8 @@ class DeferredEngineStartTest {
     assertTrue("未知时长必须如实标注", snapshotTransactionWaitText("STAGED", null).contains("未知时长"))
     assertTrue("13 分钟必须渲染成 13 分钟", snapshotTransactionWaitText("STAGED", 13 * 60_000L).contains("13 分钟"))
     assertFalse("不得凭空给出未提供的时长", snapshotTransactionWaitText("STAGED", null).contains("分钟"))
+    assertTrue("英文文案必须带 phase", snapshotTransactionWaitText("STAGED", 13 * 60_000L, english = true).contains("phase=STAGED"))
+    assertFalse("英文文案不得混入中文", snapshotTransactionWaitText("STAGED", 13 * 60_000L, english = true).any { it.code > 127 })
   }
 
   // ── ③ 接线层：调用点不得回退成静默丢弃（撤掉修复即红） ────────────────────────

@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useShellState } from '../mobile/use-shell-state.ts'
 import { noticeDataAttrs, type Notice } from '../user-copy.ts'
+import { tr } from '../i18n.ts'
 import type {} from '../android-bridge.ts'
 
 /** 壳侧 apkUpdate 返回的状态快照。字段名与 ApkUpdateState.snapshotJson 逐字对应。 */
@@ -137,12 +138,16 @@ export function ApkUpdateRow() {
     setMessage(null)
     const accepted = invoke(action)
     if (accepted === null) {
-      setMessage({ text: '更新通道不可用（仅安卓应用内有此能力）——请确认在本机应用内操作' })
+      setMessage({ text: tr('更新通道不可用（仅安卓应用内有此能力）——请确认在本机应用内操作', 'Updates are only available inside the Android app.') })
       return
     }
     // ok 只表达受理；真正的进展由轮询读回。busy 时壳侧会回 ok:false + code:busy，如实说。
     if (accepted.ok !== true) {
-      setMessage({ text: accepted.code === 'busy' ? '上一次更新动作仍在进行中，请稍候（进度见下方）' : '这次请求未被受理——' + (accepted.reason ?? '可稍后重试') })
+      setMessage({
+        text: accepted.code === 'busy'
+          ? tr('上一次更新动作仍在进行中，请稍候（进度见下方）', 'The previous update is still running; the progress is shown below.')
+          : tr('这次请求未被受理——', 'The request was not accepted: ') + (accepted.reason ?? tr('可稍后重试', 'try again later')),
+      })
     }
     setBusy(true)
     refresh()
@@ -150,43 +155,45 @@ export function ApkUpdateRow() {
   }, [refresh])
 
   /** 主行文案与按钮（八态；终态停止轮询）。 */
-  let label = '检查更新'
+  let label = tr('检查更新', 'Check for updates')
   let disabled = false
-  let text = '运行时与安装包状态未检查'
+  let text = tr('运行时与安装包状态未检查', 'Runtime and APK status not checked')
   switch (state) {
     case 'checking':
-      label = '检查中…'; disabled = true; text = '正在查询最新版本…'
+      label = tr('检查中…', 'Checking…'); disabled = true; text = tr('正在查询最新版本…', 'Looking up the latest version…')
       break
     case 'up-to-date':
-      label = '重新检查'; text = 'APK 已是最新 ' + (status?.version ?? '')
+      label = tr('重新检查', 'Check again'); text = tr('APK 已是最新 ', 'APK is up to date ') + (status?.version ?? '')
       break
     case 'available':
-      label = '下载并安装 ' + (status?.tag ?? '')
-      text = '发现新版 ' + (status?.tag ?? '') + (status?.current === undefined ? '' : '（当前 v' + status.current + '，' + fmtBytes(status?.sizeBytes ?? 0) + '）')
-        + '——资产 ' + (status?.name ?? '') + '，再点即开始下载并安装'
+      label = tr('下载并安装 ', 'Download and install ') + (status?.tag ?? '')
+      text = tr('发现新版 ', 'New version ') + (status?.tag ?? '') +
+        (status?.current === undefined ? '' : tr('（当前 v', ' (current v') + status.current + '，' + fmtBytes(status?.sizeBytes ?? 0) + tr('）', ')')) +
+        tr('——资产 ', ' — asset ') + (status?.name ?? '') + tr('，再点即开始下载并安装', '; tap again to download and install')
       break
     case 'downloading':
-      label = '下载中 ' + String(status?.percent ?? 0) + '%'; disabled = true
-      text = '正在从镜像链下载 ' + (status?.name ?? '') + (status?.sizeBytes === undefined ? '' : '（' + fmtBytes(status.sizeBytes) + '）') + '——请保持应用在前台'
+      label = tr('下载中 ', 'Downloading ') + String(status?.percent ?? 0) + '%'; disabled = true
+      text = tr('正在从镜像链下载 ', 'Downloading ') + (status?.name ?? '') + (status?.sizeBytes === undefined ? '' : tr('（', ' (') + fmtBytes(status.sizeBytes) + tr('）', ')')) + tr('——请保持应用在前台', ' — keep the app in the foreground')
       break
     case 'installing':
-      label = '重新检查'
-      text = '已拉起系统安装器——安装完成后重新打开应用即生效'
-        + (status?.reused === true ? '（本次复用了上次已下载并校验通过的安装包，未重复下载）' : '')
+      label = tr('重新检查', 'Check again')
+      text = tr('已拉起系统安装器——安装完成后重新打开应用即生效', 'The system installer is open; reopen the app after installing')
+        + (status?.reused === true ? tr('（本次复用了上次已下载并校验通过的安装包，未重复下载）', ' (the previously downloaded and verified package was reused)') : '')
       break
     case 'need-permission':
-      label = '授权后继续安装'; text = '需要「安装未知应用」权限（壳侧已打开授权页）——开启后返回应用即可续继安装'
+      label = tr('授权后继续安装', 'Continue after granting');
+      text = tr('需要「安装未知应用」权限（壳侧已打开授权页）——开启后返回应用即可续继安装', 'Install-unknown-apps permission is required; the settings page is open. Return after granting to continue.')
       break
     case 'failed':
-      label = '重试'; text = status?.reason ?? '更新未完成（壳侧未给出原因，可复制日志反馈）'
+      label = tr('重试', 'Retry'); text = status?.reason ?? tr('更新未完成（壳侧未给出原因，可复制日志反馈）', 'The update did not finish; copy the log and report it.')
       break
     default:
       // idle 或读不到：区分「合法空闲」与「通道不可用」，绝不把后者渲染成前者。
       if (status === null) {
         // 措辞纪律：不得在同一行里同时出现「读不到」与「已是最新」——那会让 PASS/失败
         // 判读自相矛盾（本行实测被自己的用例拦下）。这里只说清「无法判断」，不引任何终态词。
-        text = '更新状态：读不到——无法判断是否有新版本（应用内的更新通道不可用或返回异常）'
-        label = '检查更新'
+        text = tr('更新状态：读不到——无法判断是否有新版本（应用内的更新通道不可用或返回异常）', 'Update status could not be read, so a new version cannot be ruled in or out.')
+        label = tr('检查更新', 'Check for updates')
       }
       break
   }
@@ -210,9 +217,7 @@ export function ApkUpdateRow() {
       {/* 精简（0.14.7-B D5）：保留「更新的是什么、怎么校验、何时发起」「权限缺失怎么办」
           这些用户真要拿来做决定的信息；去掉与本行按钮状态逐字重复的流程复述。 */}
       <p className="dsh-dev-hint">
-        更新的是应用安装包（APK）：从 GitHub 发布页按本机 ABI 选包，下载走镜像链并校验体积与 sha256，
-        再拉起系统安装器。全程只在你点击时发起，不自动检查或下载；缺「安装未知应用」权限会先打开授权页。
-        安装包落在 Documents/dshdata/updates。
+        {tr('更新应用安装包（APK）：按本机 ABI 从 GitHub 发布页取包，校验体积与 sha256 后交给系统安装器。只在你点击时下载；缺「安装未知应用」权限会先打开授权页。', 'Updates the app APK: the matching ABI comes from the GitHub release, and its size and sha256 are verified before the system installer opens. Downloads start only when you tap; a missing install permission opens the grant page first.')}
       </p>
     </div>
   )

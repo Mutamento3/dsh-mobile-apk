@@ -212,10 +212,10 @@ object ShizukuTransport {
       // 不是能力门——binder 一旦连上就走下面的就绪路径；包名不在表内的分支同样不受影响。
       return if (managerPresent) {
         out.put("ok", false).put("code", "shizuku-not-running")
-          .put("guidance", "Shizuku 已安装但服务未运行。非 root 设备可通过 USB/有线 ADB 或无线调试启动它；重启设备后需再次启动。")
+          .put("guidance", UiText.t(context, "Shizuku 已安装但服务未运行。非 root 设备可通过 USB/有线 ADB 或无线调试启动它；重启设备后需再次启动。", "Shizuku is installed but not running. Start it over USB or wireless debugging; do this again after a reboot."))
       } else {
         out.put("ok", false).put("code", "shizuku-absent")
-          .put("guidance", "未检测到 Shizuku 及其兼容实现；虚拟屏需要用户安装、启动并授权其中之一。")
+          .put("guidance", UiText.t(context, "未检测到 Shizuku 及其兼容实现；虚拟屏需要用户安装、启动并授权其中之一。", "No Shizuku-compatible service was found; install, start, and grant one to use virtual screens."))
       }
     }
 
@@ -224,7 +224,7 @@ object ShizukuTransport {
     out.put("version", version).put("uid", uid)
     if (version < 12) {
       return out.put("ok", false).put("code", "shizuku-prev11")
-        .put("guidance", "Shizuku 版本过低，虚拟屏需要 v12 及以上的 UserService 支持。")
+        .put("guidance", UiText.t(context, "Shizuku 版本过低，虚拟屏需要 v12 及以上的 UserService 支持。", "Shizuku is too old; virtual screens need UserService v12 or later."))
     }
 
     val granted = runCatching {
@@ -233,7 +233,7 @@ object ShizukuTransport {
     out.put("granted", granted)
     if (!granted) {
       return out.put("ok", false).put("code", "shizuku-denied")
-        .put("guidance", "尚未获得 Shizuku 授权。点击创建虚拟屏后会由 Shizuku 管理器显示用户确认；DSH 不会自行授予权限。")
+        .put("guidance", UiText.t(context, "尚未获得 Shizuku 授权。点击创建虚拟屏后会由 Shizuku 管理器显示用户确认；DSH 不会自行授予权限。", "Shizuku access is not granted yet. Creating a virtual screen asks Shizuku for confirmation; DSH never grants it by itself."))
     }
     if (service?.asBinder()?.pingBinder() != true) {
       // 三态化（0.14.1）：code 只报「正在建立」当且仅当确有 bind 在飞。
@@ -243,12 +243,12 @@ object ShizukuTransport {
       val ageMs = bindState.attemptAgeMs(SystemClock.elapsedRealtime())
       val code = if (binding) CONNECTING_CODE else bindState.lastError.ifBlank { ShizukuBindCodes.NOT_BOUND }
       val answer = out.put("ok", false).put("code", code)
-        .put("guidance", shizukuBindGuidance(code, binding, ageMs, BIND_WATCHDOG_MS))
+        .put("guidance", shizukuBindGuidance(code, binding, ageMs, BIND_WATCHDOG_MS, UiText.isEnglish(context)))
       if (binding) answer.put("retryAfterMs", BIND_TIMEOUT_MS)
       return answer
     }
     return out.put("ok", true).put("code", "shizuku-ready")
-      .put("guidance", "Shizuku shell UserService 已就绪（uid=$uid）。")
+      .put("guidance", UiText.t(context, "Shizuku shell UserService 已就绪（uid=$uid）。", "The Shizuku shell UserService is ready (uid=$uid)."))
   }
 
   /**
