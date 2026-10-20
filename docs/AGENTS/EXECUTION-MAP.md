@@ -2072,7 +2072,10 @@ node scripts/verify-client-plugin-fail-recovery.mjs --self-test   # 客户端插
 
 覆盖全域（脚本里定义，构建产物与第三方目录除外）：`app/src/**/*.kt` 与 `AndroidManifest.xml`、`plugins/*/{src,test}/**`、三个子仓 src/lib、`scripts/{check-,verify-,build-,inject-}*` 与 `scripts/patches/**`、`scripts/snapshot-config/**`。
 
+来件持久清单：写入、重读和确认后移除共用 pendingLock，临时文件同步后替换。TTL 清扫先于投递预留，保护 pending 和 .sessions 引用；清单不可读则停止清扫。投递结束在 finally 归还计数。
+
 <!-- COVERAGE
+app/src/androidTest/java/com/dsharnessmobile/shell/IncomingRetentionTest.kt
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
 scripts/verify-mobile-workspaces.mjs

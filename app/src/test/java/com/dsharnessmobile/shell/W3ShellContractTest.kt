@@ -370,13 +370,21 @@ class W3ShellContractTest {
   fun incomingGuardCoversDeliveryAndRetry() {
     val code = codeOnly(source("FileIncoming.kt"))
     val pipeline = code.substringAfter("fun processIncomingIntent")
-    val inc = pipeline.indexOf("activeDeliveries.incrementAndGet()")
+    val reservation = pipeline.indexOf("withIncomingDeliveryAfterSweep(pendingLock, activeDeliveries, { sweepExpired(context) })")
     val enqueue = pipeline.indexOf("enqueuePending(context, target.absolutePath)")
     val retry = pipeline.indexOf("while (System.currentTimeMillis() < deadline)")
-    val dec = pipeline.indexOf("activeDeliveries.decrementAndGet()")
-    assertTrue("守卫必须在投递前起跳", inc in 0 until enqueue)
-    assertTrue("入待发清单必须在守卫内", enqueue in 0 until dec)
-    assertTrue("20s 重试循环必须在守卫内（划掉应用不再丢件）", retry in 0 until dec)
+    val reservationBody = memberBody(code, "internal fun <T> withIncomingDeliveryAfterSweep(")
+    val sweep = reservationBody.indexOf("sweep()")
+    val inc = reservationBody.indexOf("deliveries.incrementAndGet()")
+    val body = reservationBody.indexOf("return body()")
+    val release = reservationBody.indexOf("finally")
+    val dec = reservationBody.indexOf("deliveries.decrementAndGet()")
+    assertTrue("清扫与预留必须共用清单锁", reservationBody.contains("synchronized(lock)"))
+    assertTrue("清扫必须先于预留，不能被自身计数挡住", sweep in 0 until inc)
+    assertTrue("守卫必须先预留再执行投递", inc in 0 until body)
+    assertTrue("投递预留必须在 finally 中归还", release > body && dec > release)
+    assertTrue("入待发清单必须经预留包装执行", reservation in 0 until enqueue)
+    assertTrue("20s 重试必须在同一投递包装内", retry > enqueue && !pipeline.substring(reservation, retry).contains("activeDeliveries.decrementAndGet()"))
     val cleanup = code.substringAfter("fun cleanupTmp(context: Context)")
     assertTrue(
       "全清必须同时看「拷贝」与「投递/重试」两个计数",
@@ -384,9 +392,12 @@ class W3ShellContractTest {
     )
     assertTrue(
       "仍有 pending 或未 claim 草稿队列引用的来件与元数据条目不得随全清删除",
-      cleanup.contains("cleanupDeletions(entries, pendingPaths(context), queuedSessionPaths(context))"),
+      cleanup.contains("val pending = pendingPaths(context)") &&
+        cleanup.contains("val queued = queuedSessionPaths(context)") &&
+        cleanup.contains("cleanupDeletions(entries, pending, queued)"),
     )
-    assertTrue(".sessions 的既有豁免必须保留", code.contains("if (f.name == SESSIONS_ENTRY) continue"))
+    val policy = code.substringAfter("fun cleanupDeletions(").substringBefore("fun ttlDeletions(")
+    assertTrue(".sessions 的既有豁免必须保留", policy.contains("it != SESSIONS_ENTRY"))
   }
 
   @Test
