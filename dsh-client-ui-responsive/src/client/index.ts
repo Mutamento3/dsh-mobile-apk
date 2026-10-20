@@ -98,6 +98,7 @@ import type { AndroidBrowserBodyProps } from './mobile/browser-tab.tsx'
 import type { NativeBrowserControlsInjected } from './mobile/native-browser-adapter.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { IncomingDraftConsumer } from './mobile/incoming-draft.ts'
+import { createIncomingDraftRuntime } from './mobile/incoming-runtime.ts'
 
 // Contract exports only (export-convergence rule): the plugin surface is
 // `apply` and `inject`; every component, marker, and helper stays internal.
@@ -127,7 +128,6 @@ interface IncomingConversationFace {
 /** Session service methods used by the process-local external attachment hand-off. */
 interface IncomingSessionsFace {
   refresh(): Promise<void>
-  open(id: unknown): void
   scope(id: unknown): unknown | undefined
 }
 
@@ -138,6 +138,7 @@ interface IncomingWorkspacesFace {
 
 /** Standard workspace navigation face; it returns a locally addressable blank session. */
 interface IncomingUiWorkspaceFace {
+  openSession(id: unknown): void
   connectWorkspace(workspaceId: unknown): Promise<unknown>
 }
 
@@ -782,31 +783,7 @@ export function apply(ctx: ClientContext): void {
     const conversation = (): IncomingConversationFace => ctx.conversation as unknown as IncomingConversationFace
     const consumer = new IncomingDraftConsumer(
       (path, init) => fetch(path, init),
-      {
-        refreshSessions: () => sessions().refresh(),
-        createSession: async (cwd) => {
-          document.documentElement.setAttribute('data-dsh-incoming-draft-poll', 'workspace-create')
-          const workspace = await workspaces().create({ path: cwd })
-          document.documentElement.setAttribute('data-dsh-incoming-draft-poll', 'workspace-created')
-          document.documentElement.setAttribute('data-dsh-incoming-draft-poll', 'workspace-connect')
-          const sessionId = await uiWorkspace().connectWorkspace(workspace.workspaceId)
-          document.documentElement.setAttribute('data-dsh-incoming-draft-poll', 'workspace-connected')
-          return String(sessionId)
-        },
-        openSession: (sessionId) => { sessions().open(sessionId) },
-        sessionScope: (sessionId) => sessions().scope(sessionId),
-        attachGenericFile: (sessionId, file) => {
-          try {
-            return conversation().addFiles(sessionId, [file])
-          } catch {
-            // The target can be released between session navigation and draft admission.
-            return false
-          }
-        },
-        notify: (scope, text) => {
-          try { conversation().input.for(scope).notify('error', text) } catch { /* target scope ended */ }
-        },
-      },
+      createIncomingDraftRuntime({ sessions, workspaces, uiWorkspace, conversation }),
     )
     const poll = (): void => { void consumer.poll() }
     const timer = window.setInterval(() => {
