@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.json.JSONObject
@@ -55,8 +56,19 @@ class NotifyDeferredRecoveryTest {
       assertEquals(0, NotifySuppressQueue.pendingCount())
       val finalRaw = requireNotNull(NotifyCenter.prefs(context).getString("notify.deferred.v1", null))
       assertTrue(NotifySuppressQueue.decodeJournal(finalRaw).first.isEmpty())
-      val posted = manager.activeNotifications.map { it.id }.toSet()
-      assertTrue("all nine waiting questions have a visible system notification", ids.take(9).all { it in posted })
+      // NotificationManager.activeNotifications is updated asynchronously. Wait for the system
+      // service to publish the records before treating an empty snapshot as a delivery failure.
+      val questions = ids.take(9)
+      val deadline = SystemClock.uptimeMillis() + 5_000
+      var missing = questions.filter { id -> manager.activeNotifications.none { it.id == id } }
+      while (missing.isNotEmpty() && SystemClock.uptimeMillis() < deadline) {
+        Thread.sleep(50)
+        missing = questions.filter { id -> manager.activeNotifications.none { it.id == id } }
+      }
+      assertTrue(
+        "all nine waiting questions have a visible system notification; missing=$missing",
+        missing.isEmpty(),
+      )
     } finally {
       NotifySuppressQueue.reset()
       ids.forEach { manager.cancel(it) }
