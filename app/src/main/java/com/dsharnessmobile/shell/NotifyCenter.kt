@@ -633,6 +633,9 @@ object NotifyCenter {
     /** DEF-NOTIFY-02：投递过程抛异常（已吞掉并落探针），绝不让异常冒到 MuxClient 读线程。 */
     ERROR,
 
+    /** 交互事件暂时无法投递；已持久化到延后队列，源偏移可安全推进。 */
+    DEFERRED_RETRY,
+
     /**
      * P3 去重：同一通知身份 + 同一内容在 [DEDUP_WINDOW_MS] 内被重复投递，后到的那次丢弃。
      *
@@ -776,7 +779,16 @@ object NotifyCenter {
       // DEF-NOTIFY-02：投递异常绝不能冒泡到 MuxClient 的读线程——那会整条应答流断开重连，
       // 之后所有提问/审批通知一起消失（而且只在 logcat 留一行 Log.w）。这里吞掉并留下探针。
       NotifyProbe.log(app, "dsh-notify", "notifyEvent THREW kind=" + entry.kind + ": " + t)
-      Result.ERROR
+      // The exception has already been caught. Persist the event before allowing the cursor to
+      // advance, so a transient failure cannot poison every later event. Unknown kinds still
+      // fail closed with ERROR because they have no reliable replay semantics; resolve is queued
+      // like any other event and replays its cancel action.
+      val replayable = entry.kind.lowercase() in setOf("resolve", "silent", "todo", "report", "question", "approval")
+      if (replayable && NotifySuppressQueue.enqueue(app, entry, "retry:" + NotifySuppressQueue.identity(entry))) {
+        Result.DEFERRED_RETRY
+      } else {
+        Result.ERROR
+      }
     }
   }
 
@@ -785,7 +797,11 @@ object NotifyCenter {
     val kind = entry.kind.lowercase()
     val face = when (kind) {
       "resolve" -> {
-        cancel(app, entry.eventId)
+        // Commit the durable removal before any in-memory/system cancellation. The source cursor
+        // remains retryable if the journal write fails, so the resolve can be applied again.
+        if (!NotifySuppressQueue.canSettleInteractive(app)) return Result.ERROR
+        cancelSystemNotification(app, entry.eventId)
+        if (!NotifySuppressQueue.settleInteractive(app, entry.eventId)) return Result.ERROR
         return Result.RESOLVED
       }
       "silent" -> Face.SILENT
@@ -815,6 +831,15 @@ object NotifyCenter {
     if (!hasPermission(app)) {
       NotifyProbe.log(app, "dsh-notify", "notify skipped (POST_NOTIFICATIONS not granted): " + face.category)
       listener?.onPermissionDenied()
+      // A waiting question or approval must outlive the permission state. Persist it before the
+      // source cursor moves; report/silent events remain ordinary permission denials.
+      if (face.interactive) {
+        return if (NotifySuppressQueue.enqueue(app, entry, "retry:" + NotifySuppressQueue.identity(entry))) {
+          Result.DEFERRED_RETRY
+        } else {
+          Result.ERROR
+        }
+      }
       return Result.PERMISSION_DENIED
     }
     if (face == Face.REPORT && NotifySuppressQueue.isSettled(app, entry)) return Result.DUPLICATE_SUPPRESSED
@@ -922,11 +947,16 @@ object NotifyCenter {
   fun cancel(context: Context, eventId: String) {
     if (eventId.isEmpty()) return
     val app = context.applicationContext
+    cancelSystemNotification(app, eventId)
+    NotifySuppressQueue.settleInteractive(app, eventId)
+    LogCollector.log("dsh-notify", "cancel(eventId=" + eventId + ")")
+  }
+
+  private fun cancelSystemNotification(app: Context, eventId: String) {
     val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     for (face in listOf(Face.QUESTION, Face.APPROVAL)) {
       manager.cancel(stableId("dsh-" + face.category + ":" + eventId))
     }
-    LogCollector.log("dsh-notify", "cancel(eventId=" + eventId + ")")
   }
 
   /** 结算后撤掉弹窗（NT-19：审批结算后立即 cancel，不留历史）。 */

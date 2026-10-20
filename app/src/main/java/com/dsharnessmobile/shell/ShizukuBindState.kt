@@ -164,12 +164,35 @@ internal object ShizukuBindCodes {
  * @param ageMs 当前这次绑定的已等待毫秒；未在绑定中传 -1。
  * @param watchdogMs 看门狗阈值（用于把「还要等多久」写进文案）。
  */
-internal fun shizukuBindGuidance(code: String, binding: Boolean, ageMs: Long, watchdogMs: Long): String {
+internal fun shizukuBindGuidance(code: String, binding: Boolean, ageMs: Long, watchdogMs: Long, english: Boolean = false): String {
   val watchdogSec = watchdogMs / 1000
   if (binding) {
     val waitedSec = if (ageMs >= 0L) ageMs / 1000 else 0L
-    return "Shizuku shell 通道正在建立（已等待 ${waitedSec}s，上限 ${watchdogSec}s）；" +
-      "请稍候直接重试同一命令，无需去设置页排查。"
+    return if (english) {
+      "Connecting the Shizuku shell channel (${waitedSec}s of ${watchdogSec}s). " +
+        "Retry the same command shortly; no need to check the settings page."
+    } else {
+      "Shizuku shell 通道正在建立（已等待 ${waitedSec}s，上限 ${watchdogSec}s）；" +
+        "请稍候直接重试同一命令，无需去设置页排查。"
+    }
+  }
+  if (english) return when {
+    code == ShizukuBindCodes.BIND_TIMEOUT ->
+      "The Shizuku shell channel timed out after ${watchdogSec}s. Binding was reset; retry now. " +
+        "If it keeps timing out, check that Shizuku is still running (start it again over USB or wireless debugging)."
+    code == ShizukuBindCodes.NOT_BOUND ->
+      "Shizuku is granted but the channel was never bound. Retry the same command or open Phone control to bind it."
+    code == ShizukuBindCodes.DISCONNECTED ->
+      "The Shizuku UserService disconnected. Retry the same command to reconnect."
+    code == ShizukuBindCodes.INVALID_BINDER ->
+      "Shizuku returned an invalid binder (the UserService probably failed to start). Check Shizuku is running and retry."
+    code.startsWith("shizuku-user-service-bind-failed") ->
+      "Shizuku refused the channel ($code). Check that Shizuku is running and this app is still granted, then retry."
+    code == ShizukuBindCodes.RESET ->
+      "The Shizuku channel was reset and will rebuild on its own; retry the same command too. " +
+        "If it stays down, check that Shizuku is still running."
+    else ->
+      "The Shizuku shell channel is not ready ($code). Check Phone control for status and guidance."
   }
   return when {
     code == ShizukuBindCodes.BIND_TIMEOUT ->

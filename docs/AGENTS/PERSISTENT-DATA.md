@@ -87,6 +87,7 @@ All listed preferences use app-private SharedPreferences storage. They survive A
 | `dsh_root_access` | `state` (String), `uid` (Int) | `RootAccess`: cached root state and UID. | Root state/identity cache. |
 | `dsh_root_execution_lease` | `epoch` (String), `startedAt` (Long), `operation` (String), `dispatched` (String), `dispatchedAt` (Long) | `RootMaintenanceLease`: write/read operation lease and clear it after a new boot proves prior process death. | Cross-process privileged-operation lease. |
 | `dsh_settings` | `immersive_mode` (Boolean) | `ShellState`: shell display preference read/write. | User shell display preference. |
+| `dsh_settings` | `ui_language` (String) | `AppLanguage`: `system` / `zh` / `en`, mirrored into the dsh profile patch (`- id: locale`). | Shell and engine UI language. |
 | `dsh-overlay` | `enabled` (Boolean), `pendingEnable` (Boolean) | `OverlayController`: floating overlay intent and pending-enable state. | Floating overlay intent and permission-guidance state. |
 | `overlay_display` | `auto_collapse_on_done` (Boolean) | `OverlayService`: read completion behavior. | Overlay completion presentation preference. |
 | `overlay_display` | `template_thinking` (String), `template_tool` (String), `template_completion` (String) | `OverlayPanel`: read user-editable display templates. | Overlay presentation text preferences. |

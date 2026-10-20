@@ -517,6 +517,8 @@ internal object SnapshotTransaction {
     fingerprint: String,
     startedAt: Long,
     onEntry: (String) -> Unit = {},
+    /** UI language for the entries reported through [onEntry]; defaults to Chinese. */
+    english: Boolean = false,
     /**
      * 空间前置检查（审查 §7.2-F-4 / B12）：入参是**本次交换需要保留的可用字节**，
      * 返回拒绝文案（null = 放行）。注入式而非直接调 Android StatFs，是为了让事务保持纯 JVM 可测
@@ -605,7 +607,7 @@ internal object SnapshotTransaction {
             val liveChild = File(liveDsh, child.name)
             if (child.name in preservedNames && SnapshotFs.exists(liveChild)) {
               // User data stays exactly where it is.
-              onEntry("保留用户数据 " + child.name)
+              onEntry(if (english) "Keeping user data " + child.name else "保留用户数据 " + child.name)
               continue
             }
             if (child.name == "profiles" && SnapshotFs.exists(liveChild)) {
@@ -622,7 +624,7 @@ internal object SnapshotTransaction {
             if (SnapshotFs.exists(liveChild) && child.name !in SnapshotUserData.factorySnapshotNames) {
               // Unknown .dsh entries can belong to newer app versions or user extensions.
               // Seed absent paths, but never let a factory archive erase an unclassified collision.
-              onEntry("保留未分类DSH数据 " + child.name)
+              onEntry(if (english) "Keeping unclassified dsh data " + child.name else "保留未分类DSH数据 " + child.name)
               continue
             }
             replaceEntry(
@@ -637,7 +639,7 @@ internal object SnapshotTransaction {
           // （白名单机制只作用于 .dsh 子项，对本分支无效，见坑 67 之前的取证）。
           val liveEntry = File(homeDir, entry.name)
           if (SnapshotFs.exists(liveEntry)) {
-            onEntry("保留用户数据 home/" + entry.name)
+            onEntry(if (english) "Keeping user data home/" + entry.name else "保留用户数据 home/" + entry.name)
             continue
           }
           replaceEntry(
