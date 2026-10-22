@@ -1,12 +1,12 @@
 {
-  "tag": "v0.14.8",
-  "publishedAt": "2026-10-17T16:10:38Z",
+  "tag": "v0.14.9",
+  "publishedAt": "2026-10-22T13:37:12Z",
   "source": "release",
-  "generatedAt": "2026-10-20T10:48:03.807Z",
+  "generatedAt": "2026-10-22T13:47:42.090Z",
   "assets": [
     {
       "name": "dsh-android-dsh-client-ui-responsive-0.3.3.tgz",
-      "size": 252838
+      "size": 284941
     },
     {
       "name": "dsh-android-dsh-host-web-compat-0.1.14.tgz",
@@ -17,12 +17,12 @@
       "size": 9526
     },
     {
-      "name": "dsh-mobile-apk-v0.14.8-arm64.apk",
-      "size": 161891142
+      "name": "dsh-mobile-apk-v0.14.9-arm64.apk",
+      "size": 161996841
     },
     {
-      "name": "dsh-mobile-apk-v0.14.8-x86_64.apk",
-      "size": 158513107
+      "name": "dsh-mobile-apk-v0.14.9-x86_64.apk",
+      "size": 158532117
     },
     {
       "name": "MANIFEST.txt",
@@ -30,7 +30,7 @@
     },
     {
       "name": "notes.md",
-      "size": 19182
+      "size": 18197
     },
     {
       "name": "plugin-lock-resolution-arm64.json",
@@ -46,15 +46,15 @@
     },
     {
       "name": "snapshot-arm64.tar.xz",
-      "size": 156777280
+      "size": 156717748
     },
     {
       "name": "snapshot-x86_64.tar.xz",
-      "size": 153399248
+      "size": 153253008
     }
   ],
   "sha256": {
-    "arm64": "a30f3e5ced238a6ea1fefc560ddc26adbe5061561c0a67600a70a88aa9e4933c",
-    "x86_64": "687d4faa471fd5c863b441f320b641890ba10248d43b520ea5e0e4b68aa9d789"
+    "arm64": "38e8421be56a96323893bcc80286203749ff806fb140f185c883f6cc5512c049",
+    "x86_64": "13dd5991a6c2ebfe0598451ea348dc1b162effa24bc1780ac5e293b20fcaa072"
   }
 }

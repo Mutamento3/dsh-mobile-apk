@@ -82,6 +82,8 @@ jobs:
     permissions:
       pages: write
       id-token: write
+    # release: published 事件的 GITHUB_REF 是 refs/tags/v*，因此 github-pages 环境的
+    # deployment-branch-policies 必须同时放行 branch:main 与 tag:v*（2026-10-22 v0.14.9 实锤）。
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
