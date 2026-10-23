@@ -172,7 +172,7 @@ internal class EngineStartFlow(private val activity: MainActivity) {
     monitorGeneration++
     engineMonitorFailures = 0
     // Background time is not evidence of a frozen renderer or stalled foreground boot.
-    bootStallStartAt = System.currentTimeMillis()
+    bootStallStartAt = bootStallNow()
     engineMonitorHandler.removeCallbacks(engineMonitorRunnable)
     engineMonitorHandler.post(engineMonitorRunnable)
     startBootStallWatchdog()
@@ -197,7 +197,14 @@ internal class EngineStartFlow(private val activity: MainActivity) {
   // 真信号只能是**页面自己报的「已渲染」**：页面侧在结果性判据首次为真时打 `[dsh-boot-ready]`
   // （dsh-host-web-compat/lib/index.js 的 readyWatch），壳侧 onConsoleMessage 收到即置
   // [pageReadyReported] 并**永久停止**本 epoch 的 stall 计时。页面没报 ⇒ 才可能是真卡住。
-  private var bootStallStartAt = System.currentTimeMillis()
+  //
+  // **0.14.10 缺陷修复（审计 §6.7）：基准曾是墙上时钟，stalledMs 会被校时凭空放大。**
+  // 现场：新机首装首启 `shell-stall` 记 `stalledMs=352525`（352s），而同一轮页面在首个 HTTP
+  // 之后 148ms 就报了 `page-ready`——352 是 40s 窗口的 8.8 倍，单靠前后时序解释不了。
+  // 真因是基准值取 [System.currentTimeMillis]（墙上时钟）：新装机在首次联网前系统时间往往还没
+  // 校准，起点记下的是一份偏慢的时间；随后 NTP 校时把钟**向前拨**，下一拍做差就凭空多出几百秒。
+  // 故起点与做差统一走 [bootStallNow]（单调时钟），见该函数的选型注释。
+  private var bootStallStartAt = bootStallNow()
 
   /**
    * 本 epoch 页面是否已自报就绪（L-1 判据）。只由页面侧 `[dsh-boot-ready]` 置真——
@@ -213,7 +220,7 @@ internal class EngineStartFlow(private val activity: MainActivity) {
       if (!activity.pageUiActive || !canRunEngineWork()) return
       val generation = monitorGeneration
       try {
-        val stalledMs = System.currentTimeMillis() - bootStallStartAt
+        val stalledMs = bootStallElapsedMs(bootStallStartAt, bootStallNow())
         // 判据三合一：①页面**未**自报就绪（真信号）；②该 epoch 未报过；③页面可见、未被用户关闭、
         // 且不是「页面加载本身已失败」（后者有自己的恢复路径，不该再记成 stall）。
         // 引擎健康与否由后台探活复核（下方），避免「引擎没起来」被误记成「页面卡住」。
@@ -357,7 +364,7 @@ internal class EngineStartFlow(private val activity: MainActivity) {
 
   /** 页面就绪/失败时复位（重新计时 + 允许再次上报）。 */
   fun resetBootStall() {
-    bootStallStartAt = System.currentTimeMillis()
+    bootStallStartAt = bootStallNow()
     bootStallReported = false
     // 新 epoch：页面的就绪声明随之作废，必须由页面重新报（否则复位后永远不会报卡住 = 丧失去判别力）。
     pageReadyReported = false
@@ -1046,13 +1053,30 @@ internal class EngineStartFlow(private val activity: MainActivity) {
     val marker = SnapshotTransaction.readMarker(activity.filesDir)
     LogCollector.log("dsh-shell", "engine start deferred: another start flow or a snapshot refresh owns the generation")
     if (marker == null) {
-      // 所有权被占、但没有任何快照事务在场：这次丢弃没有客观依据可等（典型是同一实例里上一次
-      // 启动流的收尾还没跑完）。如实记账，不制造一个注定空等的等待者。
+      // 所有权被占、但没有任何快照事务在场（典型是同一实例里上一次启动流的收尾还没跑完）。
+      //
+      // **0.14.10 缺陷修复（审计 §6.1）**：旧实现在这里只写一行 boot-fail 就 return，文案还宣称
+      // 「下一次入口会重试」——而实际上没有任何自动续跑。现场证据：新机 boot-fail.log 里
+      // `engine-start-deferred-no-transaction` 反复出现，采样期间仍在新增——每一次都意味着
+      // 一次**被静默丢弃**的启动请求（用户按了按钮 / 回到前台，引擎却没起来）。
+      //
+      // 现在改为**有界自动重试**（[NO_TRANSACTION_RETRY_*]）：所有权是上一次启动流的收尾在占，
+      // 它通常几十毫秒内就会 `finish()`。按 200ms 步进重试数秒，成功即续跑 start()；预算用尽
+      // 则如实记一条 timeout（**不**判失败、不改相位——用户看到的仍是「正在启动引擎…」）。
+      //
+      // 与上面「有快照事务在场」那条**不是同一个等待者**，两者刻意分开：
+      //  - 事务在场：等的是**跨进程的 8-12 分钟解压**，判据是 journal 文件，预算 16 分钟；
+      //  - 无事务：等的是**本实例上一次启动流的收尾**，判据是 flowOwnership，预算数秒。
+      // 把它们并成一个（例如复用 deferredStartRunnable 的 16 分钟预算）会让「上一次流收尾慢了」
+      // 这种秒级情形也挂上 16 分钟等待者，用户点到按钮后毫无反馈。
       LogCollector.writeBootFail(
         activity, "engine-start-deferred-no-transaction",
         "启动请求未获世代所有权（另一次启动流仍在占用），且无快照事务在场：本次请求未被受理，未拉起引擎；"
-          + "下一次入口（点按钮 / 回前台探活）会重试。",
+          + "已安排按 " + NO_TRANSACTION_RETRY_STEP_MS + "ms 步进、上限 " + NO_TRANSACTION_RETRY_BUDGET_MS
+          + "ms 的自动重试，取得所有权后自动续跑。",
       )
+      noTransactionRetry.attempts = 0
+      engineMonitorHandler.postDelayed(noTransactionRetry, NO_TRANSACTION_RETRY_STEP_MS)
       return
     }
     LogCollector.writeBootFail(
@@ -1098,6 +1122,64 @@ internal class EngineStartFlow(private val activity: MainActivity) {
       }
       waitedMs += SNAPSHOT_TRANSACTION_WAIT_POLL_STEP_MS
       engineMonitorHandler.postDelayed(this, SNAPSHOT_TRANSACTION_WAIT_POLL_STEP_MS)
+    }
+  }
+
+  /**
+   * 审计 §6.1 的有界重试者：**无快照事务在场、但世代所有权被占**时，按秒级预算等所有权空出来。
+   *
+   * 与 [deferredStartRunnable] 的边界（两者**不得**合并，判据 / 预算 / 等的东西全都不同）：
+   *  - 本等待者：等**本实例上一次启动流的收尾**（`flowOwnership.running`）。它是内存态，
+   *    通常几十毫秒内就结束；预算必须小（[NO_TRANSACTION_RETRY_BUDGET_MS]），否则用户点完按钮
+   *    要对着「正在启动引擎…」空等；
+   *  - [deferredStartRunnable]：等**跨进程的快照事务**（journal 文件 + 所有权），对应 8-12 分钟
+   *    的解压，预算 16 分钟（[SNAPSHOT_TRANSACTION_WAIT_BUDGET_MS]）。
+   *
+   * 判据仍是所有权本身而不是时间：一旦 `!flowOwnership.running` 就续跑 [start]（它会自己再抢
+   * 一次 `begin()`，抢不到会重新落到这条路径，不存在「偷偷绕过所有权」）。
+   * destroyed / running 语义完全保持：destroyed 立即收手（不启动）；每次重试都先过
+   * [canRunEngineWork]，与 [start] 入口同一道闸门。
+   */
+  private val noTransactionRetry = object : Runnable {
+    /** 已走过的拍数（累计等待 = 拍数 × 步进）。 */
+    internal var attempts = 0
+    override fun run() {
+      // 事务在期间出现时也要能转交给 16 分钟那条等待者，所以先读 journal（跨进程真源）。
+      val decision = decideNoTransactionRetry(
+        canRun = canRunEngineWork(),
+        transactionPresent = SnapshotTransaction.readMarker(activity.filesDir) != null,
+        ownershipRunning = flowOwnership.running,
+        attempts = attempts,
+      )
+      when (decision) {
+        DeferredStartRetryDecision.STOP -> { attempts = 0; return }
+        DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT -> {
+          attempts = 0
+          LogCollector.log("dsh-shell", "no-transaction retry handing over to the transaction waiter")
+          deferEngineStartWhileSnapshotTransactionBusy()
+          return
+        }
+        DeferredStartRetryDecision.RESUME -> {
+          attempts = 0
+          LogCollector.log("dsh-shell", "deferred engine start resuming: generation ownership is free")
+          start()
+          return
+        }
+        DeferredStartRetryDecision.TIMEOUT -> {
+          attempts = 0
+          LogCollector.writeBootFail(
+            activity, "engine-start-deferred-no-transaction-timeout",
+            "启动请求在 " + NO_TRANSACTION_RETRY_BUDGET_MS + "ms 重试预算内仍未取得世代所有权"
+              + "（另一次启动流仍在占用，且始终无快照事务在场）：本次启动请求未执行，也未拉起引擎；"
+              + "下一次入口（点按钮 / 回前台探活）会再次尝试。",
+          )
+          return
+        }
+        DeferredStartRetryDecision.RETRY -> {
+          attempts++
+          engineMonitorHandler.postDelayed(this, NO_TRANSACTION_RETRY_STEP_MS)
+        }
+      }
     }
   }
 
@@ -1906,6 +1988,45 @@ internal fun snapshotTransactionWaitText(phase: String, accountedAgeMs: Long?, e
 internal fun snapshotTransactionAccountedAgeMs(marker: SnapshotTransaction.Marker?, nowMs: Long): Long =
   marker?.startedAt?.takeIf { it > 0L }?.let { (nowMs - it).coerceAtLeast(0L) } ?: 0L
 
+// ── boot-stall 计时基准：**必须用单调时钟做差**（审计 §6.7）────────────────────────────
+//
+// 缺陷形态（0.14.9 审计 §6.7 与现场证据）：新机首装首启时 `boot-diag.log` 记
+// `source=shell-stall ... stalledMs=352525 ... pageReady=false`，而同一轮页面在首个 HTTP 之后
+// 148ms 就报了 `page-ready`。也就是壳侧把一个已经就绪的页面记成「卡了 352 秒」。
+//
+// 真因**不是起点取错**，而是**时钟基准选错**：起点与做差都用了 [System.currentTimeMillis]
+// （墙上时钟）。新装机在首次联网校准之前系统时间常常偏慢，起点因此记下一份**偏小**的读数；
+// 随后 NTP/用户校时把钟**向前拨**，下一次 tick 做差就凭空多出几百秒——352 秒这个量级、以及
+// 「只在首装首启出现」这一分布，都与该机制吻合（单靠 tick 前后时序解释不了 8.8 倍放大）。
+//
+// 选型（三选一，只有第一个是对的）：
+//  - [android.os.SystemClock.elapsedRealtime]：自开机起的毫秒数，**不受校时影响**，且设备休眠
+//    （深睡）期间**继续计数**。这里要比的正是「用户感知到的等待」——用户合上屏幕再回来，等待
+//    确实经过了，所以含深睡是对的。
+//  - [android.os.SystemClock.uptimeMillis]：**不含深睡**。用它会在「息屏放置一段时间后再回前台」
+//    的场景里系统性低报等待时长，正好漏掉本项目最需要抓的那类现场。
+//  - [System.currentTimeMillis]：**缺陷本体**，见上（会被向前/向后拨）。
+//
+// 与 snapshotTransactionAccountedAgeMs 的区别（**那一处刻意不动**）：事务账龄比的是 journal 里
+// 由**另一个进程**写下的 startedAt，属跨进程比较、只能走墙上时钟；本函数比的是**本进程内**两个
+// 时刻，所以能且应当用单调时钟。
+
+/** boot-stall 计时基准：单调时钟（毫秒），跨休眠继续计数、不受校时影响。 */
+internal fun bootStallNow(): Long = android.os.SystemClock.elapsedRealtime()
+
+/**
+ * 两个**单调**时刻之间经过的毫秒数。
+ *
+ * 为什么单独抽出来：这是「352 秒假 stall」的判据本体，抽成纯函数后 JVM 单测可以直接构造
+ * 「起点之后墙上时钟前跳 300 秒」的场景做反证（见 BootStallClockTest），不需要 sleep 真时间，
+ * 也不依赖设备时钟。
+ *
+ * 返回值恒非负：now 不晚于起点（同一毫秒、注入错误、基准被回退）一律返回 0——
+ * 负的「已经卡了 -300 秒」会在诊断里变成另一种假读数，不如如实表示「本拍没有经过时间」。
+ */
+internal fun bootStallElapsedMs(startedAt: Long, now: Long): Long =
+  if (now <= startedAt) 0L else now - startedAt
+
 // ── P1（0.14.8）：快照事务窗口内的**有界等待**（定位报告 §2.3/§7）────────────────────
 //
 // 缺陷形态：刷新期间 `flowOwnership.running` 恒为 true（finish 只在启动线程 finally 里跑），
@@ -1959,6 +2080,75 @@ internal const val SNAPSHOT_TRANSACTION_WAIT_BUDGET_MS = 16 * 60_000L
 
 /** 快照事务等待步进（毫秒）。 */
 internal const val SNAPSHOT_TRANSACTION_WAIT_POLL_STEP_MS = 1_000L
+
+// ── 审计 §6.1：**无快照事务**时的有界自动重试（与上面那条 16 分钟预算无关）────────────────
+//
+// 现场形态：deferEngineStartWhileSnapshotTransactionBusy() 的「无事务」分支只写一行 boot-fail
+// 就 return，文案还承诺「下一次入口会重试」——但从来没有任何自动续跑。新机 boot-fail.log 里
+// 这条反复新增，每一次都是一次被静默丢弃的启动请求。
+//
+// 预算依据（不给魔数）：这里等的是**本实例上一次启动流的收尾**（flowOwnership.finish，在启动
+// 线程的 finally 里执行），它通常是**毫秒级**——启动线程已经跑完 spawn/轮询的最后一句，只剩
+// 一个 CAS。所以预算取「数秒」而不是分钟：200ms × 15 拍 = 3 秒，足够覆盖一次 GC 抖动或主线程
+// 繁忙，又不至于让用户对着「正在启动引擎…」空等下去。
+//
+// **不要**把它并到 16 分钟那条：那条等的是跨进程的 8-12 分钟解压，判据是 journal 文件。
+
+/** 无事务重试的步进（毫秒）：200ms 一拍，足够细地把「上一个启动流刚收尾」这种窗口接住。 */
+internal const val NO_TRANSACTION_RETRY_STEP_MS = 200L
+
+/** 无事务重试的预算（毫秒）：数秒级（15 拍），超时如实记一条 timeout。 */
+internal const val NO_TRANSACTION_RETRY_BUDGET_MS = 3_000L
+
+/** 无事务重试的每一拍要做什么（纯判据，JVM 可逐条反证）。 */
+internal enum class DeferredStartRetryDecision {
+  /** 生命周期已终结 / 用户已关引擎：不启动，也不再排下一拍。 */
+  STOP,
+  /** 事务在这期间出现了：交给 16 分钟那条等待者（本等待者收手）。 */
+  HAND_OVER_TO_TRANSACTION_WAIT,
+  /** 所有权空出来了：续跑 start()（它会自己再抢一次 begin()）。 */
+  RESUME,
+  /** 预算用尽：如实记一条 timeout 后收手（不判失败、不改相位）。 */
+  TIMEOUT,
+  /** 仍在预算内且所有权仍被占：排下一拍。 */
+  RETRY,
+}
+
+/**
+ * 无事务重试的**决策本体**（审计 §6.1）。
+ *
+ * 抽成纯函数的理由与 [awaitSnapshotTransactionSettled] 同源：这条重试最危险的形态是**变成无限重试**
+ * 或**偷偷绕过世代所有权**，两者都只能在 JVM 上逐条反证（真跑要等真实启动流收尾）。
+ *
+ * 判据顺序即语义，**不可重排**：
+ *  ① 生命周期闸门最先 —— destroyed / 用户关引擎 / 维修态一律 STOP，绝不因为「快超时了」而漏判；
+ *  ② 事务在场优先于所有权空出 —— 事务在跑说明上一次流已推进到解压，该由 16 分钟等待者接手；
+ *  ③ 所有权空出即 RESUME（**不等满预算**：等待本身没有意义，抢到就是抢到了）；
+ *  ④ 预算用尽 TIMEOUT（如实收手，不静默）；
+ *  ⑤ 其余 RETRY。
+ *
+ * @param canRun 生命周期闸门（生产传 [EngineStartFlow] 的 canRunEngineWork）
+ * @param transactionPresent 跨进程真源：快照事务 journal 是否在场
+ * @param ownershipRunning 本次启动流是否仍持有世代所有权
+ * @param attempts 已经走过的拍数（0 = 第一次决策）
+ * @param budgetMs 预算（毫秒）
+ * @param stepMs 步进（毫秒）
+ */
+internal fun decideNoTransactionRetry(
+  canRun: Boolean,
+  transactionPresent: Boolean,
+  ownershipRunning: Boolean,
+  attempts: Int,
+  budgetMs: Long = NO_TRANSACTION_RETRY_BUDGET_MS,
+  stepMs: Long = NO_TRANSACTION_RETRY_STEP_MS,
+): DeferredStartRetryDecision {
+  if (!canRun) return DeferredStartRetryDecision.STOP
+  if (transactionPresent) return DeferredStartRetryDecision.HAND_OVER_TO_TRANSACTION_WAIT
+  if (!ownershipRunning) return DeferredStartRetryDecision.RESUME
+  val waitedMs = attempts.coerceAtLeast(0).toLong() * stepMs
+  if (waitedMs >= budgetMs) return DeferredStartRetryDecision.TIMEOUT
+  return DeferredStartRetryDecision.RETRY
+  }
 
 // ── DEVICE-FINDING-4：引擎强制重启后的**有界就绪等待**（纯判据，JVM 可反证）─────────
 

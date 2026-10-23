@@ -53,6 +53,48 @@ class ControlPoller(
     private const val MAX_BACKOFF_MS = 10_000L
     /** 已执行 reqId 去重集合容量（有界 LRU；4s 内的 in-flight 窗口远用不满 64 条）。 */
     private const val EXECUTED_LRU_CAPACITY = 64
+
+    /**
+     * 无障碍心跳节拍（0.14.10 §6.5）：2 秒 -> 5 秒。
+     *
+     * 为什么 5 秒够用：消费方（引擎侧 dsh-android-bridge）的新鲜窗口是
+     * A11Y_FRESH_MS = 20_000（plugins/dsh-android-bridge/src/index.ts），5 秒一拍仍有
+     * 4 倍余量。而每次心跳都是一次 SharedPreferences 的 edit().apply()（真要落盘），
+     * 2 秒一拍等于每 2 秒一次无谓写盘——审计把这条列为可收敛的唤醒与 I/O。
+     */
+    internal const val HEARTBEAT_INTERVAL_MS = 5_000L
+
+    /**
+     * 心跳循环（0.14.10 §6.5）：节拍与等待均可注入 —— JVM 单测用假等待断言节奏，
+     * 不 sleep 真实时间（用户口径明确要求）。
+     *
+     * 放在 companion 而不是实例方法：本循环只用参数，不碰实例状态；而 JVM 单测无法构造
+     * Android Context，放实例上就永远测不到「先发一次心跳再等一拍」这个顺序契约。
+     *
+     * 顺序与旧实现一致：**先发一次心跳再等一拍**——服务刚连上时引擎侧立刻看到新鲜心跳，
+     * 不会因为首拍多等 5 秒而被误判成「通道没起来」。
+     */
+    internal fun runHeartbeatLoop(
+      isRunning: () -> Boolean,
+      heartbeat: () -> Unit,
+      intervalMs: Long = HEARTBEAT_INTERVAL_MS,
+      waitMs: (Long) -> Unit = { ms ->
+        try {
+          Thread.sleep(ms)
+        } catch (_: InterruptedException) {
+          // 停机中断：置回中断位，外层 while 会因 running=false 退出。
+          Thread.currentThread().interrupt()
+        }
+      },
+    ) {
+      while (isRunning()) {
+        try {
+          heartbeat()
+        } catch (_: Throwable) {
+        }
+        waitMs(intervalMs)
+      }
+    }
   }
 
   private val running = AtomicBoolean(false)
@@ -69,16 +111,11 @@ class ControlPoller(
       it.start()
     }
     // 0.13.8 E3（V2 D2）：心跳与执行解耦——原实现心跳只在轮询循环里刷新，慢建树
-    // 会把「服务在忙」误判成「掉线」并翻转 ADB 通道。独立心跳线程 2s 一拍，
-    // 与动作执行完全并行；busy 态对引擎保持可见（ready/busy 语义）。
+    // 会把「服务在忙」误判成「掉线」并翻转 ADB 通道。独立心跳线程按
+    // HEARTBEAT_INTERVAL_MS 一拍（0.14.10 §6.5 起由 2 秒降到 5 秒），与动作执行完全并行；
+    // busy 态对引擎保持可见（ready/busy 语义）。
     heartbeatThread = Thread({
-      while (running.get()) {
-        try {
-          heartbeat()
-        } catch (_: Throwable) {
-        }
-        sleep(2_000)
-      }
+      runHeartbeatLoop(isRunning = { running.get() }, heartbeat = heartbeat)
     }, "dsh-a11y-heartbeat").also {
       it.isDaemon = true
       it.start()
@@ -133,7 +170,14 @@ class ControlPoller(
     }
     val op = request.optString("op", "")
     val args = request.optJSONObject("args") ?: JSONObject()
-    var outcome = runOp(op, args)
+    // §6.2：控制请求在途 = 唤醒锁活动租约的三类事件之一。写在执行前后各一次，
+    // 让整个执行窗（可能跨数十秒的建树/截屏）都算活动，而不是只有开始那一刻。
+    noteWakeActivity()
+    var outcome = try {
+      runOp(op, args)
+    } finally {
+      noteWakeActivity()
+    }
     var envelope = envelope(token, reqId, outcome)
     var posted = post("/api/android/ui/result", envelope)
     // L1 降级阶梯（§S1.4）：回填超限先收窄口径重跑一次——snapshot 才有 view 可选，
@@ -221,6 +265,21 @@ class ControlPoller(
       }
     } finally {
       connection.disconnect()
+    }
+  }
+
+  /**
+   * §6.2：控制请求在途时刷新唤醒锁活动租约。
+   *
+   * 为什么由本类刷新而不是等看门狗下一拍：看门狗一拍最长 20 秒（健康态降频后），
+   * 若一条 op 正好跨越租约到期点，唤醒锁会在一段真在干活的时间里被放掉。这里直接
+   * 记租约；引擎服务若在跑，同一入口会顺手把锁重取回来（有事件立即重取）。
+   */
+  private fun noteWakeActivity() {
+    try {
+      WatchdogV2.WakeActivityLease.note()
+      EngineService.instance?.noteWakeActivity()
+    } catch (_: Throwable) {
     }
   }
 

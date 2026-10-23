@@ -89,6 +89,8 @@ export class TopBarFold {
   /** 容器上被我们覆盖掉的内联样式原值，解除时逐项写回。 */
   private readonly styleSnapshot = new Map<string, string>()
   private scheduled = false
+  /** 上一次真正写进 DOM 的呈现状态（折叠开关 + 容器 + 标题行 + 箭头），见 syncState()。 */
+  private written: readonly [boolean, HTMLElement | null, HTMLElement | null, HTMLButtonElement | null] | null = null
 
   private readonly onDocumentPointerDown = (event: Event): void => {
     if (!this.open) return
@@ -176,8 +178,29 @@ export class TopBarFold {
     }
     this.ensureArrow()
     // 重进手机竖屏默认收起（Spec 2.6）：容器换新时 this.open 未变，但首次接管必须从收起开始。
-    this.applyOpen()
+    //
+    // 审计 §7.9：样式写入只在 open 边沿执行。这里不再无条件调 applyOpen() ——
+    // 每批 DOM 变更都重写一遍容器属性、六个定位属性与标题行标记，等于把「状态没变」
+    // 也当成「要重排」。现在由 syncState() 记住上一次写进 DOM 的状态，只有它真的变了
+    // （含容器换新、箭头重建）才写。
+    this.syncState()
+    // 读与写分离：measure() 只读几何、只写定位属性，且只在打开态有意义。
     this.measure()
+  }
+
+  /**
+   * 把「当前应有的呈现状态」与「上一次真正写进 DOM 的状态」比对，只在边沿写 DOM。
+   *
+   * 状态元组 = 折叠开关 + 容器 + 标题行 + 箭头。任何一项变化都必须重写（容器换新时
+   * 属性写在旧容器上等于没写；箭头重建后 aria 属性要补），其余情况一次 DOM 写入都不做。
+   */
+  private syncState(): void {
+    const container = this.container
+    if (container === null) return
+    const state = [this.open, this.container, this.titleRow, this.arrow] as const
+    if (this.written !== null && this.written.every((value, index) => value === state[index])) return
+    this.written = state
+    this.applyOpen()
   }
 
   /** 是否手机竖屏形态（与 form-marker.ts 的单一来源一致）。 */
@@ -242,13 +265,17 @@ export class TopBarFold {
     this.arrow?.remove()
     this.arrow = null
     this.arrowHost = null
+    // 箭头没了：缓存里的「已写状态」作废，下一次 syncState() 必须重写。
+    this.written = null
   }
 
-  /** 打开 / 收起面板。 */
+  /** 打开 / 收起面板（用户手势：状态边沿，必须写 DOM）。 */
   private setOpen(next: boolean): void {
     this.open = next
-    this.applyOpen()
-    if (next) this.measure()
+    this.written = null
+    this.syncState()
+    // 只读后写：先记下打开态的几何，再让下一次 resolve/measure 按新状态写入定位。
+    this.measure()
   }
 
   /** 把当前状态写进 DOM（容器属性 + 箭头状态 + 标题行 containment）。 */
@@ -291,23 +318,43 @@ export class TopBarFold {
     else row.removeAttribute(UNCONTAINED_ATTR)
   }
 
-  /** 按头部实测写入面板的水平范围与限高（不推动内容：面板是 fixed 覆盖层）。 */
+  /**
+   * 按头部实测写入面板的水平范围与限高（不推动内容：面板是 fixed 覆盖层）。
+   *
+   * 审计 §7.9：读后写不要交错。原来每写一个属性就夹着下一次读取的输入，
+   * 七个 style 写入与 rect / 视口读取混在一起；现在先把四段几何**全部读完**算好，
+   * 再一次性写入 —— 中间没有任何布局读取，浏览器不会因此在同一帧里反复重排。
+   * 值没变就跳过写入：即使进了 measure()，稳态也不再触发样式失效。
+   */
   private measure(): void {
     const container = this.container
     if (container === null || !this.open) return
     const anchor = container.closest('header') ?? container.parentElement
     if (anchor === null) return
+    // ── 读阶段：只读，不写 ──
     const rect = anchor.getBoundingClientRect()
-    container.style.setProperty('top', String(Math.round(rect.bottom)) + 'px')
-    container.style.setProperty('left', String(Math.round(rect.left) + 12) + 'px')
-    container.style.setProperty('right', String(Math.round(Math.max(12, document.documentElement.clientWidth - rect.right + 12))) + 'px')
-    // 限高到视口底部（留 12px）：内容更多时由面板内部滚动，而不是盖住输入框。
+    const clientWidth = document.documentElement.clientWidth
     const visible = window.visualViewport
     const viewportBottom = visible !== null && visible !== undefined
       ? Math.round(visible.offsetTop + visible.height)
       : Math.round(window.innerHeight)
-    const maxHeight = Math.max(96, viewportBottom - Math.round(rect.bottom) - 24)
-    container.style.setProperty('--dsh-topbar-fold-max-height', String(maxHeight) + 'px')
+    // ── 算阶段 ──
+    const top = String(Math.round(rect.bottom)) + 'px'
+    const left = String(Math.round(rect.left) + 12) + 'px'
+    const right = String(Math.round(Math.max(12, clientWidth - rect.right + 12))) + 'px'
+    // 限高到视口底部（留 12px）：内容更多时由面板内部滚动，而不是盖住输入框。
+    const maxHeight = String(Math.max(96, viewportBottom - Math.round(rect.bottom) - 24)) + 'px'
+    // ── 写阶段：只在值真的变了时写 ──
+    this.setStyle(container, 'top', top)
+    this.setStyle(container, 'left', left)
+    this.setStyle(container, 'right', right)
+    this.setStyle(container, '--dsh-topbar-fold-max-height', maxHeight)
+  }
+
+  /** 值没变就不写：样式写入本身会触发样式失效，稳态下应当一次都不发生。 */
+  private setStyle(element: HTMLElement, name: string, value: string): void {
+    if (element.style.getPropertyValue(name) === value) return
+    element.style.setProperty(name, value)
   }
 
   /** 完全还原上游原样（状态、内联样式、标记、箭头）。 */
@@ -326,6 +373,8 @@ export class TopBarFold {
     this.container = null
     this.titleRow = null
     this.open = false
+    // 接管关系已经拆掉：下次接管必须重新写一遍 DOM。
+    this.written = null
   }
 }
 

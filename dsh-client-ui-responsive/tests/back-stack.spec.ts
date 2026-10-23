@@ -12,9 +12,15 @@ let uplink: ReturnType<typeof vi.fn>
 let leaveMainPanel: ReturnType<typeof vi.fn>
 let activePanelId: string | null
 
-/** Deliver the pending MutationObserver batch (jsdom delivers it as a microtask). */
-function flush(): Promise<void> {
-  return new Promise(resolve => { setTimeout(resolve, 0) })
+/**
+ * Deliver the pending MutationObserver batch and the coalesced pass it schedules.
+ *
+ * 两段：① 观察者回调本身是微任务；② 回调只排一次合帧检测（宏任务），所以要再等一个宏任务。
+ * 三段式（await flush() 后再 await flush()）在旧测试里也成立，故这里一次给足。
+ */
+async function flush(): Promise<void> {
+  await new Promise(resolve => { setTimeout(resolve, 0) })
+  await new Promise(resolve => { setTimeout(resolve, 0) })
 }
 
 /** The phone form marker attribute the drawer detector gates on. */

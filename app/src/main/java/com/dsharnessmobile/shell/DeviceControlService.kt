@@ -257,7 +257,13 @@ class DeviceControlService : AccessibilityService() {
       editor.apply()
     }
 
-    /** 轮询心跳：每次取活/空轮都刷新，引擎侧据此判断服务是否真的活着。 */
+    /**
+     * 轮询心跳：由 ControlPoller 的心跳线程驱动，引擎侧据此判断服务是否真的活着。
+     *
+     * 0.14.10 §6.5：节拍从 2 秒降到 5 秒（见 ControlPoller.HEARTBEAT_INTERVAL_MS）。
+     * 消费方新鲜窗口是 20 秒，5 秒仍有 4 倍余量；而这里每次都是一次真实的 prefs 落盘
+     * （edit().apply()），原来每 2 秒写一次属于可收敛的无谓 I/O。
+     */
     fun heartbeat(context: Context) {
       context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         .edit().putLong(KEY_HEARTBEAT, System.currentTimeMillis()).apply()

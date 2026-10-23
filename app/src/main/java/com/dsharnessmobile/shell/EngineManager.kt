@@ -1278,20 +1278,45 @@ class EngineManager(private val context: Context, private val pickToken: String?
       Log.i(TAG, "runtime patch skipped (target package absent): $asset")
       return
     }
-    val assetBytes = try {
-      context.assets.open(asset).use { it.readBytes() }
-    } catch (e: Exception) {
-      Log.w(TAG, "runtime patch asset missing: $asset")
-      return
+    val startedAtNs = System.nanoTime()
+    val outcome = applyAssetPatchCore(
+      asset = asset,
+      target = target,
+      recordFile = assetPatchRecordFile(asset),
+      apkIdentity = assetPatchApkIdentity(),
+      readAsset = { context.assets.open(asset).use { it.readBytes() } },
+      log = { message -> Log.i(TAG, message) },
+    )
+    when (outcome) {
+      AssetPatchOutcome.ASSET_MISSING -> Log.w(TAG, "runtime patch asset missing: $asset")
+      AssetPatchOutcome.WRITTEN -> Log.i(TAG, "runtime patch applied/updated: $asset -> $target")
+      AssetPatchOutcome.SKIPPED_FAST_PATH, AssetPatchOutcome.SKIPPED_ALREADY_EQUAL ->
+        Log.i(TAG, "runtime patch already in place (" + outcome.name + "): $asset")
     }
-    if (target.exists() && target.readBytes().contentEquals(assetBytes)) return
+    // 审计 §6.1 同批：这一段的耗时进 perf 探针（快路径命中时应显著低于内容比对路径）。
+    // 与 [EngineStartPreludeProbe.report] 同口径：默认安装上开发者日志通道是关的，
+    // 故无条件写 boot-diag.log（否则设备侧取不到这行——0.14.10 实测缺口）。
+    val perfLine = "perf asset-patch " + asset + " outcome=" + outcome.name +
+      " durMs=" + (System.nanoTime() - startedAtNs) / 1_000_000
     try {
-      target.parentFile?.mkdirs()
-      target.writeBytes(assetBytes)
-      Log.i(TAG, "runtime patch applied/updated: $asset -> $target")
-    } catch (e: Exception) {
-      Log.e(TAG, "runtime patch failed: $asset", e)
+      LogCollector.writeBootDiag(context, "perf-asset-patch", perfLine)
+    } catch (_: Throwable) {
+      // 诊断落盘失败不得影响补丁应用本身（下面那行开发者日志仍会尝试）。
     }
+    LogCollector.log(TAG, perfLine)
+  }
+
+  /** 补丁应用记录的落点：放在应用私有目录，**不进**运行时树（那棵树会被快照整体换掉）。 */
+  private fun assetPatchRecordFile(asset: String): File =
+    File(File(context.filesDir, ASSET_PATCH_RECORD_DIR), asset.replace('/', '_') + ".rec")
+
+  /** 安装包身份：资产字节只随安装包变化，故用它绑定记录（免去每次启动读资产算摘要）。 */
+  private fun assetPatchApkIdentity(): String = try {
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    info.versionCode.toString() + ":" + info.lastUpdateTime
+  } catch (t: Throwable) {
+    // 取不到身份时给一个必然不匹配的值：宁可每次走内容比对，也不要在快路径上赌。
+    "unknown"
   }
 
 
@@ -1452,19 +1477,34 @@ class EngineManager(private val context: Context, private val pickToken: String?
         LogCollector.log(TAG, "engine start refused: listener remained after owned-child cleanup")
         return false
       }
+      // ── 审计 §6.1 同批：spawn 前串行前置的**分段耗时探针** ────────────────────────────
+      // 审计原文（§6.1 落地批次第 8 项）要求「先把各步耗时打出来，再决定是否并行化」。
+      // 因此这里**只加探针、不改顺序**：这五步的先后是有语义约束的（坏键迁移必须先于引擎读
+      // settings；README 刷新与补丁应用都在准备运行时树），并行化会改变顺序语义——没有实测
+      // 收益之前不动。每步的耗时进 engine.log 与 logcat（[EngineStartPreludeProbe]），
+      // 汇总一行 prelude-total，供设备侧 `grep prelude` 直接读出瓶颈。
+      //
+      // 口径：用 SystemClock.elapsedRealtime（单调时钟）——与审计 §6.7 的教训一致，
+      // 墙钟会被校时拨动，拿来量毫秒级耗时是错的。
+      val preludeProbe = EngineStartPreludeProbe()
       // 0.13.1 W5：坏键迁移必须在引擎读 settings 前完成。
-      repairSettingsSeed()
-      SnapshotUserData.retireReseededFactorySettings(File(homeDir, ".dsh"))?.let { backup ->
-        LogCollector.log(TAG, "resurrected blank factory settings quarantined before profile import: " + backup.name)
+      preludeProbe.step("repair-settings-seed") { repairSettingsSeed() }
+      preludeProbe.step("retire-reseeded-factory-settings") {
+        SnapshotUserData.retireReseededFactorySettings(File(homeDir, ".dsh"))?.let { backup ->
+          LogCollector.log(TAG, "resurrected blank factory settings quarantined before profile import: " + backup.name)
+        }
       }
       // 0.14.0 #214：退役行 disabled 残留自愈（前置于引擎读 profile；幂等一次性，见函数注释）。
-      repairProfilePatch()
+      preludeProbe.step("repair-profile-patch") { repairProfilePatch() }
       // 0.13.1 W3/W4：共享目录 README 每次启动刷新（此前只在迁移路径调用，正常启动不落盘）。
       // 注意：本行**只覆盖「引擎真的启动」这一条路径**——startEngine 有两个早退会整段跳过它
       // （快照刷新中 / 引擎已在跑）。故 provisionPublicRepo 另由 MainActivity 的 onCreate/onResume
       // 触发，那里才是「授权之后能自愈」的入口（0.14.1 用户反馈）。
-      provisionPublicRepo(PublicRepoProvision.TRIGGER_ENGINE_START)
-      applyRuntimePatches()
+      preludeProbe.step("provision-public-repo") {
+        provisionPublicRepo(PublicRepoProvision.TRIGGER_ENGINE_START)
+      }
+      preludeProbe.step("apply-runtime-patches") { applyRuntimePatches() }
+      preludeProbe.report(TAG, context)
       // --no-open: the engine must never try to open a desktop browser on Android
       // (the WebView IS the UI). Without it, rc.2's spawn xdg-open on a missing
       // binary stalls engine serve on some emulators (MuMu root observed);
@@ -2572,6 +2612,281 @@ internal fun engineHeapMb(totalRamMb: Int): Int {
   if (totalRamMb <= 0) return ENGINE_HEAP_FLOOR_MB
   return (totalRamMb / 2).coerceIn(ENGINE_HEAP_FLOOR_MB, ENGINE_HEAP_CAP_MB)
 }
+
+
+// ── 审计 §6.1 同批：applyAssetPatch 的 mtime/size 快路径（**保留内容比对兜底**）──────────
+//
+// 现状与代价：每次启动（每次 spawn 前）三个补丁资产各读一遍、与目标文件逐字节比对并算摘要：
+// attachment-local 47.9KB / fs-local 47.8KB / session-persistence 149.7KB，约 245KB 的读盘 + 比较，
+// 而其中绝大多数启动里结果都是「已经打过了、什么都不用做」。
+//
+// 为什么不能「只看 mtime/size 就跳过」：这是**安全敏感面**（资产补丁会把上游 package 的 lib/index.js
+// 覆盖成我们的补丁版本）。产物树的 mtime 由解压器写入，与安装包里的资产 mtime 毫无关系；
+// 更关键的是「mtime 与 size 相同但内容不同」完全可能且危险（同尺寸改写、字节翻转）。
+// 把快路径做成「跳过内容校验」= 一旦产物被写坏就永久判「已打好」，缺陷被静默固化。
+//
+// 因此快路径的判据**不是**「资产与目标的元数据相同」，而是：
+//   本安装包（versionCode + lastUpdateTime）**曾经**把这份资产写成了目标文件当前的内容
+//   （记录落在应用私有目录），且目标文件的 size/mtime 与记录一致。
+// 三条与关系：
+//   ① 安装包身份一致 —— 资产字节只随安装包变化（[AssetPatchRecord.apkIdentity]）；
+//   ② 目标文件的 size 与 mtime 与记录一致 —— 说明这条路径没有被第三方改写过；
+//   ③ 记录里的内容摘要 = 当初写入的资产摘要。
+// 任一不成立就退回**完整内容比对**（读资产 + 读目标 + 逐字节比），行为与旧实现完全一致。
+// 换句话说：快路径只省掉「已经打好的那次读盘」，任何不一致都会落回原判据。
+//
+// **安全边界（必须理解，否则容易把快路径做成绕过校验）**：快路径命中时确实不再比对内容，
+// 它信任的是「本安装包在本机写入过的那个内容摘要」这条**记录**，而不是「大小与时间相同」。
+// 记录只在本进程成功写入后产生、只存在应用私有目录；而「资产与目标 size/mtime 相同、内容不同」
+// 但**没有**可信记录的情形，必然落回内容比对并被正确改写（见 AssetPatchFastPathTest 的核心用例）。
+
+/** 补丁记录目录（应用私有，随 App 卸载清除；**不**放进运行时树，避免被快照整体换掉）。 */
+internal const val ASSET_PATCH_RECORD_DIR = "asset-patch-records"
+
+// ── 审计 §6.1 同批：spawn 前串行前置的**分段耗时探针** ────────────────────────────
+//
+// 为什么先只打探针、不并行化：这五步的先后是有语义约束的——
+//   ① repairSettingsSeed：坏键迁移**必须**先于引擎读 settings；
+//   ② retireReseededFactorySettings：隔离「复活的空白工厂设置」，也要先于 profile 导入；
+//   ③ repairProfilePatch：退役行 disabled 残留自愈，前置于引擎读 profile；
+//   ④ provisionPublicRepo：共享目录 README，写的是用户可见面；
+//   ⑤ applyRuntimePatches：把三份补丁资产写进运行时树。
+// 并行化会改变「谁先看到什么」的顺序语义，而审计原文的要求是「收益待测，先打耗时再决定」。
+// 所以本类只做一件事：**如实测量**每一步，汇总一行 prelude-total 落 engine.log。
+//
+// 时钟用 SystemClock.elapsedRealtime（单调）：与审计 §6.7 的教训同源——墙上时钟会被校时
+// 拨动，拿来量毫秒级耗时是错的。
+
+/** 一步探针读数（毫秒）。 */
+internal data class EngineStartPreludeStep(val name: String, val durMs: Long)
+
+/**
+ * spawn 前串行前置的分段计时器（纯逻辑，JVM 可断言）。
+ *
+ * 用法：`probe.step("名字") { 真正的动作 }`，最后 `probe.report(TAG)` 汇总一行。
+ * 探针**不得**成为故障源：动作抛异常时仍要记下这一段耗时，然后把异常原样抛出去
+ * （吞掉异常会改变既有失败语义）。
+ *
+ * @param clock 单调时钟读数（单测注入，生产传 elapsedRealtime）
+ */
+internal class EngineStartPreludeProbe(
+  private val clock: () -> Long = { android.os.SystemClock.elapsedRealtime() },
+) {
+  private val steps = mutableListOf<EngineStartPreludeStep>()
+
+  /** 已记录的分段（只读快照）。 */
+  val recorded: List<EngineStartPreludeStep> get() = steps.toList()
+
+  /** 跑一步并记下它的耗时（异常照原样抛出，但耗时仍然落账）。 */
+  fun <T> step(name: String, action: () -> T): T {
+    val startedAt = clock()
+    try {
+      return action()
+    } finally {
+      steps += EngineStartPreludeStep(name, elapsedSince(startedAt))
+    }
+  }
+
+  private fun elapsedSince(startedAt: Long): Long {
+    val now = clock()
+    return if (now <= startedAt) 0L else now - startedAt
+  }
+
+  /** 汇总行（唯一落盘形态）：`perf prelude step=a durMs=1 ... prelude-total-durMs=9`。 */
+  fun reportLine(): String {
+    val parts = steps.map { "step=" + it.name + " durMs=" + it.durMs }
+    val total = steps.sumOf { it.durMs }
+    return (listOf("perf prelude") + parts + listOf("prelude-total-durMs=" + total)).joinToString(" ")
+  }
+
+  /**
+   * 落一行：**无条件通道** + 开发者日志通道。
+   *
+   * 为什么必须走 [LogCollector.writeBootDiag]：审计 §3.1 要让设备侧能直接读出「各步耗时」，
+   * 而 `LogCollector.log` 有两个门——[LogCollector.appContext] 未初始化时直接 return，
+   * 且 `start()` 本身受开发者日志开关（`DevLogPrefs`，默认关）门住。默认安装上
+   * `files/log/` 目录根本不存在，探针写出去等于没写（0.14.10 实测缺口）。
+   * boot-diag.log 是同一轮启动里必然存在的诊断面（`shell-stall` 等已在用），故以它为准。
+   * 两路都写：诊断面可无条件取，开发者日志通道保留给开了开关的场景。
+   */
+  fun report(tag: String, context: Context? = null) {
+    if (steps.isEmpty()) return
+    val line = reportLine()
+    if (context !== null) {
+      try {
+        LogCollector.writeBootDiag(context, "perf-prelude", line)
+      } catch (_: Throwable) {
+        // 诊断落盘失败不得影响启动：走下面的开发者日志通道即可。
+      }
+    }
+    LogCollector.log(tag, line)
+  }
+}
+
+/** 记录里的内容摘要形态（64 位小写十六进制；与 sha256Hex 同口径）。 */
+private val SHA256_HEX = Regex("[0-9a-f]{64}")
+
+/** 补丁应用的结果（调用方据此决定打哪条日志）。 */
+internal enum class AssetPatchOutcome {
+  /** 快路径命中：安装包身份 + size/mtime + 摘要三者一致，未读资产、未写目标。 */
+  SKIPPED_FAST_PATH,
+  /** 走了完整内容比对，发现目标已与资产逐字节相同，未写。 */
+  SKIPPED_ALREADY_EQUAL,
+  /** 资产被成功写入目标（首次打补丁或资产更新）。 */
+  WRITTEN,
+  /** 资产读不出来（打包缺件）或写不进去——与旧实现同为「跳过 + 告警」，不改行为。 */
+  ASSET_MISSING,
+}
+/**
+ * 补丁应用记录：**只在本进程写入成功后**才落盘，用于下一次启动的快路径判定。
+ *
+ * @param apkIdentity 安装包身份（versionCode:lastUpdateTime）；变了就整条失效
+ * @param assetSize 写入的资产字节数
+ * @param contentSha256 写入内容的 SHA-256（十六进制小写）
+ * @param targetSize 写入后目标文件的大小
+ * @param targetMtime 写入后目标文件的 mtime（毫秒）
+ */
+internal data class AssetPatchRecord(
+  val apkIdentity: String,
+  val assetSize: Long,
+  val contentSha256: String,
+  val targetSize: Long,
+  val targetMtime: Long,
+) {
+  /** 单行序列化（空格分隔；身份与摘要是无空白字符的短标识，不需要转义）。 */
+  fun encode(): String = listOf(apkIdentity, assetSize.toString(), contentSha256, targetSize.toString(), targetMtime.toString())
+    .joinToString(" ")
+
+  companion object {
+    /** 解析记录；空/字段缺失/数字不合法一律 null（**不得**把不可解析的记录当成命中）。 */
+    fun parse(raw: String?): AssetPatchRecord? {
+      val parts = raw?.trim()?.split(' ') ?: return null
+      if (parts.size != 5) return null
+      if (parts[0].isEmpty()) return null
+      // 摘要必须是 64 位十六进制：畸形记录（半截写入 / 乱码）一律判不可解析——
+      // 宁可退化到内容比对，也不要把一条读不懂的记录当成「内容已认证」。
+      if (!SHA256_HEX.matches(parts[2])) return null
+      val assetSize = parts[1].toLongOrNull() ?: return null
+      val targetSize = parts[3].toLongOrNull() ?: return null
+      val targetMtime = parts[4].toLongOrNull() ?: return null
+      if (assetSize < 0L || targetSize < 0L) return null
+      return AssetPatchRecord(parts[0], assetSize, parts[2], targetSize, targetMtime)
+    }
+  }
+}
+
+/**
+ * 快路径判据（纯函数）：三条与关系，任一不成立就必须退回内容比对。
+ *
+ * **这一条是本修复的安全边界**：它只回答「能不能省掉这次读盘」，绝不回答「内容对不对」。
+ * 所以「记录缺席」「身份变了」「size/mtime 变了」都返回 false，调用方随之走旧的逐字节比对。
+ */
+internal fun assetPatchFastPathHit(
+  record: AssetPatchRecord?,
+  apkIdentity: String,
+  targetExists: Boolean,
+  targetSize: Long,
+  targetMtime: Long,
+  targetDigest: String?,
+): Boolean {
+  if (record == null) return false
+  if (!targetExists) return false
+  if (record.apkIdentity != apkIdentity) return false
+  if (record.targetSize != targetSize) return false
+  if (record.targetMtime != targetMtime) return false
+  // **内容认证**（关键，不可省）：size 与 mtime 都可以被伪造/还原，只有摘要能证明目标文件
+  // 现在的内容仍是本包装过的那份。没有这一步，快路径就成了「同尺寸改写也照样跳过」的绕过。
+  if (targetDigest == null) return false
+  if (!targetDigest.equals(record.contentSha256, ignoreCase = true)) return false
+  return true
+}
+
+/**
+ * applyAssetPatch 的**核心**（依赖注入，JVM 单测用真实文件 + 内存资产即可全覆盖）。
+ *
+ * 执行顺序即安全边界，不可重排：
+ *  ① 先读记录并跑快路径判据（[assetPatchFastPathHit]）——命中就返回，**不读资产**；
+ *  ② 快路径未命中 ⇒ 读资产（读不出 = [AssetPatchOutcome.ASSET_MISSING]，与旧行为一致）；
+ *  ③ 目标存在且与资产逐字节相同 ⇒ [AssetPatchOutcome.SKIPPED_ALREADY_EQUAL]，**但仍刷新记录**
+ *     （否则下一次启动还会重读资产做比对，快路径永远不命中）；
+ *  ④ 其余 ⇒ 写入目标并刷新记录。
+ *
+ * 关键：**内容比对永远在快路径之后**。快路径命中时确实不再比对内容，但它要求的记录只可能在
+ * 「本包在本机成功写入过」之后产生；没有可信记录时，无论 size/mtime 多像，都必然走到 ③——
+ * 那正是「mtime/size 相同但内容不同」被正确识别的路径。
+ */
+internal fun applyAssetPatchCore(
+  asset: String,
+  target: File,
+  recordFile: File,
+  apkIdentity: String,
+  readAsset: () -> ByteArray,
+  log: (String) -> Unit = {},
+): AssetPatchOutcome {
+  val rawRecord = try { recordFile.takeIf { it.isFile }?.readText() } catch (_: Throwable) { null }
+  val record = AssetPatchRecord.parse(rawRecord)
+  // 读一次目标（随后内容比对若需要可直接复用，不重复读盘）。
+  val existing = try { target.takeIf { it.isFile }?.readBytes() } catch (_: Throwable) { null }
+  if (existing != null && assetPatchFastPathHit(
+      record = record,
+      apkIdentity = apkIdentity,
+      targetExists = true,
+      targetSize = existing.size.toLong(),
+      targetMtime = target.lastModified(),
+      targetDigest = sha256Hex(existing),
+    )
+  ) {
+    // 快路径命中：内容摘要与服务端记录一致 ⇒ 目标就是本包装过的那份，无需读资产、无需写入。
+    return AssetPatchOutcome.SKIPPED_FAST_PATH
+  }
+  val assetBytes = try {
+    readAsset()
+  } catch (e: Throwable) {
+    log("runtime patch asset unreadable: " + asset)
+    return AssetPatchOutcome.ASSET_MISSING
+  }
+  if (existing != null && existing.contentEquals(assetBytes)) {
+    // 内容已经一致：不写文件，但**补记录**——否则每次启动都会重读资产做比对（快路径永远不命中）。
+    writeAssetPatchRecord(recordFile, sha256Hex(assetBytes), assetBytes.size.toLong(), target, apkIdentity)
+    return AssetPatchOutcome.SKIPPED_ALREADY_EQUAL
+  }
+  return try {
+    target.parentFile?.mkdirs()
+    target.writeBytes(assetBytes)
+    writeAssetPatchRecord(recordFile, sha256Hex(assetBytes), assetBytes.size.toLong(), target, apkIdentity)
+    AssetPatchOutcome.WRITTEN
+  } catch (e: Throwable) {
+    log("runtime patch failed: " + asset + " -> " + e.message)
+    AssetPatchOutcome.ASSET_MISSING
+  }
+}
+
+/** 字节的 SHA-256（十六进制小写）。快路径的内容认证与记录都走它，口径唯一。 */
+internal fun sha256Hex(bytes: ByteArray): String =
+  java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+/** 记录落盘（失败不影响补丁本身：下一次启动退化为完整内容比对）。 */
+internal fun writeAssetPatchRecord(
+  recordFile: File,
+  contentSha256: String,
+  assetSize: Long,
+  target: File,
+  apkIdentity: String,
+): Boolean =
+  try {
+    val recorded = AssetPatchRecord(
+      apkIdentity = apkIdentity,
+      assetSize = assetSize,
+      contentSha256 = contentSha256,
+      targetSize = target.length(),
+      targetMtime = target.lastModified(),
+    )
+    recordFile.parentFile?.mkdirs()
+    recordFile.writeText(recorded.encode())
+    true
+  } catch (_: Throwable) {
+    false
+  }
 
 /** 由上限值装配 NODE_OPTIONS 的值。非法域按下限处理——宁可给足，不编造一个小于下限的标志。 */
 internal fun heapOptionFrom(heapMb: Int): String =

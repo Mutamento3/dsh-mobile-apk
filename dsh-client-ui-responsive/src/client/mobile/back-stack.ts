@@ -327,6 +327,8 @@ export class BackStackSignal {
   private uplinked = false
   private available = false
   private attached = false
+  /** 合帧用的挂起标记：一批 DOM 变更只换一次检测。 */
+  private scheduled = false
 
   /** @param options - the drawer toggle callback. */
   constructor(options: BackStackOptions) {
@@ -338,17 +340,47 @@ export class BackStackSignal {
     if (this.attached) return
     this.attached = true
     window.__dshBack = () => this.popTop()
-    this.observer = new MutationObserver(() => { this.sync() })
-    // Document-wide with an attribute filter: the layer anchors are attributes
-    // written by upstream stores (sidebar collapse, dialog roles, panel mode)
-    // and by this plugin's own marker. MutationObserver already batches one
-    // callback per delivered batch, so no extra rAF coalescing is needed.
+    this.observer = new MutationObserver(() => { this.schedule() })
+    // 全文档观察，两条腿都必须留着（0.14.10 实测）：
+    // - attributes + OBSERVED_ATTRIBUTES：上游用属性驱动层（侧栏折叠、dialog 角色、面板模式）
+    //   和本插件自己的标记；
+    // - childList：React 提交一棵**属性已经在创建时写好**的子树时，插入动作本身不产生任何
+    //   属性变更。dialog / 菜单 / 附件来源菜单全都这么进场，去掉 childList 它们一条都看不见，
+    //   而壳侧只有在收到「层栈非空」信号时才会调用 __dshBack，所谓「返回键前同步 sync()」的
+    //   兜底根本到不了 —— 实测：去掉 childList 后这三层的深度停在 0，返回键直接 finish 应用。
+    //
+    // 所以这里不动观察面，改的是回调的代价：合帧，一批/一阵 DOM 变更只做一次检测。
     this.observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: OBSERVED_ATTRIBUTES,
     })
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
+    window.addEventListener('pageshow', this.onVisibilityChange)
+    this.sync()
+  }
+
+  /**
+   * 合帧：一批 DOM 变更只安排一次检测。
+   *
+   * 为什么必须有：观察面是全文档，流式渲染时每个提交都会送来一批变更，而一次 detect()
+   * 要跑六七个全文档查询。审计 §7.3 点名的就是「回调直接 sync()，没有合帧」。
+   * 合帧窗口是一个宏任务（不是 rAF）：页面不可见时 rAF 不派发，层栈信号就会停在旧值上，
+   * 而壳侧正是靠这个信号决定按返回键要不要问页面。
+   */
+  private schedule(): void {
+    if (this.scheduled || !this.attached) return
+    this.scheduled = true
+    window.setTimeout(() => {
+      this.scheduled = false
+      this.sync()
+    }, 0)
+  }
+
+  /** 回到前台立刻结算一次挂起的检测（后台里合帧窗口可能被节流）。 */
+  private readonly onVisibilityChange = (): void => {
+    if (document.hidden) return
     this.sync()
   }
 
@@ -358,6 +390,9 @@ export class BackStackSignal {
     this.attached = false
     this.observer?.disconnect()
     this.observer = null
+    this.scheduled = false
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
+    window.removeEventListener('pageshow', this.onVisibilityChange)
     this.layers = []
     delete window.__dshBack
     delete window.__dshBackDepth

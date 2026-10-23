@@ -17,7 +17,8 @@ import java.io.File
  * - 熔断与指数退避：连续失败 → 指数退避（5s→10s→20s→40s→80s 封顶），超过熔断阈值（12 次连续失败）
  *   暂停看门狗并记录（界面提示由 GuideChrome 状态区显示），用户交互或探活成功自动复位。
  * - 开机自启：BOOT_COMPLETED 接收器恢复用户上次同意的运行状态（EngineService.userShutdown 持久化）。
- * - 前台唤醒锁：引擎前台运行期间持有（PARTIAL_WAKE_LOCK，标准档位；获取失败降级尽力模式并记录）。
+ * - 唤醒锁：**按活动持有**（0.14.10 §6.2，PARTIAL_WAKE_LOCK，标准档位；获取失败降级尽力模式并记录）。
+ *   活动 = turn 在跑 / 控制请求在途 / 启动或重启窗口；空闲 60 秒主动放锁，有事件立刻重取。
  * - 授权状态探活：ADB 配对断线时记录（F2.9，桥引导重新配对由桥层返回）。
  */
 object WatchdogV2 {
@@ -36,17 +37,72 @@ object WatchdogV2 {
    */
   enum class ProbeState { HEALTHY, DEGRADED_HTTP, DEGRADED_LOG, DEAD }
 
-  /** DEGRADED_HTTP 阶梯阈值：6 拍 × 5s = 30s（与 restartDeadConfirmations 同量级，远小于 90s 冷启动上限）。 */
+  /**
+   * 标准拍长（0.14.10 §6.3）：所有阶梯阈值的时间单位。
+   *
+   * 为什么要有这个概念：审计点名「DEGRADED_SLOW_GRACE_TICKS 与阶梯拍数是按 5 秒拍标定的，
+   * 降频时必须同步换算」，否则健康态退到 20 秒后，30 秒的阶梯会变成 120 秒。现在拍数常量
+   * 一律按**标准拍（5 秒）**计，每拍按「实际经过的毫秒」折算成标准拍数记账（[tickUnits]），
+   * 于是无论调度拍长是 5 秒还是 20 秒，恢复与熔断都落在同一个时间点。
+   */
+  const val STANDARD_TICK_MS = 5_000L
+
+  /** 健康态探活间隔（0.14.10 §6.3）：审计要求 15–30 秒，取 20 秒。 */
+  const val HEALTHY_TICK_MS = 20_000L
+
+  /** 非健康态（DEGRADED_* / DEAD / 冷启动窗口）探活间隔：立刻回到原节奏。 */
+  const val ACTIVE_TICK_MS = 5_000L
+
+  /** DEGRADED_HTTP 阶梯阈值：6 个标准拍 = 30 秒（时间语义，见 [STANDARD_TICK_MS]）。 */
   const val DEGRADED_RESTART_CONFIRMATIONS = 6
+
+  /** 阶梯到点的时间口径（毫秒）：30 秒。降频不得改变它。 */
+  const val DEGRADED_RESTART_AFTER_MS = DEGRADED_RESTART_CONFIRMATIONS.toLong() * STANDARD_TICK_MS
 
   /**
    * 「慢」的宽限拍数（issue #274 ①）：slowProbe 否决破坏性动作的**上界**。
    *
    * 为什么需要上界而不是无条件否决：真机上半死引擎的探活形态也是超时，与长 turn 的单次观测
    * 无法区分；无条件否决会让真卡死的引擎永远救不回来（破坏 0.14.1 锁存盲区回归）。
-   * 3 倍阶梯 = 18 拍 ≈ 90s，与 START_COOLDOWN_MS 的冷启动预算同量级。
+   * 3 倍阶梯 = 18 个标准拍 = 90 秒，与 START_COOLDOWN_MS 的冷启动预算同量级。
    */
   const val DEGRADED_SLOW_GRACE_TICKS = DEGRADED_RESTART_CONFIRMATIONS * 3
+
+  /** 慢宽限的时间口径（毫秒）：90 秒。降频不得改变它。 */
+  const val DEGRADED_SLOW_GRACE_AFTER_MS = DEGRADED_SLOW_GRACE_TICKS.toLong() * STANDARD_TICK_MS
+
+  /** 熔断阈值的时间口径（毫秒）：12 个标准拍 = 60 秒。降频不得改变它。 */
+  const val CIRCUIT_OPEN_AFTER_MS = MAX_CONSEC_FAILURES.toLong() * STANDARD_TICK_MS
+
+  /**
+   * 单拍最多折算多少个标准拍（= 阶梯阈值 6）。
+   *
+   * 为什么要封顶：设备深睡/Doze 之后一拍可能隔了几分钟，若按真实间隔折算，单次观测就能
+   * 直接顶满熔断（12 拍）——熔断守的是「**反复**失败」，一次观测不该有那个权限。封到阶梯
+   * 阈值处，则最多「一拍走完阶梯」，恢复仍会立即发生，只是不跳步打开熔断。
+   */
+  const val MAX_TICK_UNITS = DEGRADED_RESTART_CONFIRMATIONS
+
+  /**
+   * 纯函数（0.14.10 §6.3）：本拍实际经过的毫秒 → 折算成多少个标准拍（5 秒）。
+   *
+   * 四舍五入而不是向下取整：20 秒拍折 4 个标准拍，12.5 秒折 3 个，5 秒拍恒为 1（不因调度
+   * 抖动掉成 0，否则阶梯永远凑不满）。0 或负值（首拍/时钟回退）按 1 拍处理。
+   */
+  fun tickUnits(elapsedMs: Long): Int {
+    if (elapsedMs <= 0L) return 1
+    val rounded = (elapsedMs + STANDARD_TICK_MS / 2) / STANDARD_TICK_MS
+    return rounded.coerceIn(1L, MAX_TICK_UNITS.toLong()).toInt()
+  }
+
+  /**
+   * 纯函数（0.14.10 §6.3）：下一拍该隔多久。
+   *
+   * 只有「引擎健康且不在冷启动窗口」才用 [HEALTHY_TICK_MS]；一旦 DEGRADED_* / DEAD / 冷启动，
+   * 立刻回到 [ACTIVE_TICK_MS]——恢复动作必须以 5 秒拍去跟，否则 30 秒的阶梯会被拖成长尾。
+   */
+  fun nextTickDelayMs(state: ProbeState, booting: Boolean = false): Long =
+    if (state == ProbeState.HEALTHY && !booting) HEALTHY_TICK_MS else ACTIVE_TICK_MS
 
   /** 引擎日志尾部签名：插件树装配失败（`plugin tree failed to load`）。 */
   const val SIGNATURE_PLUGIN_TREE = "plugin-tree"
@@ -91,20 +147,26 @@ object WatchdogV2 {
   /** Exponential delay for destructive recovery attempts (death or half-dead ladder). */
   fun nextDelayMs(): Long = delayForFailureCount(effectiveFailureCount())
 
-  /** Only a confirmed dead process contributes to the restart/undo circuit breaker. */
-  fun recordProbe(state: ProbeState, signature: String? = lastLogSignature) {
-    consecutiveFailures = if (state == ProbeState.DEAD) consecutiveFailures + 1 else 0
-    consecutiveDegradedHttp = nextDegradedCount(state, consecutiveDegradedHttp)
-    consecutivePluginTreeFailures = nextPluginTreeCount(state, signature, consecutivePluginTreeFailures)
+  /**
+   * 记一拍探活结果（0.14.10 §6.3：计数单位是**标准拍**，不是「调度拍」）。
+   *
+   * [units] = [tickUnits] 折算出来的标准拍数：健康态 20 秒一拍折 4 个，进 DEGRADED 后 5 秒
+   * 一拍折 1 个。于是「6 个标准拍 = 30 秒」这条阶梯语义与调度频率完全解耦。
+   */
+  fun recordProbe(state: ProbeState, signature: String? = lastLogSignature, units: Int = 1) {
+    val u = units.coerceAtLeast(1)
+    consecutiveFailures = if (state == ProbeState.DEAD) consecutiveFailures + u else 0
+    consecutiveDegradedHttp = nextDegradedCount(state, consecutiveDegradedHttp, u)
+    consecutivePluginTreeFailures = nextPluginTreeCount(state, signature, consecutivePluginTreeFailures, u)
   }
 
-  /** 纯函数（JVM 单测）：DEGRADED_HTTP 自增，其余状态清零。 */
-  fun nextDegradedCount(state: ProbeState, count: Int): Int =
-    if (state == ProbeState.DEGRADED_HTTP) count + 1 else 0
+  /** 纯函数（JVM 单测）：DEGRADED_HTTP 按标准拍自增，其余状态清零。 */
+  fun nextDegradedCount(state: ProbeState, count: Int, units: Int = 1): Int =
+    if (state == ProbeState.DEGRADED_HTTP) count + units.coerceAtLeast(1) else 0
 
   /** 纯函数（JVM 单测）：**只认**插件树签名（不跟 DEGRADED_LOG 整类计数，见字段注释）。 */
-  fun nextPluginTreeCount(state: ProbeState, signature: String?, count: Int): Int =
-    if (pluginTreeHung(state, signature)) count + 1 else 0
+  fun nextPluginTreeCount(state: ProbeState, signature: String?, count: Int, units: Int = 1): Int =
+    if (pluginTreeHung(state, signature)) count + units.coerceAtLeast(1) else 0
 
   /** 纯函数：是否「插件树挂死」（HTTP 活着但 loader entry 导入失败）。 */
   fun pluginTreeHung(state: ProbeState, signature: String?): Boolean =
@@ -243,12 +305,17 @@ object WatchdogV2 {
     refreshWake: () -> Unit,
     undoReady: () -> Boolean,
     callerCurrent: () -> Boolean = { true },
+    /**
+     * 本拍折算成多少个标准拍（0.14.10 §6.3）。生产面传 [tickUnits] 的换算结果；JVM 测试
+     * 不传即 1（= 经典 5 秒拍），既有用例语义不变。
+     */
+    units: Int = 1,
   ): TickPlan {
     if (!callerCurrent()) return TickPlan(TickAction.HOLD)
     // ── 前置副作用（#210.3/#210.4）：与状态分类无关，先于一切早退 ──
     feedProbe(state == ProbeState.HEALTHY)
     if (!callerCurrent()) return TickPlan(TickAction.HOLD)
-    recordProbe(state, logSignature)
+    recordProbe(state, logSignature, units)
     consumeMarkers()
     if (!callerCurrent()) return TickPlan(TickAction.HOLD)
     refreshWake()
@@ -258,7 +325,9 @@ object WatchdogV2 {
     val degradedLadderTripped = state == ProbeState.DEGRADED_HTTP && degradedHttpTripped()
     val alive = state != ProbeState.DEAD
     if (degradedLadderTripped) {
-      logs += "DEGRADED_HTTP 连续 " + consecutiveDegradedHttp + " 拍（端口可连但 HTTP 持续失败）→ 升级为受控重启"
+      // 计数单位是标准拍（5 秒），故这里同时给出秒数——降频后「拍」的字面量会误导排障。
+      logs += "DEGRADED_HTTP 连续 " + consecutiveDegradedHttp + " 个标准拍（约 " +
+        (consecutiveDegradedHttp.toLong() * STANDARD_TICK_MS / 1000L) + "s；端口可连但 HTTP 持续失败）→ 升级为受控重启"
     }
     // 【issue #274 ①】破坏性动作的证据门。**本条只作用于「强杀一个还活着的进程」这一件事**
     // （下面的 RESTART 分支），不拦 undo、也不拦「重启一个已经死掉的进程」。
@@ -398,6 +467,43 @@ object WatchdogV2 {
   /** 单次读取上限（与 OverlayLiveFeed / NotifyStore 同口径：行边界在 CAP 内，溢出留到下一轮）。 */
   internal val markerReadCapBytes: Int = 256 * 1024
 
+  /** §6.4：标记消费的调试日志文件（受开发者日志开关门控；到上限滚一代）。 */
+  internal const val MARKER_DEBUG_FILE = "notify-debug.log"
+
+  /** §6.4：调试日志容量上限（512 KiB，滚一代 .1；总量因此被钉在 1 MiB 以内）。 */
+  internal const val MARKER_DEBUG_LIMIT_BYTES = 512L * 1024
+
+  /** §6.4：调试日志的一次写盘处置。 */
+  internal enum class MarkerDebugStep { APPEND, ROTATE, SKIP }
+
+  /**
+   * §6.4 纯函数（JVM 单测）：本次调试日志该写、该滚、还是该跳过。
+   *
+   * 两重收敛：① 开发者日志开关（默认关）关着就完全不写；② 开着也有容量上限，
+   * 到上限滚一代而不是无限追长——审计原文的「没有轮转上限，没有开关」两条都在这里堵住。
+   */
+  internal fun markerDebugStep(
+    enabled: Boolean,
+    currentBytes: Long,
+    limitBytes: Long = MARKER_DEBUG_LIMIT_BYTES,
+  ): MarkerDebugStep = when {
+    !enabled -> MarkerDebugStep.SKIP
+    currentBytes >= limitBytes -> MarkerDebugStep.ROTATE
+    else -> MarkerDebugStep.APPEND
+  }
+
+  /**
+   * §6.4：调试日志是否开启——复用仓里既有的开发者日志开关（MainActivity.DevLogPrefs，
+   * 默认 false，同一条偏好也门控 LogCollector 采集器），不另造一套开关。
+   *
+   * 读失败按关闭处理：诊断日志写不写都不该影响标记消费，失败静默降级为「不写」。
+   */
+  internal fun devLogEnabled(context: Context): Boolean = try {
+    MainActivity.DevLogPrefs.isEnabled(context)
+  } catch (_: Throwable) {
+    false
+  }
+
   /** 消费窗口的纯函数结果：[lines] 整行；[advance] 本次可推进的字节数（到最后一个换行符）。 */
   internal data class MarkerWindow(val lines: List<String>, val advance: Long)
 
@@ -448,8 +554,29 @@ object WatchdogV2 {
    * #210.4：由 [planTick] 的前置段调用——HEALTHY/DEGRADED_HTTP/DEGRADED_LOG/DEAD 四态都要消费。
    */
   internal fun consumeTaskDoneMarkers(context: Context) {
-    val debugLog = java.io.File(context.filesDir, "notify-debug.log")
-    fun dbg(msg: String) { try { debugLog.appendText(System.currentTimeMillis().toString() + " " + msg + "\n") } catch (_: Exception) {} }
+    // §6.4（0.14.10）：调试日志收进既有开发者日志开关（MainActivity.DevLogPrefs，默认关），
+    // 并给文件加了容量上限。此前是**无条件** appendText：每拍至少两行、有标记时每行再两条，
+    // 无轮转、无开关——审计点名它是纯噪音写入。
+    //
+    // 开关只影响这条日志，**消费逻辑一行都没动**（下面的解析、去重、通知投递、偏移推进全在）。
+    val debugLogOn = devLogEnabled(context)
+    fun dbg(msg: String) {
+      try {
+        val file = java.io.File(context.filesDir, MARKER_DEBUG_FILE)
+        when (markerDebugStep(debugLogOn, if (file.exists()) file.length() else 0L)) {
+          MarkerDebugStep.ROTATE -> {
+            // 有界：到上限就滚一代（旧 .1 先删，不累积历史）。
+            val rotated = java.io.File(context.filesDir, MARKER_DEBUG_FILE + ".1")
+            try { if (rotated.exists()) rotated.delete() } catch (_: Exception) {}
+            try { file.renameTo(rotated) } catch (_: Exception) {}
+          }
+          MarkerDebugStep.APPEND -> Unit
+          MarkerDebugStep.SKIP -> return
+        }
+        file.appendText(System.currentTimeMillis().toString() + " " + msg + "\n")
+      } catch (_: Exception) {
+      }
+    }
     try {
       val f = taskMarkerFile(context)
       if (!f.exists()) return
@@ -533,6 +660,74 @@ object WatchdogV2 {
     }
   }
 
+  /**
+   * 活动租约（0.14.10 §6.2）：唤醒锁按「有没有事在做」持有，而不是按「引擎进程还活着」持有。
+   *
+   * 缺陷形态（审计 §6.2，功耗最大单项）：旧实现服务启动即 acquireWakeLock，此后每拍
+   * refreshWake 无条件续持（refreshWakeLock 就是 acquireWakeLock 的别名），于是即使没有任何
+   * turn 在跑，CPU 也不允许深睡——审计实测连续持锁 7 分钟以上，「放着不动也发热」。
+   *
+   * 口径（用户拍板）：**活动 turn / 控制请求在途 / 启动或重启窗口**三类事件刷新本租约；
+   * 距最近一次活动 [IDLE_RELEASE_MS] 内续持，超时主动释放；有事件立刻重取。
+   * 释放期间进程优先级仍由前台服务维持——本租约只管「CPU 是否被强制唤醒」，不动保活语义。
+   *
+   * 时钟基准是 SystemClock.elapsedRealtime()：单调、不受墙钟调整影响，且跨休眠不回绕。
+   */
+  internal object WakeActivityLease {
+    /** 空闲多久后允许放掉唤醒锁（用户口径：60 秒）。 */
+    const val IDLE_RELEASE_MS = 60_000L
+
+    /** 从未有过活动。elapsedRealtime 恒 >= 0，故负值即哨兵，也不必担心减法溢出。 */
+    private const val NEVER = Long.MIN_VALUE
+
+    private val lastActivityAt = java.util.concurrent.atomic.AtomicLong(NEVER)
+
+    /** 记一次活动（turn 事件 / 控制请求在途 / 启动或重启窗口）。 */
+    fun note(now: Long = android.os.SystemClock.elapsedRealtime()) {
+      lastActivityAt.set(now)
+    }
+
+    /** 最近一次活动的时刻；负值 = 本进程尚未有过活动（冷启动即此态）。 */
+    fun lastActivityAt(): Long = lastActivityAt.get()
+
+    /**
+     * 租约是否新鲜（= 此刻应当持锁）。
+     *
+     * 从未活动必须判「不新鲜」：不能因为哨兵比 now 小就当成「刚活动过」。
+     * 反向也要判：last > now（时钟域混用/测试注入）按不新鲜处理，宁可放掉也不锁死。
+     */
+    fun holdable(now: Long): Boolean {
+      val last = lastActivityAt.get()
+      if (last < 0L || last > now) return false
+      return now - last < IDLE_RELEASE_MS
+    }
+
+    /** 重置（JVM 单测用；生产不调——租约跨用例残留会互相污染）。 */
+    fun reset() {
+      lastActivityAt.set(NEVER)
+    }
+  }
+
+  /** 一拍唤醒锁的处置（纯枚举，便于单测直接断言「该持 / 该放」）。 */
+  internal enum class WakeTick { HOLD, RELEASE }
+
+  /** 纯函数：按活动租约决定本拍唤醒锁的处置（0.14.10 §6.2）。 */
+  internal fun wakeTickDecision(now: Long): WakeTick =
+    if (WakeActivityLease.holdable(now)) WakeTick.HOLD else WakeTick.RELEASE
+
+  /**
+   * 桥的 live 事件流长度（§6.2「turn 在跑」的廉价观测：只做一次 length()，不读内容）。
+   *
+   * 为什么可以拿它当活动信号：dsh-android-bridge 每产生一条 live 事件（tool_call /
+   * tool_result / text / turn_end）就 append 一行，turn 在跑期间文件必长；turn 结束后停止增长，
+   * 于是租约在 60 秒后自然过期——正是用户口径要的「空闲释放」。文件不存在时按 0 处理。
+   */
+  internal fun liveFeedLength(context: Context): Long = try {
+    java.io.File(java.io.File(context.filesDir, "home/.dsh"), ".live.ndjson").length()
+  } catch (_: Throwable) {
+    0L
+  }
+
   /** A terminal owner belongs to one Service epoch; no process-global wake handle exists. */
   internal data class WakeAcquisition(val lock: PowerManager.WakeLock, val renewAt: Long)
   internal class WakeLockOwner {
@@ -563,9 +758,46 @@ object WatchdogV2 {
     }
   }
 
-  /** Renew with a new acquisition; a released handle is never re-acquired by a stale tick. */
-  internal fun refreshWakeLock(context: Context, owner: WakeLockOwner) = acquireWakeLock(context, owner)
+  /**
+   * 续期（0.14.10 §6.2）：**按活动租约**决定续持还是放掉，而不是无条件 acquire。
+   *
+   * 旧实现是 acquireWakeLock 的别名 ⇒ 每拍无条件续持，唤醒锁等于「引擎进程活多久就持多久」
+   * （审计 §6.2 的缺陷本体）。现在：
+   *  - 租约新鲜（60 秒内有 turn / 控制请求 / 启动窗口事件）⇒ 照旧 acquire（keepExisting 仍按
+   *    25 分钟 renewAt 判，30 分钟 acquire 上限那档继续由 renew 覆盖）；
+   *  - 租约过期 ⇒ 走 [releaseWakeLockIdle] 主动放掉，下一次有事件时 [acquireWakeLock] 立刻重取。
+   *
+   * 无论哪一支，唤醒锁句柄始终由调用方那个 epoch 的 [WakeLockOwner] 持有——本函数不引入
+   * 进程级句柄，[releaseWakeLock] 的终态释放路径（onDestroy/retireEpoch）不受影响。
+   */
+  internal fun refreshWakeLock(
+    context: Context,
+    owner: WakeLockOwner,
+    now: Long = android.os.SystemClock.elapsedRealtime(),
+  ) {
+    when (wakeTickDecision(now)) {
+      WakeTick.HOLD -> acquireWakeLock(context, owner)
+      // 空闲放锁不是终态：只摘掉当前句柄，owner 仍可再次 install（见 EpochResourceOwner.drop）。
+      WakeTick.RELEASE -> releaseWakeLockIdle(owner)
+    }
+  }
 
+  /**
+   * 空闲放锁（0.14.10 §6.2）：释放当前句柄但**保持 owner 可用**。
+   *
+   * 不能直接 owner.acquisition.close()：close 是终态（closed=true 后 install 一律拒绝），
+   * 用它做「空闲释放」会让此后所有重取静默失败，唤醒锁永久失效。故走 drop()——它保留
+   * epoch 语义（释放仍由同一个 owner 执行、仍只释放自己那一个句柄），只是不动终态位。
+   */
+  internal fun releaseWakeLockIdle(owner: WakeLockOwner) {
+    try {
+      owner.acquisition.drop()
+    } catch (t: Throwable) {
+      Log.e(TAG, "wake lock idle release failed", t)
+    }
+  }
+
+  /** 终态释放（onDestroy / retireEpoch）：关闭 owner，此后一律拒绝重新 install。 */
   internal fun releaseWakeLock(owner: WakeLockOwner) { owner.acquisition.close() }
 }
 
@@ -586,6 +818,27 @@ internal class EpochResourceOwner<T : Any>(private val release: (T) -> Unit) {
     }
     before.resource?.let(release)
     return true
+  }
+
+  /**
+   * 释放当前资源但**保留 owner 可用**（0.14.10 §6.2 空闲放锁用；[close] 是终态，不可替代）。
+   *
+   * 语义与 [close] 的唯一差别是 closed 位：这里置回 false，于是下一次 [install] 能重新发布
+   * 新资源。并发安全：release 只对「自己 CAS 掉的那个句柄」执行一次，绝不动别人刚装进去的
+   * 句柄（与 [install] 的 obsolete-candidate 清理同纪律）。
+   *
+   * @return 被释放的资源；无资源可释放或 owner 已关闭时返回 null。
+   */
+  fun drop(): T? {
+    while (true) {
+      val before = state.get()
+      if (before.closed) return null
+      val held = before.resource ?: return null
+      if (state.compareAndSet(before, State(closed = false, resource = null))) {
+        release(held)
+        return held
+      }
+    }
   }
 
   fun close() {

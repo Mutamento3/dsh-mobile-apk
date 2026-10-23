@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BROWSER_STAGE_LEASE_MS, NativeBrowserPresentation } from '../src/client/mobile/native-browser-presentation.ts'
 
-let changes: MutationCallback
 let hidden = false
 let visible = true
 let owner: NativeBrowserPresentation
@@ -18,7 +17,13 @@ function stage(): HTMLElement {
   return element
 }
 function latest(): Record<string, unknown> { return JSON.parse(bounds.mock.calls.at(-1)![0]) }
-function mutate(): void { changes([], {} as MutationObserver); vi.advanceTimersByTime(20) }
+/** 等 MutationObserver 的微任务派发完，再推进一帧（rAF 由 fake timer 接管）。 */
+async function mutate(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+  vi.advanceTimersByTime(20)
+  await Promise.resolve()
+}
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -26,7 +31,6 @@ beforeEach(() => {
   hidden = false; visible = true
   vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden)
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
-  vi.stubGlobal('MutationObserver', class { constructor(callback: MutationCallback) { changes = callback } observe() {} disconnect() {} })
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => window.setTimeout(() => callback(0), 16))
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => window.clearTimeout(id))
   bounds = vi.fn(() => '{}')
@@ -37,14 +41,14 @@ beforeEach(() => {
 afterEach(() => { owner.detach(); delete window.androidBridge; vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('native browser stage ownership lease (#341)', () => {
-  it('hides for bubble navigation and its closing animation, then restores the same native page', () => {
+  it('hides for bubble navigation and its closing animation, then restores the same native page', async () => {
     stage(); owner.mount('stage')
     const bubbles = document.createElement('nav')
-    bubbles.setAttribute('data-dsh-sidebar-bubbles', 'open'); document.body.append(bubbles); mutate()
+    bubbles.setAttribute('data-dsh-sidebar-bubbles', 'open'); document.body.append(bubbles); await mutate()
     expect(latest()).toMatchObject({ tabId: 'native-a', uiTabId: 'ui-a', visible: false })
-    bubbles.setAttribute('data-dsh-sidebar-bubbles', 'closing'); mutate()
+    bubbles.setAttribute('data-dsh-sidebar-bubbles', 'closing'); await mutate()
     expect(latest().visible).toBe(false)
-    bubbles.setAttribute('data-dsh-sidebar-bubbles', 'closed'); mutate()
+    bubbles.setAttribute('data-dsh-sidebar-bubbles', 'closed'); await mutate()
     expect(latest()).toMatchObject({ tabId: 'native-a', uiTabId: 'ui-a', visible: true })
   })
   it('renews unchanged visible bounds beyond the native 4000ms TTL without reopening a page', () => {
@@ -61,9 +65,9 @@ describe('native browser stage ownership lease (#341)', () => {
     const count = bounds.mock.calls.length
     vi.advanceTimersByTime(6000); expect(bounds).toHaveBeenCalledTimes(count)
   })
-  it('does not starve the lease under repeated unchanged DOM mutations', () => {
+  it('does not starve the lease under repeated unchanged DOM mutations', async () => {
     stage(); owner.mount('stage')
-    for (let count = 0; count < 100; count++) { mutate(); vi.advanceTimersByTime(40) }
+    for (let count = 0; count < 100; count++) { await mutate(); vi.advanceTimersByTime(40) }
     expect(bounds.mock.calls.length).toBeGreaterThanOrEqual(6)
     expect(latest().visible).toBe(true)
   })
@@ -76,15 +80,15 @@ describe('native browser stage ownership lease (#341)', () => {
     expect(latest().visible).toBe(true)
     window.dispatchEvent(new Event('focus')); expect(bounds).toHaveBeenCalledTimes(count + 2)
   })
-  it('attaches when the official stage appears after mount', () => {
+  it('attaches when the official stage appears after mount', async () => {
     owner.mount('stage'); expect(bounds).not.toHaveBeenCalled()
-    stage(); mutate(); expect(latest().visible).toBe(true)
+    stage(); await mutate(); expect(latest().visible).toBe(true)
   })
-  it('stops renewing when the stage is disconnected or the occurrence becomes invisible', () => {
-    const element = stage(); owner.mount('stage'); element.remove(); mutate()
+  it('stops renewing when the stage is disconnected or the occurrence becomes invisible', async () => {
+    const element = stage(); owner.mount('stage'); element.remove(); await mutate()
     const count = bounds.mock.calls.length
     vi.advanceTimersByTime(6000); expect(bounds).toHaveBeenCalledTimes(count)
-    stage(); mutate(); visible = false; owner.refresh(); expect(latest().visible).toBe(false)
+    stage(); await mutate(); visible = false; owner.refresh(); expect(latest().visible).toBe(false)
     const hiddenCount = bounds.mock.calls.length
     vi.advanceTimersByTime(6000); expect(bounds).toHaveBeenCalledTimes(hiddenCount)
   })
@@ -101,20 +105,20 @@ describe('native browser stage ownership lease (#341)', () => {
     window.androidBridge = { browserHostBounds: bounds }; owner.refresh()
     expect(latest().visible).toBe(true)
   })
-  it('ignores offscreen portals and dialogs hidden by an ancestor', () => {
+  it('ignores offscreen portals and dialogs hidden by an ancestor', async () => {
     stage()
     const parent = document.createElement('div'); parent.hidden = true
     const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); dialog.getBoundingClientRect = () => rect()
     parent.append(dialog); document.body.append(parent)
     const menu = document.createElement('div'); menu.setAttribute('role', 'menu'); menu.getBoundingClientRect = () => rect(-500, 50)
-    document.body.append(menu); owner.mount('stage'); expect(latest().visible).toBe(true)
+    document.body.append(menu); owner.mount('stage'); await mutate(); expect(latest().visible).toBe(true)
   })
-  it('suspends renewal under an actual dialog and restores after it closes', () => {
+  it('suspends renewal under an actual dialog and restores after it closes', async () => {
     stage(); owner.mount('stage')
     const dialog = document.createElement('div'); dialog.setAttribute('role', 'dialog'); dialog.getBoundingClientRect = () => rect()
-    document.body.append(dialog); mutate(); expect(latest().visible).toBe(false)
+    document.body.append(dialog); await mutate(); expect(latest().visible).toBe(false)
     const count = bounds.mock.calls.length
     vi.advanceTimersByTime(5000); expect(bounds).toHaveBeenCalledTimes(count)
-    dialog.remove(); mutate(); expect(latest().visible).toBe(true)
+    dialog.remove(); await mutate(); expect(latest().visible).toBe(true)
   })
 })
