@@ -30,6 +30,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { ExportResultDialog } from './ExportResultDialog.tsx'
 import { MOBILE_SETTINGS_CSS } from './mobile-settings.css.ts'
+import { APPEARANCE_ROW_CSS } from './appearance-row.css.ts'
 import { MobileSettingsNav } from './mobile/settings-nav.ts'
 import { COMPOSER_MENU_CSS } from './composer-menu.css.ts'
 import { ATTACHMENT_PICKER_MENU_CSS } from './attachment-picker-menu.css.ts'
@@ -51,6 +52,7 @@ import { NotifySettingsSection } from './dev-section/notify-settings.tsx'
 import { ApkUpdateSection } from './dev-section/apk-update.tsx'
 import { DEV_SECTION_CSS } from './dev-section/dev-section.css.ts'
 import { GeneralSettings } from './general-settings/GeneralSettings.tsx'
+import { GENERAL_SETTINGS_CSS } from './general-settings/general-settings.css.ts'
 import { tr } from './i18n.ts'
 import { ThemeBridge } from './theme-bridge.ts'
 import { EnterGuard } from './enter-guard.ts'
@@ -189,6 +191,10 @@ export function apply(ctx: ClientContext): void {
   // upstream CSS Modules class names are hashed and unreachable from here,
   // so the stylesheet targets the dialog's ARIA attributes instead.
   ctx.effect(() => injectStyle('mobile-settings', MOBILE_SETTINGS_CSS), 'ui-responsive: mobile settings styles')
+
+  // 设置 → 通用设置 → 外观：上游三个主题卡片（flex:180px + 20px 内边距）在竖屏下逐张堆叠，
+  // 整块约 330px。压成一行紧凑选项，只认「恰好三个 aria-pressed 按钮」的外观组。
+  ctx.effect(() => injectStyle('appearance-row', APPEARANCE_ROW_CSS), 'ui-responsive: appearance row compaction')
 
   // 0.14.7-B 竖屏设置分层：设置首页（分类列表）→ 二级页（可操作设置）。列表本身仍由上游按注册
   // 顺序渲染（不硬编码、不排序、不隐藏注册项）；本容器只写层级属性 + 返回控件 + 我方自有分区的
@@ -340,6 +346,10 @@ export function apply(ctx: ClientContext): void {
   // 0.13.3 (D6): the font-size slider retired — upstream ui-theme fontSize
   // (12–17px) covers it natively. The setImmersiveMode shell bridge persists,
   // and the UI registers the row at settings.general.item after the built-ins.
+  // 行骨架走独立样式表：本分区与上游通用设置同页，必须共用同一套行规
+  // （14/20 标题 + 12/18 说明 + 右侧控件 + 0.5px 分隔线），不能沿用开发者选项那套
+  // 动作行样式（用户反馈「设置页有些 UI 很突兀」）。
+  ctx.effect(() => injectStyle('general-settings', GENERAL_SETTINGS_CSS), 'ui-responsive: android general-settings styles')
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'android-general',
