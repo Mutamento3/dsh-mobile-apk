@@ -67,6 +67,8 @@
 <!-- generated:active-registry:start -->
 | 活动补丁 ID | scope | 目标 |
 |---|---|---|
+| `managed-port-bind-EP1` | engine | `usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-host-webserver/lib/index.js` |
+| `profile-link-skip-PL1` | engine | `usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-app-boot/lib/index.js` |
 | `sidebar-bubble-reorder-B1` | engine | `usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js` |
 | `market-B` | undefined | `dshmarketplace-plugin/lib/index.js` |
 | `market-D-server` | undefined | `dshmarketplace-plugin/lib/index.js` |
@@ -135,6 +137,8 @@
 （fixture = 0.1.5-rc.1 产物；`.deploy-tmp/` 下的临时预检脚本不入库，勿再引用）。
 
 ### 7.1 构建期引擎补丁历史与实现说明（活动状态见 §6.1）
+
+2026-10-23 新增：`profile-link-skip-PL1` 仅在 profile 链接扫描中跳过权限/缺失/非目录错误，不写用户文件；`managed-port-bind-EP1` 仅在本壳 IPv4 回环监听发生 `EADDRINUSE` 时回退一次到 OS 分配端口，监听完成后发布真实端口。实现位于 `scripts/patches/data/`，真实发布夹具与负控位于同名测试文件。壳侧消费与信任边界见 `EXECUTION-MAP.md` 的 K02 端点补充。
 
 - **inspector-worker-expose-internals-472（2026-10-21，apk #472）**：`dsh-experimental-inspector/lib/index.js` 的 `spawnWorker()` 用 `execArgv: []` 显式清空 Worker 的继承参数，丢掉壳侧启动命令里的 `--expose-internals`。`node-addon-require-builtin` 没有 android-arm64 预编译件，`requireBuiltin('internal/modules/esm/loader')` 只能走需要该 flag 的 require 回退 ⇒ Worker 内恒 `MODULE_NOT_FOUND`，`/api/experimental-inspector/bootstrap` 每启动两条 404。补丁只把该处改为 `execArgv: ["--expose-internals"]`；**不继承** `process.execArgv`，避免把 `--inspect` 之类带进 Worker。marker 供 `check-engine-overlay` 抽验；真实夹具、幂等、三向负控与 runner 集成测试见 `scripts/patches/tests/inspector-worker-expose-internals-472.test.mjs`。
 

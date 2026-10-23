@@ -18,6 +18,15 @@ import { fileURLToPath } from 'node:url'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(HERE)
 const PLUGIN_DIR = join(ROOT, 'plugins')
+/** A test runner must not hold CI forever; a hard timeout keeps the failing unit visible. */
+const TEST_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Kill the whole process group on POSIX so npm/npx grandchildren cannot hold CI open. */
+function runCommand(bin, args, options) {
+  if (process.platform !== 'linux') return spawnSync(bin, args, { ...options, timeout: TEST_TIMEOUT_MS })
+  return spawnSync('timeout', ['--kill-after=10s', Math.ceil(TEST_TIMEOUT_MS / 1000) + 's', bin, ...args],
+    { ...options, timeout: TEST_TIMEOUT_MS + 15_000 })
+}
 
 /** Convert a Windows drive path for the WSL npm installation when it exists. */
 function toWslPath(path) {
@@ -61,7 +70,7 @@ for (const plugin of plugins.sort()) {
   // 同时看所有测试文件：一个插件可能混用（任一文件用 node:test 即按 node:test 跑）。
   const usesNodeTest = files.some((f) => /from 'node:test'/.test(readFileSync(f, 'utf8')))
   const args = usesNodeTest
-    ? ['--test', '--test-reporter=spec', ...files.map((f) => f.slice(join(PLUGIN_DIR, plugin).length + 1))]
+    ? ['--test', '--test-force-exit', '--test-reporter=spec', ...files.map((f) => f.slice(join(PLUGIN_DIR, plugin).length + 1))]
     : ['vitest', 'run', ...files.map((f) => f.slice(join(PLUGIN_DIR, plugin).length + 1))]
   // 不用 shell:true——execPath 在 Windows 上含空格（'C:\Program Files\...'），shell 会把它拆断
   // （首次跑本门禁实测到该误报）。直接以 argv 形式 spawn，由内核处理路径。
@@ -70,7 +79,8 @@ for (const plugin of plugins.sort()) {
     ? args
     : ['vitest', 'run', '--root', join(PLUGIN_DIR, plugin), ...files.map((f) => f.slice(join(PLUGIN_DIR, plugin).length + 1))]
   const bin = usesNodeTest ? process.execPath : (process.platform === 'win32' ? 'npx.cmd' : 'npx')
-  const r2 = spawnSync(bin, spawnArgs, { cwd: join(PLUGIN_DIR, plugin), encoding: 'utf8' })
+  console.log('RUN   ' + plugin + '（' + (usesNodeTest ? 'node:test' : 'vitest') + '）')
+  const r2 = runCommand(bin, spawnArgs, { cwd: join(PLUGIN_DIR, plugin), encoding: 'utf8' })
   const out2 = (r2.stdout ?? '') + (r2.stderr ?? '')
   // 通过数：node:test spec 报 'ℹ pass N'；vitest 报 'Tests N passed'。两者都接受，任一为 0 判红。
   // 通过数：node:test spec 报 'ℹ pass N'；vitest 报 'Tests N passed'；Node 20 TAP 报 '# pass N'。
@@ -81,7 +91,7 @@ for (const plugin of plugins.sort()) {
   const failN2 = Number(/^ℹ fail (\d+)/m.exec(plain2)?.[1] ?? /^\s*(\d+) failed/m.exec(plain2)?.[1] ?? '0')
   if (r2.status !== 0 || failN2 !== 0) {
     failed += 1
-    console.error('FAIL  ' + plugin + ' 的单测未通过（runner=' + (usesNodeTest ? 'node:test' : 'vitest') + '）')
+    console.error('FAIL  ' + plugin + ' 的单测未通过（runner=' + (usesNodeTest ? 'node:test' : 'vitest') + (r2.error?.code === 'ETIMEDOUT' ? ', timeout=' + TEST_TIMEOUT_MS + 'ms' : '') + '）')
     console.error(out2.split('\n').slice(-25).join('\n'))
   } else if (passN2 <= 0) {
     failed += 1
@@ -168,18 +178,18 @@ for (const repo of SUBREPO_TESTS) {
   // ——重试只影响「怎么起 npm」，判据仍是它的退出码与通过数。
   const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   let r3 = useWslNpm
-    ? spawnSync('wsl.exe', ['--cd', wslDir, '--exec', 'env', 'npm_config_cache=/tmp/dsh-mobile-npm-cache', 'npm', 'test'], { cwd: dir, encoding: 'utf8' })
+    ? runCommand('wsl.exe', ['--cd', wslDir, '--exec', 'env', 'npm_config_cache=/tmp/dsh-mobile-npm-cache', 'npm', 'test'], { cwd: dir, encoding: 'utf8' })
     : useNpm
-      ? spawnSync(npmBin, ['test'], { cwd: dir, encoding: 'utf8' })
-      : spawnSync(process.execPath, ['--test', '--test-reporter=spec', ...bare], { cwd: dir, encoding: 'utf8' })
+      ? runCommand(npmBin, ['test'], { cwd: dir, encoding: 'utf8' })
+      : runCommand(process.execPath, ['--test', '--test-force-exit', '--test-reporter=spec', ...bare], { cwd: dir, encoding: 'utf8' })
   if (useNpm && (r3.error !== undefined || r3.status === null)) {
     console.log('NOTE  ' + repo + '：npm 直调失败（' + String(r3.error?.code ?? 'no-status') + '），退到 shell 重试')
     // shell:true 在 Node 24 会打一条 DEP0190 弃用提示（noise，与被测对象无关），子进程关掉它。
-    r3 = spawnSync(npmBin, ['test'], { cwd: dir, encoding: 'utf8', shell: true, env: { ...process.env, NODE_OPTIONS: '--no-deprecation' } })
+    r3 = runCommand(npmBin, ['test'], { cwd: dir, encoding: 'utf8', shell: true, env: { ...process.env, NODE_OPTIONS: '--no-deprecation' } })
   }
   if (r3.error !== undefined && r3.error !== null) {
     failed += 1
-    console.error('FAIL  ' + repo + ' 的子仓测试无法启动：' + String(r3.error.message))
+    console.error('FAIL  ' + repo + ' 的子仓测试无法启动：' + String(r3.error.message) + (r3.error.code === 'ETIMEDOUT' ? '（timeout=' + TEST_TIMEOUT_MS + 'ms）' : ''))
     continue
   }
   const out3 = (r3.stdout ?? '') + (r3.stderr ?? '')
