@@ -135,15 +135,43 @@
          * @returns {Promise<Response>} the fetch response.
          */
         function postDelete(sessionId) {
-          var init = {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ sessionId: sessionId }),
-          }
-          if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-            init.signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-          }
-          return fetch('/api/session-delete', init)
+          // 用 XHR 而不是 fetch：XHR 的 timeout 由浏览器网络栈保证触发，fetch 的
+          // AbortSignal 在部分 WebView 上对已入队/半开连接不生效（现场：弹窗无限转）。
+          return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest()
+            xhr.open('POST', '/api/session-delete', true)
+            xhr.setRequestHeader('content-type', 'application/json')
+            xhr.timeout = REQUEST_TIMEOUT_MS
+            xhr.onload = function () {
+              resolve({
+                ok: xhr.status >= 200 && xhr.status < 300,
+                status: xhr.status,
+                json: function () {
+                  try {
+                    return Promise.resolve(JSON.parse(xhr.responseText || '{}'))
+                  } catch (_) {
+                    return Promise.resolve({})
+                  }
+                },
+              })
+            }
+            xhr.onerror = function () {
+              var error = new Error('network error')
+              error.name = 'NetworkError'
+              reject(error)
+            }
+            xhr.ontimeout = function () {
+              var error = new Error('request timed out after ' + REQUEST_TIMEOUT_MS + 'ms')
+              error.name = 'TimeoutError'
+              reject(error)
+            }
+            xhr.onabort = function () {
+              var error = new Error('request aborted')
+              error.name = 'AbortError'
+              reject(error)
+            }
+            xhr.send(JSON.stringify({ sessionId: sessionId }))
+          })
         }
 
         /**
@@ -300,6 +328,32 @@
             window.localStorage.setItem(TRACE_KEY, JSON.stringify(list.slice(-60)))
           } catch (_) {
             /* 诊断用，失败不影响功能 */
+          }
+        }
+
+        /**
+         * Resource Timing for our own API calls.
+         *
+         * Answers the question the server log cannot: was the request ever
+         * *initiated* by the page? A pending entry has a growing duration; a
+         * missing entry means fetch never left the renderer.
+         * @returns {Array<object>} timing rows.
+         */
+        function apiResourceTiming() {
+          try {
+            return performance.getEntriesByType('resource')
+              .filter(function (entry) { return entry.name.indexOf('/api/session-delete') !== -1 })
+              .map(function (entry) {
+                return {
+                  path: entry.name.slice(entry.name.indexOf('/api/')),
+                  startMs: Math.round(entry.startTime),
+                  durationMs: Math.round(entry.duration),
+                  transferSize: entry.transferSize,
+                  initiator: entry.initiatorType,
+                }
+              })
+          } catch (_) {
+            return []
           }
         }
 
@@ -485,24 +539,37 @@
           function confirmDelete() {
             var sessionId = target.sessionId
             trace('info', 'confirm accepted, sending request', { sessionId: sessionId })
-            localTrace('confirm', { sessionId: sessionId })
+            localTrace('confirm', {
+              sessionId: sessionId,
+              visibility: document.visibilityState,
+              online: navigator.onLine,
+              resourcesBefore: apiResourceTiming().length,
+            })
             setBusy(true)
             setError(null)
             // 请求卡死时不再让弹窗无限转：落待办 + 看门狗，超时就重载页面，
             // 重载后插件自动续做这条删除（幂等：404 视为已删）。
             savePending(sessionId)
             var watchdog = setTimeout(function () {
-              localTrace('watchdog-reload', { sessionId: sessionId })
+              localTrace('watchdog-reload', {
+                sessionId: sessionId,
+                visibility: document.visibilityState,
+                online: navigator.onLine,
+                resources: apiResourceTiming(),
+              })
               reportTrace({ event: 'watchdog-reload', sessionId: sessionId })
               window.location.reload()
             }, WATCHDOG_MS)
             runDelete(sessionId)
-              .then(function () { clearTimeout(watchdog) })
+              .then(function () {
+                clearTimeout(watchdog)
+                localTrace('done', { sessionId: sessionId, resources: apiResourceTiming() })
+              })
               .catch(function (reason) {
                 clearTimeout(watchdog)
                 clearPending()
                 var message = String(reason && reason.message ? reason.message : reason)
-                localTrace('failed', { sessionId: sessionId, message: message })
+                localTrace('failed', { sessionId: sessionId, message: message, resources: apiResourceTiming() })
                 trace('error', 'delete failed', { sessionId: sessionId, message: message })
                 reportTrace({ event: 'delete-failed', sessionId: sessionId, message: message })
                 setError(message)
