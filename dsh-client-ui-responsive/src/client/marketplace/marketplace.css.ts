@@ -446,6 +446,9 @@ export const MARKETPLACE_CSS: string = `
   max-width: none;
   height: 100%;
   max-height: none;
+  /* 面板本身不滚：否则页头会跟着内容一起滚出视野（表现为「返回被挤没了」）。
+     滚动交给内容区 .dshm。 */
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: var(--dsw-alias-bg-layer-1);
@@ -496,5 +499,18 @@ export const MARKETPLACE_CSS: string = `
   min-height: 0;
   overflow: auto;
   padding: 12px;
+}
+
+/* 列向 flex 容器默认允许子项收缩：标题区、搜索框、勾选行、分页条都要保持自身高度，
+   否则会被压扁（真机表现就是搜索框变薄、返回被顶掉）。 */
+.dshm > .dshm-head,
+.dshm > .dshm-search,
+.dshm > .dshm-pager,
+.dshm > label {
+  flex: 0 0 auto;
+}
+
+.dshm-search {
+  flex: 0 0 auto;
 }
 `
