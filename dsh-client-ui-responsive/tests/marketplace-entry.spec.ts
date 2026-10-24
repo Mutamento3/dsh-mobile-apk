@@ -1,66 +1,28 @@
 // @vitest-environment jsdom
-// 插件市场入口（0.15.0 用户定例）：市场是独立一页（设置分区），入口只在「添加插件」下拉。
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { hideMarketplaceNavRow, openMarketplacePage } from '../src/client/marketplace/marketplace-entry.tsx'
-
-function mountNav(label: string, withDesc = false) {
-  document.body.innerHTML = ''
-  const nav = document.createElement('nav')
-  const row = document.createElement('div')
-  row.setAttribute('data-dsh-settings-nav', 'own')
-  const button = document.createElement('button')
-  const labelSpan = document.createElement('span')
-  labelSpan.textContent = label
-  button.appendChild(labelSpan)
-  if (withDesc) {
-    const desc = document.createElement('span')
-    desc.setAttribute('data-dsh-settings-nav-desc', '')
-    desc.textContent = '浏览社区插件，按移动端兼容性筛选'
-    button.appendChild(desc)
-  }
-  row.appendChild(button)
-  nav.appendChild(row)
-  document.body.appendChild(nav)
-  return { row, button }
-}
-
-afterEach(() => { document.body.innerHTML = '' })
+// 插件市场入口（0.15.0 用户定例）：整页由市场插件自己的浮层承载，入口只在「添加插件」下拉。
+// 这里钉两件事：派发的是同一条 `store` 命令回执；缺通道/抛异常时安全降级。
+import { describe, expect, it, vi } from 'vitest'
+import { openMarketplaceDialog } from '../src/client/marketplace/marketplace-entry.tsx'
 
 describe('插件市场入口', () => {
-  it('点菜单项切到市场分区（点击导航行）', () => {
-    const { button } = mountNav('插件市场')
-    const clicked = vi.fn()
-    button.addEventListener('click', clicked)
-    expect(openMarketplacePage()).toBe(true)
-    expect(clicked).toHaveBeenCalledOnce()
+  it('派发 command/executed 的 store 回执（市场插件据此打开整页）', () => {
+    const emit = vi.fn()
+    expect(openMarketplaceDialog({ emit })).toBe(true)
+    expect(emit).toHaveBeenCalledOnce()
+    const [name, sessionId, command, result] = emit.mock.calls[0]!
+    expect(name).toBe('command/executed')
+    expect(sessionId).toBeNull()
+    expect(command).toBe('store')
+    expect(result).toEqual({ kind: 'success', query: '' })
   })
 
-  it('英文标签同样可识别（市场 locale 用 Plugin store）', () => {
-    const { button } = mountNav('Plugin store')
-    const clicked = vi.fn()
-    button.addEventListener('click', clicked)
-    expect(openMarketplacePage()).toBe(true)
-    expect(clicked).toHaveBeenCalledOnce()
+  it('没有 emit 通道时安全降级', () => {
+    expect(openMarketplaceDialog(undefined)).toBe(false)
+    expect(openMarketplaceDialog({})).toBe(false)
   })
 
-  it('行里带短说明时仍能识别（自有分区的常态）', () => {
-    const { button } = mountNav('插件市场', true)
-    const clicked = vi.fn()
-    button.addEventListener('click', clicked)
-    expect(openMarketplacePage()).toBe(true)
-    expect(clicked).toHaveBeenCalledOnce()
-  })
-
-  it('导航里没有市场行时安全返回 false', () => {
-    mountNav('通用设置')
-    expect(openMarketplacePage()).toBe(false)
-  })
-
-  it('市场分区行被隐藏（只留下拉入口），且不重复处理', () => {
-    const { row } = mountNav('插件市场')
-    const stop = hideMarketplaceNavRow()
-    expect(row.style.display).toBe('none')
-    expect(row.getAttribute('data-dsh-market-nav-hidden')).toBe('true')
-    stop()
+  it('emit 抛异常时也被吞掉', () => {
+    const emit = vi.fn(() => { throw new Error('boom') })
+    expect(openMarketplaceDialog({ emit })).toBe(false)
   })
 })

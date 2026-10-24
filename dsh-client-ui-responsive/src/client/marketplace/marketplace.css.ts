@@ -51,8 +51,9 @@ export const MARKETPLACE_CSS: string = `
    纵向间距由 .dshm 的 gap 提供，这里不再加 margin（否则叠成 24px）。 */
 .dshm-search {
   box-sizing: border-box;
-  height: 32px;
-  padding: 0 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: var(--dsw-radius-md);
   background: transparent;
@@ -454,22 +455,27 @@ export const MARKETPLACE_CSS: string = `
   display: flex;
   flex: none;
   align-items: center;
-  gap: 4px;
-  padding: 10px 12px 8px;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
+/* 返回：明确的「‹ 返回」文字按钮，44px 高（可点面积够大，不再是一个小箭头）。 */
 .dshm-back {
   box-sizing: border-box;
-  width: 32px;
-  height: 32px;
-  padding: 0;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 44px;
+  padding: 0 12px 0 8px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 24px;
-  line-height: 1;
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
   cursor: pointer;
 }
 
