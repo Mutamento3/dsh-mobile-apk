@@ -14,7 +14,7 @@
 
 Android shell for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). App name `DeepCode`, package `com.dsharnessmobile.shell`.
 
-> This project is MIT-licensed for learning and research only; commercial or unlawful use is prohibited.
+> This project is open source under the MIT License. Forks, modifications, and redistribution are welcome. Contributions, suggestions, and feedback are appreciated.
 > Judge AI-generated content and actions yourself; experimental features are labeled as such.
 
 ## What it can do
