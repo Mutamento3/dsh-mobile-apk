@@ -7,8 +7,10 @@
  * - `session-<uuid>` ids only;
  * - a session with running work is refused (409), and an unverifiable activity probe
  *   refuses too — "unknown" is never treated as "idle";
- * - a loaded-but-idle session is unloaded (detach + flush) after the directory leaves
- *   the scan path, so it stops appearing in search;
+ * - a session still loaded in the engine is refused (409) as well: the engine exposes
+ *   no public way to unload it (flush needs it live, liveEntryFor is private, the
+ *   agent handle's dispose belongs to the creator), so deleting its files would leave
+ *   a live ghost that keeps showing up in search;
  * - archive/pin membership is dropped best-effort before the directory goes away.
  *
  * The client half (session row menu) is the only caller; the route is not a
@@ -161,15 +163,21 @@ async function sessionActivity(ctx, sessionId) {
  */
 export async function removeSession(ctx, sessionId) {
   const sessions = ctx.get('sessions')
-  // 引擎把「打开过」的会话都留在内存里（sessions.list），所以「live」不等于「正在跑」。
-  // 只拦真正有活动（运行中的回合、终端等）的会话：workspace/session-activity 是上游
-  // 归档路径用的同一判据，这里复用，避免把「看过的对话」也判成不可删。
   const live = sessions?.get?.(sessionId) !== undefined
+  // 引擎把「打开过」的会话都留在内存里（sessions.list），而插件**没有公开接口**能卸载它：
+  // flush(session) 要求会话仍在 live store，liveEntryFor 是 private，AgentHandle.dispose()
+  // 只暴露给创建者。因此只要会话还是 live，就拒绝删除——否则会留下「文件没了但内存里还在」
+  // 的幽灵会话，继续参与搜索。重启应用后 live 集合清空，即可删除。
   const activity = await sessionActivity(ctx, sessionId)
   if (activity === null) {
     throw new SessionDeleteError('activity-unknown', 'cannot verify whether the conversation is idle; refusing to delete', { sessionId })
   }
-  const active = activity.length > 0
+  if (activity.length > 0) {
+    throw new SessionDeleteError('session-active', 'the conversation is running; stop it before deleting', { sessionId })
+  }
+  if (live) {
+    throw new SessionDeleteError('session-loaded', 'the conversation is still loaded in the app; restart the app and try again', { sessionId })
+  }
   const registry = ctx.get('workspaceRegistry')
   log(ctx, 'info', 'host delete start', {
     sessionId,
@@ -181,31 +189,8 @@ export async function removeSession(ctx, sessionId) {
   return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
-    isActive: active,
+    isActive: false,
     logger: (level, message, extra) => log(ctx, level, message, extra),
-    // 只删磁盘会让会话继续留在 sessions.list() 里参与搜索；但卸载必须发生在
-    // 「目录已改名」之后，否则删除失败时用户白丢正在看的会话。
-    afterRename: async () => {
-      if (!live) return
-      try {
-        const session = sessions?.get?.(sessionId)
-        const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
-        if (entry !== undefined && typeof entry.detach === 'function') {
-          entry.detach()
-          log(ctx, 'info', 'detached the live session', { sessionId })
-        } else {
-          log(ctx, 'warn', 'live session has no detach capability; it may stay in the live list', { sessionId })
-        }
-      } catch (error) {
-        log(ctx, 'warn', 'session detach failed', { sessionId, error: String(error?.message ?? error) })
-      }
-      try {
-        await sessions?.flush?.()
-        log(ctx, 'info', 'flushed session persistence after detach', { sessionId })
-      } catch (error) {
-        log(ctx, 'warn', 'flush after detach failed', { sessionId, error: String(error?.message ?? error) })
-      }
-    },
     beforeRemove: async () => {
       try {
         await registry?.unarchiveSession?.(sessionId)
@@ -233,7 +218,7 @@ function failureOf(error) {
   const status = code === 'invalid-id' || code === 'invalid-body'
     ? 400
     : code === 'not-found' ? 404
-      : code === 'session-active' || code === 'activity-unknown' || code === 'ambiguous' ? 409
+      : code === 'session-active' || code === 'activity-unknown' || code === 'session-loaded' || code === 'ambiguous' ? 409
         : 500
   return { status, code, message: String(error?.message ?? error) }
 }

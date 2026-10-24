@@ -2,9 +2,9 @@
  * Client half: a "Delete conversation" item in the session row menu.
  *
  * The engine has no delete action (issue #493), so the item asks the host route
- * (`POST /api/session-delete`) to remove the stored session, then leaves the
- * deleted conversation through the public `session.new` shortcut action (with a
- * reload as the last resort). Deletion is irreversible and therefore always
+ * (`POST /api/session-delete`) to remove the stored session. The host refuses
+ * sessions that are still loaded or running, so the deleted one is never the one
+ * on screen — the client only hides its row. Deletion is irreversible and always
  * confirmed in a modal — never `window.confirm`, which the Android shell
  * auto-approves.
  */
@@ -91,25 +91,6 @@
         }
 
         /**
-         * Session currently rendered on screen.
-         *
-         * `[data-conversation-session]` is the conversation body's own id and is
-         * present for every rendered conversation (main view or panel). The
-         * `<html data-dsh-session-id>` marker is the shell's shell-wide hint and
-         * is absent on some layouts (measured: null while a conversation was
-         * open), so it is only the fallback.
-         * @returns {string|null} mounted session id.
-         */
-        function mountedSessionId() {
-          var body = document.querySelector('[data-conversation-session]')
-          if (body !== null) {
-            var fromBody = body.getAttribute('data-conversation-session')
-            if (fromBody !== null && fromBody !== '') return fromBody
-          }
-          return document.documentElement.getAttribute('data-dsh-session-id')
-        }
-
-        /**
          * Per-attempt timeout. A local delete answers in ~20ms; anything slower than
          * this is a dead keep-alive socket left over from an engine restart, and
          * aborting it makes the browser drop that socket. 2s keeps the dialog honest
@@ -192,41 +173,6 @@
         }
 
         /**
-         * Leave the deleted conversation through the public shortcut action.
-         *
-         * `session.new` is the catalog entry the keyboard shortcut uses: its resolver
-         * returns `{ status: 'handled', run }`, and `run()` drives workspace
-         * navigation. That is a public surface — unlike the store's `clearMain()`
-         * (declared private upstream) and unlike clicking DOM buttons (breaks when
-         * the markup moves).
-         * @returns {boolean} true when the action ran.
-         */
-        function openNewConversation() {
-          try {
-            var shortcuts = pluginCtx === null || typeof pluginCtx.get !== 'function'
-              ? undefined
-              : pluginCtx.get('shortcuts')
-            if (shortcuts === undefined || shortcuts === null || typeof shortcuts.find !== 'function') {
-              trace('warn', 'shortcuts service unavailable; cannot navigate through session.new')
-              return false
-            }
-            var hit = shortcuts.find('session.new')
-            if (hit === null || hit === undefined || hit.status !== 'handled' || typeof hit.run !== 'function') {
-              trace('warn', 'session.new is not available right now', {
-                status: hit === undefined || hit === null ? 'missing' : String(hit.status),
-              })
-              return false
-            }
-            hit.run()
-            trace('info', 'ran the public session.new action')
-            return true
-          } catch (error) {
-            trace('warn', 'session.new threw', { message: String(error && error.message ? error.message : error) })
-            return false
-          }
-        }
-
-        /**
          * 把服务端错误码翻成界面文案；未知码原样显示。
          * @param {Function} t - locale-bound translator.
          * @param {string|undefined} code - server error code.
@@ -236,8 +182,9 @@
         function errorText(t, code, fallback) {
           var key = code === 'session-active' ? 'error.active'
             : code === 'activity-unknown' ? 'error.unknown'
-              : code === 'not-found' ? 'error.gone'
-                : null
+              : code === 'session-loaded' ? 'error.loaded'
+                : code === 'not-found' ? 'error.gone'
+                  : null
           if (key === null) return fallback
           return typeof t === 'function' ? t(key) : fallback
         }
@@ -264,6 +211,7 @@
           'error': '删除失败：{message}',
           'error.active': '这条对话正在运行，请先停止再删除。',
           'error.unknown': '无法确认这条对话是否空闲，已拒绝删除。',
+          'error.loaded': '这条对话还在应用里加载着，重启应用后再删除。',
           'error.gone': '这条对话已经不在了。',
           'close': '关闭',
         }
@@ -277,6 +225,7 @@
           'error': 'Delete failed: {message}',
           'error.active': 'This conversation is running. Stop it before deleting.',
           'error.unknown': 'Could not confirm the conversation is idle, so it was not deleted.',
+          'error.loaded': 'This conversation is still loaded in the app. Restart the app, then delete it.',
           'error.gone': 'This conversation no longer exists.',
           'close': 'Close',
         }
@@ -448,30 +397,16 @@
          * @param {object} data - server payload.
          */
         function afterDeleted(sessionId, data) {
+          // live 会话在 host 侧已被拒绝，所以这里删的一定不是正在显示的会话：
+          // 只需把行藏起来（服务端已删，列表刷新后自然消失）。
           rememberHiddenId(sessionId)
           refreshHiddenStyles()
-          var mounted = mountedSessionId()
-          var report = { sessionId: sessionId, mountedBefore: mounted, url: window.location.href }
-          if (mounted !== sessionId) {
-            // 删的不是当前会话：该行已被本地规则隐藏，不需要重载整页。
-            report.decision = 'hidden-row-only'
-            reportTrace(report)
-            return
-          }
-          report.newConversationAction = openNewConversation()
-          setTimeout(function () {
-            var afterAction = mountedSessionId()
-            report.mountedAfterNewConversation = afterAction
-            if (afterAction !== sessionId) {
-              report.decision = 'opened-new-conversation'
-              reportTrace(report)
-              return
-            }
-            // 公开动作没生效（或上游改了行为）：重载一次让列表重读，不再点 DOM。
-            report.decision = 'reload-after-failed-navigation'
-            reportTrace(report)
-            window.location.reload()
-          }, 400)
+          reportTrace({
+            sessionId: sessionId,
+            decision: 'hidden-row-only',
+            alreadyGone: data !== undefined && data.alreadyGone === true,
+            url: window.location.href,
+          })
         }
 
         /**

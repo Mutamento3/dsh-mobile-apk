@@ -4,33 +4,32 @@
 
 ## 组成
 
-- **client.js**：两处注册
+- **src/client.js**：两处注册
   - `sidebar.workspaces.session.menu.item`：「删除对话」（danger，order 500）。菜单项只记录目标——
     选中会关闭菜单并卸载菜单项，确认框若挂在这里根本不会出现；
   - `shell.overlay`：确认框本体（自绘 Modal，不用 `window.confirm`——壳侧会自动批准 JS 弹窗）。
-    确认后 `POST /api/session-delete`，成功 `location.reload()` 让列表/索引/搜索重读。
-  - **幂等**：host 返回 404（会话已删/引擎已重启）时按成功处理，不再弹「session not found」。
-  - **删的是当前打开的会话**：走**公开**的 `session.new` 快捷键动作（`shortcuts.find('session.new').run()`）
-    切到新对话——不用上游声明为 private 的 `clearMain()`，也不点 DOM；动作不可用才回退为重载。
-  - **隐藏已删行**：引擎把加载过的会话留在内存里直到下次启动，所以删掉的行还会出现一会儿。
-    client 把已删 id 记进 `localStorage['dsh.session-delete.hidden']`（上限 200），
-    下次加载注入 `[data-row-key="session:<id>"]{display:none}`；引擎重启后列表本就干净，条目无副作用。
-- **src/index.js**（host）：注册 `POST /api/session-delete`（日志走 stdout 的 `[dsh-session-delete]`
-  前缀——`ctx.logger.info` 在 Android 壳里不落 `engine.log`，实测不可见）
-  - 走 `connection.requestRejection(req)` 同源鉴权；
-  - 只接受 `session-<uuid>`；请求体上限 4 KB；
-  - 拦截判据是「正在运行」而不是「加载过」：引擎把打开过的会话都留在内存里，所以用
-    `workspace/session-activity` 瀑布（与上游归档同一判据）判断，有活动才 **409**；
-  - **探测状态未知一律拒绝**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）：
-    返回 `activity-unknown`（409），绝不把「不知道」当「空闲」；
-  - **改名成功后**卸载内存里的会话：`sessions.liveEntryFor(session).detach()`（服务公开方法，
-    移除 live 记录并派发 `session/disposed`）→ `sessions.flush()` 落盘 → 再递归删目录。
-    顺序很重要：卸载放在改名之前，一旦删除失败用户会白丢正在看的会话；只删磁盘不卸载，
-    会话又会留在 `sessions.list()` 里参与搜索；
-  - 删除前 best-effort 调用 `workspaceRegistry.unarchiveSession/unpinSession`，清掉归档/置顶成员关系。
+    确认后 `POST /api/session-delete`，成功关闭弹窗并把该行隐藏。
+  - **幂等**：只有带 `error: 'not-found'` 的 404 才算「已删」；宿主插件没加载时的 404 会正常报错。
+  - **不做导航**：live 会话在 host 侧已被拒绝，所以删掉的一定不是屏幕上正在显示的那条，
+    客户端不需要切页（也就不会碰 `clearMain` 这类 private 接口）。
+- **src/index.js**（host）：注册三个路由（日志走 stdout 的 `[dsh-session-delete]` 前缀——
+  `ctx.logger.info` 在 Android 壳里不落 `engine.log`，实测不可见）
+  - `POST /api/session-delete`：`connection.requestRejection(req)` 同源鉴权；只接受 `session-<uuid>`；
+    请求体上限 4 KB；
+  - 拒绝规则（全部 409）：
+    - `workspace/session-activity` 瀑布报告有活动 → `session-active`；
+    - **探测状态未知**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）→ `activity-unknown`，
+      绝不把「不知道」当「空闲」；
+    - **会话仍加载在引擎里** → `session-loaded`：引擎没有任何公开接口能卸载内存会话
+      （`flush(session)` 要求会话仍在 live store、`liveEntryFor` 是 private、
+      `AgentHandle.dispose()` 只暴露给创建者），只删磁盘会留下「文件没了但内存里还在」的
+      幽灵会话、继续参与搜索。重启应用后 live 集合清空即可删除；
+  - 删除前 best-effort 调用 `workspaceRegistry.unarchiveSession/unpinSession`（失败只记日志）。
+  - `POST /api/session-delete-trace`：客户端决策回传（写 engine.log，便于现场取证）。
+  - `GET /api/session-delete-version`：构建戳，供页面自更新。
 - **src/session-delete.js**：可单测的删除核心——定位 `<DSH_HOME>/sessions/<cwd-key>/<id>/`，
-  命中 0 个报 `not-found`、命中 2 个报 `ambiguous`（一个都不删），先 `rename` 成 `.deleting-<t>` 再递归删除，
-  避免并发扫描看到删到一半的目录。
+  命中 0 个报 `not-found`、命中 2 个报 `ambiguous`（一个都不删），先 `rename` 成 `.deleting-<t>`
+  再递归删除，避免并发扫描看到删到一半的目录。
 
 ## 构建与安装
 
@@ -38,19 +37,21 @@
 （见 `scripts/inject-all.py` 的 `build_dsh_replacements`），所以 `lib/client.js` 必须存在。
 `lib/` 是构建产物，不进 git。
 
-启用：`scripts/profile-web.cordis.patch.yml` 里 `- id: session-delete` 的 insert（插件本身不再带
+启用：`scripts/profile-web.cordis.patch.yml` 里 `- id: session-delete` 的 insert（插件本身不带
 `dsh.bundle.patch`，与仓库其它 `@dsh-android/*` 插件同一形态）。
 
 ## 验证
 
-- `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**8 项全过**
-  （非法 id / 不存在 / 活会话拒绝 / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
-  host 编排的活会话拒绝 / 归档置顶清理顺序）。
-- `node scripts/check-api-route-auth.mjs`：通过（`/api/session-delete` 已登记为 protected，guard 在注册块内）。
-- `node scripts/check-code-map.mjs`：通过（新增文件已进覆盖账本）。
+- `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**20 项全过**
+  （非法 id / 不存在 / 运行中拒绝 / live 拒绝 / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
+  host 编排拒绝 / 归档置顶清理顺序 / 每步日志 / 探测抛错与非数组拒绝 / 无瀑布拒绝 /
+  目录中途消失→not-found / post-rename 钩子失败不残留 / 接口契约：不出现 flush、liveEntryFor、
+  clearMain、shortcuts.find）。
+- `node scripts/check-api-route-auth.mjs`：三道路由均登记为 protected。
+- `node scripts/check-code-map.mjs`：新增文件已进覆盖账本。
 
 ## 边界
 
 - 删除不可恢复；只删磁盘上的会话目录，不碰工作区本身。
+- live 会话需要先重启应用再删（见上）。
 - 归档/置顶集合的清理是 best-effort：失败只记日志，不阻断删除。
-- 页面在删除后整页重载一次（列表/索引/搜索都会重读）。

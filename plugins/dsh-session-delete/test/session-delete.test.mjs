@@ -122,14 +122,17 @@ test('removeSession refuses a running session before touching the disk', async (
   }
 })
 
-test('removeSession deletes a loaded but idle session (live != running)', async () => {
+test('removeSession refuses a loaded session even when it is idle', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
-    const result = await removeSession(fakeCtx({ live: true, activity: [] }), ID)
-    assert.equal(result.ok, true)
-    assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
+    const ctx = fakeCtx({ live: true, activity: [] })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'session-loaded',
+    )
+    assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [ID])
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
@@ -260,39 +263,34 @@ test('a non-array activity probe result refuses instead of guessing idle', async
   }
 })
 
-test('a live session is detached and flushed before its files are removed', async () => {
+test('a live session is refused (session-loaded) and its files stay', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
     const ctx = fakeCtx({ live: true, activity: [] })
-    const result = await removeSession(ctx, ID)
-    assert.equal(result.ok, true)
-    assert.deepEqual(ctx.calls, ['detach:' + ID, 'flush'])
-    assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'session-loaded',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
   }
 })
 
-test('a delete that fails before the rename must not unload the live session', async () => {
+test('a running session is refused before any file work happens', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
-  const dir = join(sessionsRoot(home), '--workspace--', ID)
   try {
-    // beforeRemove 里把目录移走 → rename 必然 ENOENT → not-found
-    const ctx = fakeCtx({
-      live: true,
-      activity: [],
-      registry: { unarchiveSession: async () => { await rm(dir, { recursive: true, force: true }) }, unpinSession: async () => {} },
-    })
+    const ctx = fakeCtx({ live: true, activity: [{ kind: 'agent' }] })
     await assert.rejects(
       removeSession(ctx, ID),
-      (error) => error instanceof SessionDeleteError && error.code === 'not-found',
+      (error) => error instanceof SessionDeleteError && error.code === 'session-active',
     )
-    assert.deepEqual(ctx.calls.filter((c) => c.startsWith('detach')), [])
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
@@ -310,4 +308,27 @@ test('a failing post-rename hook never leaves a renamed directory behind', async
   assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
   const leftovers = (await readdir(join(sessionsRoot(home), '--workspace--'))).filter((n) => n.includes('.deleting-'))
   assert.deepEqual(leftovers, [])
+})
+
+// ── 接口契约回归：只允许公开接口，禁止再次引入 private API ──────────────────
+import { readFileSync } from 'node:fs'
+
+/** 去掉注释再断言：注释里解释「为什么不用 private API」是允许的。 */
+function codeOf(relative) {
+  return readFileSync(new URL(relative, import.meta.url), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+}
+
+test('host half never calls private session APIs (flush / liveEntryFor)', () => {
+  const source = codeOf('../src/index.js')
+  assert.equal(/\.flush\s*\(/.test(source), false, 'flush(session) requires a live session; the plugin must not call it')
+  assert.equal(/liveEntryFor/.test(source), false, 'liveEntryFor is private upstream')
+})
+
+test('client half never calls private navigation APIs (clearMain / shortcuts.find)', () => {
+  const source = codeOf('../src/client.js')
+  assert.equal(/clearMain/.test(source), false, 'clearMain is private upstream')
+  assert.equal(/shortcuts\.find/.test(source), false, 'the Shortcuts service has no find()')
+  assert.equal(/liveEntryFor/.test(source), false, 'liveEntryFor is private upstream')
 })
