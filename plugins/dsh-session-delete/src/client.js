@@ -168,6 +168,31 @@
           }
         }
 
+        /**
+         * Leave the deleted conversation through the upstream workspace store.
+         *
+         * Upstream's own archive path does exactly this when the archived session is
+         * the main view: `if (this.mainReference?.sessionId === sessionId) this.clearMain()`.
+         * Reusing the service beats guessing at DOM buttons.
+         * @returns {boolean} true when the store cleared the main view.
+         */
+        function clearMainView() {
+          try {
+            var workspace = pluginCtx === null || typeof pluginCtx.get !== 'function'
+              ? undefined
+              : pluginCtx.get('uiWorkspace')
+            if (workspace !== undefined && workspace !== null && typeof workspace.clearMain === 'function') {
+              workspace.clearMain()
+              trace('info', 'cleared the main view via uiWorkspace.clearMain()')
+              return true
+            }
+            trace('warn', 'uiWorkspace.clearMain is not available; falling back to DOM controls')
+          } catch (error) {
+            trace('warn', 'uiWorkspace.clearMain threw', { message: String(error && error.message ? error.message : error) })
+          }
+          return false
+        }
+
         function goToNewSession() {
           var buttons = Array.prototype.slice.call(document.querySelectorAll('button'))
           var match = buttons.find(function (button) {
@@ -252,6 +277,8 @@
          * which unmounts the item — a dialog rendered there would never appear.
          * The item only records the target; `shell.overlay` renders the confirm.
          */
+        /** Client context, captured in apply so the overlay can reach upstream services. */
+        var pluginCtx = null
         var pending = null
         var listeners = new Set()
         function setPending(next) {
@@ -357,27 +384,36 @@
               window.location.reload()
               return
             }
-            var clicked = goToNewSession()
-            report.newSessionControl = clicked
+            report.clearedMain = clearMainView()
             setTimeout(function () {
-              var afterNew = mountedSessionId()
-              report.mountedAfterNewSession = afterNew
-              if (afterNew !== target.sessionId) {
-                report.decision = 'switched-to-new-session'
+              var afterClear = mountedSessionId()
+              report.mountedAfterClearMain = afterClear
+              if (afterClear !== target.sessionId) {
+                report.decision = 'cleared-main'
                 reportTrace(report)
                 return
               }
-              // 兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
-              var row = document.querySelector('[data-row-key^="session:"]')
-              report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
-              if (row !== null) row.click()
+              report.newSessionControl = goToNewSession()
               setTimeout(function () {
-                report.mountedAfterRowClick = mountedSessionId()
-                report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
-                reportTrace(report)
-                if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
+                var afterNew = mountedSessionId()
+                report.mountedAfterNewSession = afterNew
+                if (afterNew !== target.sessionId) {
+                  report.decision = 'switched-to-new-session'
+                  reportTrace(report)
+                  return
+                }
+                // 最后兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
+                var row = document.querySelector('[data-row-key^="session:"]')
+                report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
+                if (row !== null) row.click()
+                setTimeout(function () {
+                  report.mountedAfterRowClick = mountedSessionId()
+                  report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
+                  reportTrace(report)
+                  if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
+                }, 600)
               }, 600)
-            }, 700)
+            }, 300)
           }
 
           function confirmDelete() {
@@ -413,6 +449,7 @@
 
         /** @param {object} ctx - cordis client context. */
         function apply(ctx) {
+          pluginCtx = ctx
           // 自证：页面里的这份代码能否连通 host。engine.log 里看到这条，说明
           // 浏览器→引擎这条路是通的；看不到就说明页面还是旧连接/旧 bundle。
           setTimeout(function () {
