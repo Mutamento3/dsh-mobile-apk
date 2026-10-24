@@ -178,6 +178,14 @@ jobs:
           # Previous stage interruption may leave the project overlay in its source-only form.
           # Regenerate from the immutable audited project commit, not the previous run artifact.
           git show "$GITHUB_SHA:scripts/snapshot-config/engine-overlay.json" > scripts/snapshot-config/engine-overlay.json
+          # Read the contract before leaving the project root. After the cd below the cwd is
+          # the upstream checkout, which has no scripts/contract.json (rc.3 included).
+          contract_package_manager=$(node -p 'require(process.argv[1]).upstream.packageManager' "$GITHUB_WORKSPACE/scripts/contract.json")
+          if ! printf '%s\n' "$contract_package_manager" | grep -Eq '^pnpm@[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::contract packageManager is not an exact pnpm version: $contract_package_manager"
+            exit 1
+          fi
+          expected_pnpm=${contract_package_manager#pnpm@}
           cd .deploy-tmp/deepseek-harness
           # Reset only the dedicated build checkout on rerun; retain ignored caches.
           # All vendor sources now follow the official target; no older commit is staged.
@@ -185,7 +193,8 @@ jobs:
           git clean -fdq
           corepack enable
           corepack pnpm install --frozen-lockfile
-          test "$(corepack pnpm --version)" = "11.7.0"
+          # The contract was captured at the project root above; this cwd is upstream only.
+          test "$(corepack pnpm --version)" = "$expected_pnpm"
           corepack pnpm --version > "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
           printf 'deployment pnpm: ' >> "$GITHUB_WORKSPACE/.deploy-tmp/source-build/package-manager-versions.txt"
           # corepack's fetcher has no download deadline: a stalled connection leaves the
@@ -316,7 +325,7 @@ jobs:
           report.androidRuntimeDependencies.resolvedPackages = {
             koffi: exact('koffi', '3.2.1'),
             koffiAndroidArm64: exact('@koromix/koffi-android-arm64', '3.2.1'),
-            sharpWasm32: exact('@img/sharp-wasm32', '0.35.3'),
+            sharpWasm32: exact('@img/sharp-wasm32', '0.35.5'),
           }
           fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n')
           const policyPath = '.deploy-tmp/source-build/source-build-policy.json'
@@ -325,7 +334,7 @@ jobs:
             audit: '.deploy-tmp/source-build/android-native-runtime-packages.json',
             trustedPublisherInputs: [
               { name: '@koromix/koffi-android-arm64', version: '3.2.1', upstream: 'https://github.com/Koromix/koffi', role: 'Android ARM64 Node-API binding for Koffi' },
-              { name: '@img/sharp-wasm32', version: '0.35.3', upstream: 'https://github.com/lovell/sharp', role: 'WebAssembly fallback for Sharp on Android' },
+              { name: '@img/sharp-wasm32', version: '0.35.5', upstream: 'https://github.com/lovell/sharp', role: 'WebAssembly fallback for Sharp on Android' },
             ],
             lockfileSha256: report.resolvedLockfileSha256,
             lockfileIntegrityEntries: report.androidRuntimeDependencies.resolvedPackages,
@@ -730,7 +739,7 @@ jobs:
             temporaryAdapterSha256: digest('scripts/source-build/check-dsh-source-snapshot-gate.mjs'),
             checker: 'scripts/source-build/check-dsh-source-snapshot.mjs',
             checkerSha256: digest('scripts/source-build/check-dsh-source-snapshot.mjs'),
-            reason: 'The standard gate models the older flattened npm overlay; this source audit uses the pinned 0.2.0-rc.2 pnpm deploy tree. The replacement validates the final snapshot against the pinned source package manifest, pnpm dependency links, and registered engine patch markers.'
+            reason: 'The standard gate models the older flattened npm overlay; this source audit uses the pinned Harness pnpm deploy tree. The replacement validates the final snapshot against the pinned source package manifest, pnpm dependency links, and registered engine patch markers.'
           }
           fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + '\n')
           NODE

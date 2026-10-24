@@ -167,3 +167,72 @@ test('deploy cleanup is scoped and rejects empty workspace and linked parent', l
   assert.notEqual(bash(cleanup, root).status, 0)
   assert.equal(readFileSync(join(other, 'sentinel'), 'utf8'), 'keep')
 }))
+
+// P1 回归（真实 rc3 演练发现）：合同读取曾在 `cd .deploy-tmp/deepseek-harness` 之后执行，
+// 于是从 upstream 的 cwd 解析 ./scripts/contract.json —— 上游没有这个文件，frozen install
+// 之后必然 MODULE_NOT_FOUND。这里直接跑工作流原文的初始化片段，确保合同在根目录读取。
+test('source build reads the contract before entering the upstream checkout', linux, () => fixture(root => {
+  const harnessStep = step('Build and pack DeepSeek Harness from source')
+  const harness = join(root, '.deploy-tmp/deepseek-harness')
+  mkdirSync(harness, { recursive: true })
+  // 片段里的 git checkout/clean 需要真实仓库；用一个已提交的 upstream 夹具即可。
+  const git = (...args) => execFileSync('git', ['-C', harness, ...args], {
+    env: { PATH: join(root, 'bin') + ':/usr/bin:/bin', HOME: root, GIT_CONFIG_NOSYSTEM: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  git('init', '-q')
+  git('config', 'user.name', 'Fixture')
+  git('config', 'user.email', 'fixture@example.invalid')
+  writeFileSync(join(harness, 'package.json'), '{}\n')
+  git('add', '.')
+  git('commit', '-qm', 'upstream fixture')
+  mkdirSync(join(root, 'scripts/snapshot-config'), { recursive: true })
+  writeFileSync(join(root, 'scripts/snapshot-config/engine-overlay.json'), '{}\n')
+  // 片段开头用 git show "$GITHUB_SHA:<overlay>" 恢复文件，夹具根也必须是已提交仓库。
+  const projectGit = (...args) => execFileSync('git', ['-C', root, ...args], {
+    env: { PATH: join(root, 'bin') + ':/usr/bin:/bin', HOME: root, GIT_CONFIG_NOSYSTEM: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  projectGit('init', '-q')
+  projectGit('config', 'user.name', 'Fixture')
+  projectGit('config', 'user.email', 'fixture@example.invalid')
+  projectGit('add', 'scripts/snapshot-config/engine-overlay.json')
+  projectGit('commit', '-qm', 'project fixture')
+  const projectCommit = projectGit('rev-parse', 'HEAD').toString().trim()
+  const contractPath = join(root, 'scripts/contract.json')
+  writeFileSync(contractPath, JSON.stringify({
+    baseline: '9.9.9-rc.9',
+    upstream: { commit: '0123456789abcdef0123456789abcdef01234567', packageManager: 'pnpm@9.9.9' },
+  }))
+  mkdirSync(join(root, 'bin'))
+  // corepack 替身：报告一次成功安装，并且只在 expected_pnpm 已捕获时返回合同版本。
+  writeFileSync(join(root, 'bin/corepack'), [
+    '#!/bin/bash', 'set -eu',
+    'if [ "$1" = enable ]; then exit 0; fi',
+    'if [ "$1" = pnpm ]; then',
+    '  if [ "$2" = install ]; then exit 0; fi',
+    '  if [ "$2" = --version ]; then printf "%s\\n" "${FAKE_PNPM_VERSION:?}"; exit 0; fi',
+    'fi',
+    'echo "unexpected corepack invocation: $*" >&2; exit 64', '',
+  ].join('\n'))
+  chmodSync(join(root, 'bin/corepack'), 0o755)
+  // 只跑合同捕获与 frozen install 校验；部署 pnpm@12.2.0 预热属于后续步骤。
+  const script = harnessStep.slice(0, harnessStep.indexOf('\n# corepack\'s fetcher'))
+  assert.ok(script.includes('corepack pnpm install --frozen-lockfile'))
+  const run = extra => bash(script, root, { GITHUB_SHA: projectCommit, FAKE_PNPM_VERSION: '9.9.9', ...extra })
+
+  const positive = run({})
+  assert.equal(positive.status, 0, positive.stderr + positive.stdout)
+
+  // upstream 自己的 scripts/ 不该被读成合同来源；真实上游此处没有 contract.json。
+  mkdirSync(join(harness, 'scripts'), { recursive: true })
+  writeFileSync(join(harness, 'scripts/contract.json'), JSON.stringify({
+    baseline: '9.9.9-rc.9',
+    upstream: { commit: '0123456789abcdef0123456789abcdef01234567', packageManager: 'pnpm@8.8.8' },
+  }))
+  const stillGood = run({})
+  assert.equal(stillGood.status, 0, stillGood.stderr + stillGood.stdout)
+
+  const wrongVersion = run({ FAKE_PNPM_VERSION: '9.9.8' })
+  assert.notEqual(wrongVersion.status, 0, 'installed pnpm must match the captured contract version')
+}))
