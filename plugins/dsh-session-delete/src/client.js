@@ -114,8 +114,15 @@
           return document.documentElement.getAttribute('data-dsh-session-id')
         }
 
-        /** Per-attempt timeout: a dead keep-alive socket after an engine restart must not hang the dialog. */
-        var REQUEST_TIMEOUT_MS = 15000
+        /**
+         * Per-attempt timeout. A local delete answers in ~20ms; anything slower than
+         * this is a dead keep-alive socket left over from an engine restart, and
+         * aborting it makes the browser drop that socket. 2s keeps the dialog honest
+         * without making the user wait for the OS TCP timeout.
+         */
+        var REQUEST_TIMEOUT_MS = 2000
+        /** Attempts per click: first try plus two fresh-connection retries. */
+        var MAX_ATTEMPTS = 3
 
         /**
          * POST the delete request with a hard timeout.
@@ -145,11 +152,17 @@
          */
         function reportTrace(payload) {
           try {
-            fetch('/api/session-delete-trace', {
+            var init = {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify(payload),
-            }).catch(function () {})
+            }
+            // 诊断请求也带超时：一条挂死的 trace 会占住浏览器连接池的槽位，
+            // 反而拖慢真正的删除请求。
+            if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+              init.signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+            }
+            fetch('/api/session-delete-trace', init).catch(function () {})
           } catch (_) {
             /* diagnostics only */
           }
@@ -295,16 +308,17 @@
             setPending(null)
           }
 
-          function confirmDelete() {
-            trace('info', 'confirm accepted, sending request', { sessionId: target.sessionId })
-            setBusy(true)
-            setError(null)
-            postDelete(target.sessionId)
+          /**
+           * One delete attempt; retries on a timeout with a fresh connection.
+           * @param {number} n - zero-based attempt index.
+           * @returns {Promise<object>} server payload.
+           */
+          function attemptDelete(n) {
+            return postDelete(target.sessionId)
               .then(function (res) {
                 return res.json().catch(function () { return {} }).then(function (data) {
                   if (!res.ok || data.ok !== true) {
-                    // 404 = the session is already gone (deleted earlier, or the engine
-                    // restarted): treat it as success so a retry is idempotent.
+                    // 404 = already gone (deleted earlier, or the engine restarted).
                     if (res.status === 404) {
                       trace('warn', 'session already gone; treating as deleted', { sessionId: target.sessionId })
                       return { ok: true, sessionId: target.sessionId, alreadyGone: true }
@@ -314,63 +328,68 @@
                   return data
                 })
               })
-              .then(function (data) {
-                rememberHiddenId(target.sessionId)
-                refreshHiddenStyles()
-                var mounted = mountedSessionId()
-                var report = { sessionId: target.sessionId, mountedBefore: mounted, url: window.location.href }
-                if (mounted !== target.sessionId) {
-                  report.decision = 'reload-not-mounted'
-                  reportTrace(report)
-                  window.location.reload()
-                  return
-                }
-                var clicked = goToNewSession()
-                report.newSessionControl = clicked
-                setTimeout(function () {
-                  var afterNew = mountedSessionId()
-                  report.mountedAfterNewSession = afterNew
-                  if (afterNew !== target.sessionId) {
-                    report.decision = 'switched-to-new-session'
-                    reportTrace(report)
-                    return
-                  }
-                  // 兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
-                  var row = document.querySelector('[data-row-key^="session:"]')
-                  report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
-                  if (row !== null) row.click()
-                  setTimeout(function () {
-                    report.mountedAfterRowClick = mountedSessionId()
-                    report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
-                    reportTrace(report)
-                    if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
-                  }, 600)
-                }, 700)
-              })
               .catch(function (reason) {
-                var timedOut = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
-                if (timedOut) {
-                  trace('warn', 'delete request timed out; retrying once', { sessionId: target.sessionId })
-                  // A dead keep-alive socket fails once; the retry opens a fresh connection.
-                  return postDelete(target.sessionId)
-                    .then(function (res) { return res.json().catch(function () { return {} }).then(function (data) {
-                      if (!res.ok || data.ok !== true) throw new Error(data.message || data.error || ('HTTP ' + res.status))
-                      rememberHiddenId(target.sessionId)
-                      refreshHiddenStyles()
-                      trace('info', 'delete succeeded on retry, reloading', { sessionId: target.sessionId })
-                      window.location.reload()
-                    }) })
-                    .catch(function (again) {
-                      var message = String(again && again.message ? again.message : again)
-                      trace('error', 'delete failed after retry; reloading to rebuild the connection', { sessionId: target.sessionId, message: message })
-                      reportTrace({ event: 'delete-timeout-reload', sessionId: target.sessionId, message: message })
-                      // 两次都超时说明页面这条连接已经死了：重载是唯一可靠的恢复路径
-                      // （删除若已在服务端完成，重载后行会被本地隐藏规则挡住）。
-                      window.location.reload()
-                    })
+                var retryable = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
+                if (retryable && n + 1 < MAX_ATTEMPTS) {
+                  trace('warn', 'delete attempt timed out; retrying on a fresh connection', {
+                    sessionId: target.sessionId,
+                    attempt: n + 1,
+                  })
+                  reportTrace({ event: 'delete-retry', sessionId: target.sessionId, attempt: n + 1 })
+                  return attemptDelete(n + 1)
                 }
+                throw reason
+              })
+          }
+
+          /**
+           * Post-delete bookkeeping: hide the row, then leave the deleted conversation.
+           * @param {object} data - server payload.
+           */
+          function afterDeleted(data) {
+            rememberHiddenId(target.sessionId)
+            refreshHiddenStyles()
+            var mounted = mountedSessionId()
+            var report = { sessionId: target.sessionId, mountedBefore: mounted, url: window.location.href }
+            if (mounted !== target.sessionId) {
+              report.decision = 'reload-not-mounted'
+              reportTrace(report)
+              window.location.reload()
+              return
+            }
+            var clicked = goToNewSession()
+            report.newSessionControl = clicked
+            setTimeout(function () {
+              var afterNew = mountedSessionId()
+              report.mountedAfterNewSession = afterNew
+              if (afterNew !== target.sessionId) {
+                report.decision = 'switched-to-new-session'
+                reportTrace(report)
+                return
+              }
+              // 兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
+              var row = document.querySelector('[data-row-key^="session:"]')
+              report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
+              if (row !== null) row.click()
+              setTimeout(function () {
+                report.mountedAfterRowClick = mountedSessionId()
+                report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
+                reportTrace(report)
+                if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
+              }, 600)
+            }, 700)
+          }
+
+          function confirmDelete() {
+            trace('info', 'confirm accepted, sending request', { sessionId: target.sessionId })
+            setBusy(true)
+            setError(null)
+            attemptDelete(0)
+              .then(afterDeleted)
+              .catch(function (reason) {
                 var message = String(reason && reason.message ? reason.message : reason)
                 trace('error', 'delete failed', { sessionId: target.sessionId, message: message })
+                reportTrace({ event: 'delete-failed', sessionId: target.sessionId, message: message })
                 setError(message)
                 setBusy(false)
               })
