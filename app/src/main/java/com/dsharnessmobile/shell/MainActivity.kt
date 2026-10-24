@@ -294,7 +294,8 @@ class MainActivity : ComponentActivity() {
   /** 引擎启动流（委托 EngineStartFlow.start）。 */
   internal fun startEngineFlow(splash: Boolean = false) {
     if (isFinishing || isDestroyed) return
-    if (startupEntryDecision(RepairState.required(this), explicitUserRetry = false) ==
+    // 冷启自动尝试（0.14.10）：门若是上一进程落的残留，允许本进程一次自动越过；本进程内仍有界。
+    if (startupEntryDecision(RepairState.required(this), explicitUserRetry = RepairState.coldStartAutoAttemptAvailable(this)) ==
       StartupEntryDecision.BLOCKED_FOR_REPAIR) {
       showGuide()
       applyRepairRequiredGuide()
