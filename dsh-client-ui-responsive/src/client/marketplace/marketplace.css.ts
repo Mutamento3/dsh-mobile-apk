@@ -169,6 +169,8 @@ export const MARKETPLACE_CSS: string = `
   align-items: center;
   gap: 4px;
   padding: 8px 0;
+  /* 双击不缩放：分页条上的连击只应表达一次点按 */
+  touch-action: manipulation;
 }
 
 .dshm-page-btn {
@@ -215,13 +217,13 @@ export const MARKETPLACE_CSS: string = `
   outline-offset: 1px;
 }
 
-/* 省略号纯装饰：不接收任何指针事件，也不参与选中。
-   它紧邻首/末页按钮，触点落偏一点就会打到旁边那颗按钮上（表现为「点三个点跳到末页」）。 */
+/* 省略号纯装饰：自己接收事件并吞掉（onClick 里 preventDefault + stopPropagation）。
+   不能用 pointer-events:none —— 那样事件会穿透到分页条容器与上层，双击时会被当成
+   「点了相邻页」而翻页。 */
 .dshm-page-gap {
   padding: 0 6px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
-  pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
