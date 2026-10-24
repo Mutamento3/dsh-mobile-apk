@@ -161,6 +161,61 @@ export const MARKETPLACE_CSS: string = `
   display: none;
 }
 
+/* 分页条（列表上下各一条）：首末页 + 当前页前后各一页 + 省略号，右侧可输入页码跳转。
+   每页 96 条是接口上限（实测 limit=200/500/1000 都只回 96），超过 96 条靠 page 翻页。 */
+.dshm-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.dshm-page-btn {
+  box-sizing: border-box;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border: 0.5px solid transparent;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.dshm-page-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dshm-page-cur {
+  border-color: var(--dsw-alias-button-primary-fill);
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.dshm-page-gap {
+  padding: 0 2px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.dshm-page-input {
+  box-sizing: border-box;
+  width: 64px;
+  height: 28px;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
 /* 列表：去掉与 head 叠成双线的上边线。 */
 .dshm-list {
   border-top: 0;

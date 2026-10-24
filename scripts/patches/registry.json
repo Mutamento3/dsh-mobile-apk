@@ -61,6 +61,20 @@
       "marker": "kidOpen"
     },
     {
+      "id": "market-F-pages",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "summary": "搜索端点转发 page 参数（每页 96 条）",
+      "provenance": "0.15.0 用户定例：与上游一致，96 条/页 + 翻页",
+      "marker": "searchParams.get(\"page\")"
+    },
+    {
+      "id": "market-F-client",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "分页条（首末页 + 当前页窗口 + 省略号，上下各一条，支持输入页码跳转）",
+      "provenance": "0.15.0 用户定例：分页显示 1 … 当前 … 末页，上下都有，可输入跳转",
+      "marker": "dshm-pager"
+    },
+    {
       "id": "undo-E1",
       "target": "dsh-undo-savepoint/lib/client.js",
       "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",
