@@ -60,6 +60,7 @@ function loadClient(options = {}) {
   if (options.pending !== undefined) {
     storage.set('dsh.session-delete.pending', JSON.stringify({ sessionId: options.pending, at: Date.now() }))
   }
+  const toasts = []
   const context = {
     window: {
       __ModuleLoader__: { load: ({ factory: f }) => { factory = f } },
@@ -75,8 +76,10 @@ function loadClient(options = {}) {
     document: {
       documentElement: { getAttribute: () => null },
       head: { appendChild: () => {} },
+      // #510 的续做失败 toast 需要 body.appendChild；桩记录创建的元素供断言。
+      body: { appendChild: (el) => { toasts.push(el) } },
       getElementById: () => null,
-      createElement: () => ({ dataset: {}, remove: () => {} }),
+      createElement: () => ({ dataset: {}, remove: () => {}, setAttribute: () => {}, style: {} }),
       querySelector: (selector) => {
         if (selector === '[data-conversation-session]' && options.mountedId !== undefined) {
           return { getAttribute: () => options.mountedId }
@@ -103,7 +106,7 @@ function loadClient(options = {}) {
   vm.runInContext(SOURCE, sandbox)
   assert.equal(typeof factory, 'function', 'client bundle did not call __ModuleLoader__.load')
   const module = factory((id) => (id === 'react' ? react : primitives))
-  return { module, react, sent, FakeXHR, sandbox, reloads, storage }
+  return { module, react, sent, FakeXHR, sandbox, reloads, storage, toasts }
 }
 
 test('menu item click opens the overlay and the confirm button sends the request', async () => {
@@ -268,6 +271,32 @@ test('a pending delete from a previous page resumes automatically', async () => 
   xhr.onload()
   for (let i = 0; i < 12; i += 1) await Promise.resolve()
   assert.equal(storage.has('dsh.session-delete.pending'), false, 'resume success must clear the pending entry')
+})
+
+test('a failed resume surfaces a visible notice instead of failing silently (#510)', async () => {
+  const SESSION = 'session-88888888-8888-4888-8888-888888888888'
+  const { module, FakeXHR, storage, toasts } = loadClient({ pending: SESSION })
+  module.apply({
+    get: () => undefined,
+    effect: (fn) => fn(),
+    locale: { register: () => () => {} },
+    slots: { inject: () => {}, register: () => ({}) },
+  })
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  assert.equal(FakeXHR.instances.length, 1, 'resume must still fire the request')
+
+  const xhr = FakeXHR.instances[0]
+  xhr.status = 409
+  xhr.responseText = JSON.stringify({ ok: false, error: 'session-active', message: 'running' })
+  xhr.onload()
+  for (let i = 0; i < 12; i += 1) await Promise.resolve()
+
+  assert.equal(storage.has('dsh.session-delete.pending'), false, 'failed resume must still drop the pending entry')
+  assert.equal(toasts.length, 1, 'failed resume must append exactly one visible notice')
+  assert.equal(
+    toasts[0].textContent.includes('正在运行'), true,
+    'notice text must come from the zh dictionary (sandbox navigator has no language ⇒ zh)',
+  )
 })
 
 test('a deleted session whose sidebar row survives triggers one reload', async () => {

@@ -104,6 +104,38 @@
         }
 
         /**
+         * #510：续做失败的可见反馈。apply 作用域拿不到确认框的 props.t，用本文件
+         * 自己的 zh/en 词典按页面语言取词（与 ctx.locale.register 同一份源）。
+         */
+        function resumeText(code, fallback) {
+          var english = (navigator.language || 'zh').toLowerCase().indexOf('zh') !== 0
+          var dict = english ? en : zh
+          var key = code === 'session-active' ? 'error.active'
+            : code === 'activity-unknown' ? 'error.unknown'
+              : code === 'unload-failed' ? 'error.unload'
+                : code === 'not-found' ? 'error.gone'
+                  : null
+          return (key !== null ? dict[key] : '') || (dict['error'].replace('{message}', fallback))
+        }
+
+        /** 固定 toast（黑底白字 5s 自消；form 与上游错误条一致，无 window.alert——壳会自动放行 alert）。 */
+        function showResumeNotice(message) {
+          try {
+            var id = 'dsh-session-delete-resume-notice'
+            var el = document.getElementById(id)
+            if (!el) {
+              el = document.createElement('div')
+              el.id = id
+              el.setAttribute('role', 'alert')
+              el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:16px;z-index:2147483000;padding:10px 12px;border-radius:8px;background:rgba(20,20,20,.92);color:#fff;font-size:13px;line-height:1.4;box-shadow:0 4px 16px rgba(0,0,0,.3)'
+              document.body.appendChild(el)
+            }
+            el.textContent = message
+            setTimeout(function () { try { el.remove() } catch (e) {} }, 5000)
+          } catch (e) { /* 反馈失败不影响已完成的放弃待办 */ }
+        }
+
+        /**
          * Report the post-delete navigation decision to the host log.
          * @param {object} payload - decision details.
          */
@@ -549,6 +581,9 @@
                 localTrace('resume-failed', { sessionId: pendingDelete.sessionId, message: String(reason && reason.message ? reason.message : reason) })
                 // 续做失败就放弃这条待办：否则每次页面加载都会重试同一条。
                 clearPending()
+                // #510：重载前用户已在确认框里同意过删除，续做失败必须说清楚——
+                // 旧实现只留 localStorage 痕迹，用户看到的是「页面闪一下、会话还在、零提示」。
+                showResumeNotice(resumeText(reason && reason.code, String(reason && reason.message ? reason.message : reason)))
               })
             }, 600)
           }
