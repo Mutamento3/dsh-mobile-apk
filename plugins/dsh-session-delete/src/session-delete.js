@@ -140,3 +140,50 @@ export async function deleteStoredSession({ home, sessionId, isActive, beforeRem
   }
   return { ok: true, sessionId, dir }
 }
+
+/**
+ * Sweep graveyard directories left behind by failed deletions.
+ *
+ * `deleteStoredSession` renames the session directory to
+ * `<dir>.deleting-<t>` before removing it; if the process dies (or `rm` fails)
+ * between the two steps the graveyard stays forever with nothing to clean it
+ * up. Directories carrying the `.deleting-` marker are only ever produced by
+ * that rename step, so the suffix alone identifies them — normal session
+ * directories and unrelated files are never touched. Best-effort: every
+ * failure (missing root, unreadable workspace, busy file) is swallowed; the
+ * sweep must never break route registration.
+ *
+ * @param {string} home - absolute `DSH_HOME`.
+ * @returns {Promise<string[]>} removed graveyard paths (empty when none).
+ */
+export async function sweepGraveyards(home) {
+  const removed = []
+  if (typeof home !== 'string' || home === '') return removed
+  const root = sessionsRoot(home)
+  let workspaces
+  try {
+    workspaces = await readdir(root, { withFileTypes: true })
+  } catch {
+    return removed // no sessions directory yet: nothing to sweep
+  }
+  for (const workspace of workspaces) {
+    if (!workspace.isDirectory()) continue
+    let entries
+    try {
+      entries = await readdir(join(root, workspace.name), { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !entry.name.includes('.deleting-')) continue
+      const target = join(root, workspace.name, entry.name)
+      try {
+        await rm(target, { recursive: true, force: true })
+        removed.push(target)
+      } catch {
+        /* busy or unreadable: leave it for the next sweep */
+      }
+    }
+  }
+  return removed
+}

@@ -10,6 +10,7 @@ import {
   deleteStoredSession,
   findSessionDir,
   sessionsRoot,
+  sweepGraveyards,
 } from '../src/session-delete.js'
 
 const ID = 'session-12345678-1234-4abc-8def-1234567890ab'
@@ -370,3 +371,25 @@ test('a missing directory reports not-found and keeps the session live', async (
     else process.env.DSH_HOME = previous
   }
 })
+
+test('sweepGraveyards removes only .deleting-* leftovers, never live sessions', async () => {
+  const home = await homeWith([ID])
+  const key = '--workspace--'
+  const graveyard = join(sessionsRoot(home), key, ID + '.deleting-lx8p2')
+  await mkdir(graveyard)
+  await writeFile(join(graveyard, 'session.lock'), '')
+
+  const removed = await sweepGraveyards(home)
+
+  assert.equal(removed.length, 1, 'exactly the graveyard is removed')
+  assert.equal(removed[0], graveyard)
+  assert.equal(existsSync(graveyard), false, 'graveyard directory is gone')
+  assert.equal(existsSync(join(sessionsRoot(home), key, ID)), true, 'live session directory untouched')
+})
+
+test('sweepGraveyards is a no-op without a sessions root', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'dsh-session-delete-'))
+  assert.deepEqual(await sweepGraveyards(home), [])
+  assert.deepEqual(await sweepGraveyards(''), [])
+})
+

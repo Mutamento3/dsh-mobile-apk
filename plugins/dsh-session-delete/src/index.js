@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SessionDeleteError, assertSessionId, deleteStoredSession } from './session-delete.js'
+import { SessionDeleteError, assertSessionId, deleteStoredSession, sweepGraveyards } from './session-delete.js'
 
 /** Log tag shared with the client half so device logs can be grepped by one string. */
 const TAG = '[dsh-session-delete]'
@@ -274,6 +274,11 @@ function failureOf(error) {
  */
 export function apply(ctx) {
   log(ctx, 'info', 'registering route', { path: ROUTE })
+  // 启动清扫上次失败删除留下的 *.deleting-* 墓地目录（best-effort；见 sweepGraveyards 注释）。
+  sweepGraveyards(process.env.DSH_HOME ?? join(homedir(), '.dsh')).then(
+    (removed) => { if (removed.length > 0) log(ctx, 'info', 'swept leftover graveyard directories', { count: removed.length }) },
+    () => {},
+  )
   // 客户端决策回传：删除后界面为什么没切换，只有浏览器侧知道；把它的选择写进
   // engine.log（[dsh-session-delete] client trace …），现场问题不必再靠猜。
   ctx.webServer.register({
