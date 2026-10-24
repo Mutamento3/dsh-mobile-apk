@@ -96,6 +96,25 @@
          * @returns {boolean} true when a control was found and clicked.
          */
         /**
+         * Session currently rendered on screen.
+         *
+         * `[data-conversation-session]` is the conversation body's own id and is
+         * present for every rendered conversation (main view or panel). The
+         * `<html data-dsh-session-id>` marker is the shell's shell-wide hint and
+         * is absent on some layouts (measured: null while a conversation was
+         * open), so it is only the fallback.
+         * @returns {string|null} mounted session id.
+         */
+        function mountedSessionId() {
+          var body = document.querySelector('[data-conversation-session]')
+          if (body !== null) {
+            var fromBody = body.getAttribute('data-conversation-session')
+            if (fromBody !== null && fromBody !== '') return fromBody
+          }
+          return document.documentElement.getAttribute('data-dsh-session-id')
+        }
+
+        /**
          * Report the post-delete navigation decision to the host log.
          * @param {object} payload - decision details.
          */
@@ -277,7 +296,7 @@
               .then(function (data) {
                 rememberHiddenId(target.sessionId)
                 refreshHiddenStyles()
-                var mounted = document.documentElement.getAttribute('data-dsh-session-id')
+                var mounted = mountedSessionId()
                 var report = { sessionId: target.sessionId, mountedBefore: mounted, url: window.location.href }
                 if (mounted !== target.sessionId) {
                   report.decision = 'reload-not-mounted'
@@ -288,7 +307,7 @@
                 var clicked = goToNewSession()
                 report.newSessionControl = clicked
                 setTimeout(function () {
-                  var afterNew = document.documentElement.getAttribute('data-dsh-session-id')
+                  var afterNew = mountedSessionId()
                   report.mountedAfterNewSession = afterNew
                   if (afterNew !== target.sessionId) {
                     report.decision = 'switched-to-new-session'
@@ -300,7 +319,7 @@
                   report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
                   if (row !== null) row.click()
                   setTimeout(function () {
-                    report.mountedAfterRowClick = document.documentElement.getAttribute('data-dsh-session-id')
+                    report.mountedAfterRowClick = mountedSessionId()
                     report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
                     reportTrace(report)
                     if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
