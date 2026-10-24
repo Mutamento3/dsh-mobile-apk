@@ -10,22 +10,21 @@
   - `shell.overlay`：确认框本体（自绘 Modal，不用 `window.confirm`——壳侧会自动批准 JS 弹窗）。
     确认后 `POST /api/session-delete`，成功关闭弹窗并把该行隐藏。
   - **幂等**：只有带 `error: 'not-found'` 的 404 才算「已删」；宿主插件没加载时的 404 会正常报错。
-  - **删除后的提示**：卸载成功 → 直接关闭弹窗；卸载失败（会话仍在内存里）→ 弹窗留在原地，
-    换成「已在本机删除。这条对话仍留在内存中，重启应用后会彻底消失。」，只有一个「知道了」。
   - **不做导航**：不碰 `clearMain` 这类 private 接口，也不点 DOM。
 - **src/index.js**（host）：注册三个路由（日志走 stdout 的 `[dsh-session-delete]` 前缀——
   `ctx.logger.info` 在 Android 壳里不落 `engine.log`，实测不可见）
   - `POST /api/session-delete`：`connection.requestRejection(req)` 同源鉴权；只接受 `session-<uuid>`；
     请求体上限 4 KB；
-  - 拒绝规则（全部 409）：
+  - 只有两条拒绝（409）：
     - `workspace/session-activity` 瀑布报告有活动 → `session-active`；
     - **探测状态未知**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）→ `activity-unknown`，
       绝不把「不知道」当「空闲」；
-    - **加载中的会话仍可删除**：先删文件，再尽力卸载（顺序反了的话，删除失败会让用户白丢正在看的会话）。
-      卸载是 best-effort：引擎没有公开卸载接口
-      （`flush(session)` 要求会话仍在 live store、`liveEntryFor` 是 private、
-      `AgentHandle.dispose()` 只暴露给创建者），卸不掉时响应带 `liveRemaining: true`，
-      客户端据此提示「已在本机删除，仍在内存中，重启后彻底消失」；
+  - **加载中的会话照常可删**：先让会话离开 Host live 集合，再删磁盘目录。
+    卸载走引擎自己的 teardown 边 `entry.detach()`：移除 store 条目并派发 `session/disposed`，
+    agent loop 据此释放 Agent、jsonl 持久化清理写入状态、api-session controller 广播
+    `api-session/removed`——侧栏/搜索/历史因此自然消失，不需要 CSS 隐藏、也不需要重启应用；
+  - **卸载失败 = 请求失败**（`unload-failed` → 409），磁盘文件保持原状（可恢复），
+    不会再出现「目录删了、内存里还在」却报成功的情况；
   - 删除前 best-effort 调用 `workspaceRegistry.unarchiveSession/unpinSession`（失败只记日志）。
   - `POST /api/session-delete-trace`：客户端决策回传（写 engine.log，便于现场取证）。
   - `GET /api/session-delete-version`：构建戳，供页面自更新。
@@ -45,7 +44,8 @@
 ## 验证
 
 - `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**20 项全过**
-  （非法 id / 不存在 / 运行中拒绝 / live 可删且先 detach / 无卸载能力时标记 liveRemaining / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
+  （非法 id / 不存在 / 运行中拒绝 / live 先卸载再删 / detach 抛错报 unload-failed 且文件不动 /
+  无卸载能力同样报错且文件不动 / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
   host 编排拒绝 / 归档置顶清理顺序 / 每步日志 / 探测抛错与非数组拒绝 / 无瀑布拒绝 /
   目录中途消失→not-found / post-rename 钩子失败不残留 / 接口契约：不出现 flush、liveEntryFor、
   clearMain、shortcuts.find）。
@@ -55,5 +55,5 @@
 ## 边界
 
 - 删除不可恢复；只删磁盘上的会话目录，不碰工作区本身。
-- 加载中的会话删除后，重启应用才会彻底生效（卸载是 best-effort，见上）。
+- 会话正在运行（`session-active`）或活动状态无法确认（`activity-unknown`）时不能删。
 - 归档/置顶集合的清理是 best-effort：失败只记日志，不阻断删除。

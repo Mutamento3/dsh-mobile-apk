@@ -7,10 +7,10 @@
  * - `session-<uuid>` ids only;
  * - a session with running work is refused (409), and an unverifiable activity probe
  *   refuses too — "unknown" is never treated as "idle";
- * - a loaded session is deleted as well: the plugin tries to unload it first, but the
- *   engine exposes no public unload API, so the unload is best-effort. When it does
- *   not take, the response carries `liveRemaining: true` and the client tells the user
- *   to restart the app — the conversation stays readable from memory until then;
+ * - a loaded session is unloaded BEFORE its files go away: `entry.detach()` is the
+ *   engine's own teardown edge (store removal + `session/disposed`, which releases the
+ *   agent, closes persistence state and emits `api-session/removed`). If the unload
+ *   cannot be completed the request fails and the files stay untouched;
  * - archive/pin membership is dropped best-effort before the directory goes away.
  *
  * The client half (session row menu) is the only caller; the route is not a
@@ -161,12 +161,53 @@ async function sessionActivity(ctx, sessionId) {
  * @param {string} sessionId - validated id.
  * @returns {Promise<{ ok: true, sessionId: string, dir: string }>} outcome.
  */
+/**
+ * Take the session out of the host's live set.
+ *
+ * `entry.detach()` is the engine's own teardown edge: it removes the store entry
+ * and emits `session/disposed`, which the agent loop (release), the jsonl
+ * persistence (handle cleanup) and the api-session controller (`api-session/removed`
+ * → sidebar/search/history) all listen to. The engine exposes no public method for
+ * this on a live session, so the plugin drives the same edge directly.
+ * @param {object} ctx - cordis context.
+ * @param {string} sessionId - session to unload.
+ * @returns {{ wasLive: boolean }} whether a live entry was removed.
+ * @throws {SessionDeleteError} `unload-failed` when the session cannot be unloaded.
+ */
+function unloadLiveSession(ctx, sessionId) {
+  const sessions = ctx.get('sessions')
+  const session = sessions?.get?.(sessionId)
+  if (session === undefined) return { wasLive: false }
+  const liveEntryFor = sessions?.liveEntryFor
+  if (typeof liveEntryFor !== 'function') {
+    throw new SessionDeleteError('unload-failed', 'the engine exposes no way to unload a live session; refusing to delete its files', { sessionId })
+  }
+  let entry
+  try {
+    entry = liveEntryFor.call(sessions, session)
+  } catch (error) {
+    throw new SessionDeleteError('unload-failed', `could not resolve the live session entry: ${String(error?.message ?? error)}`, { sessionId })
+  }
+  if (entry === undefined || entry === null || typeof entry.detach !== 'function') {
+    throw new SessionDeleteError('unload-failed', 'the live session has no detach capability', { sessionId })
+  }
+  try {
+    entry.detach()
+  } catch (error) {
+    throw new SessionDeleteError('unload-failed', `detaching the live session failed: ${String(error?.message ?? error)}`, { sessionId })
+  }
+  // 卸载必须真的生效：还在 live 集合里就说明这次删除会留下幽灵会话。
+  if (sessions?.get?.(sessionId) !== undefined) {
+    throw new SessionDeleteError('unload-failed', 'the session is still live after detach', { sessionId })
+  }
+  return { wasLive: true }
+}
+
 export async function removeSession(ctx, sessionId) {
   const sessions = ctx.get('sessions')
   const live = sessions?.get?.(sessionId) !== undefined
   const activity = await sessionActivity(ctx, sessionId)
   const registry = ctx.get('workspaceRegistry')
-  // 先落一行现场再判定：拒绝也要能从 engine.log 看出是 live / 有活动 / 探测失败。
   log(ctx, 'info', 'host delete start', {
     sessionId,
     live,
@@ -181,7 +222,12 @@ export async function removeSession(ctx, sessionId) {
     throw new SessionDeleteError('session-active', 'the conversation is running; stop it before deleting', { sessionId })
   }
 
-  const result = await deleteStoredSession({
+  // 先离开 live 集合，再删磁盘：反过来会留下「目录没了但内存里还在」的幽灵会话。
+  // 卸载失败直接报错并保持文件原状（可恢复），不再 best-effort。
+  const unloaded = unloadLiveSession(ctx, sessionId)
+  if (unloaded.wasLive) log(ctx, 'info', 'unloaded the live session', { sessionId })
+
+  return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
     isActive: false,
@@ -201,27 +247,6 @@ export async function removeSession(ctx, sessionId) {
       }
     },
   })
-
-  // 文件删掉之后才尽力卸载内存会话：反过来的话，一旦删除失败，用户已经丢掉了正在看的
-  // 会话、而文件还在（重启后又冒出来）。卸载失败不改变删除结果，只如实标记 liveRemaining。
-  let liveRemaining = false
-  if (live) {
-    liveRemaining = true
-    try {
-      const session = sessions?.get?.(sessionId)
-      const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
-      if (entry !== undefined && typeof entry.detach === 'function') {
-        entry.detach()
-        liveRemaining = false
-        log(ctx, 'info', 'detached the live session', { sessionId })
-      } else {
-        log(ctx, 'warn', 'live session has no detach capability; it stays in memory until restart', { sessionId })
-      }
-    } catch (error) {
-      log(ctx, 'warn', 'session detach failed; it stays in memory until restart', { sessionId, error: String(error?.message ?? error) })
-    }
-  }
-  return liveRemaining ? { ...result, liveRemaining: true } : result
 }
 
 /**
@@ -234,7 +259,7 @@ function failureOf(error) {
   const status = code === 'invalid-id' || code === 'invalid-body'
     ? 400
     : code === 'not-found' ? 404
-      : code === 'session-active' || code === 'activity-unknown' || code === 'session-loaded' || code === 'ambiguous' ? 409
+      : code === 'session-active' || code === 'activity-unknown' || code === 'unload-failed' || code === 'ambiguous' ? 409
         : 500
   return { status, code, message: String(error?.message ?? error) }
 }

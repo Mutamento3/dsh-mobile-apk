@@ -86,18 +86,28 @@ test('findSessionDir resolves the single matching directory', async () => {
 // ── host 侧编排：removeSession 用注入的 ctx 读活会话/工作区登记，再走同一个核心 ──
 import { removeSession } from '../src/index.js'
 
-function fakeCtx({ live = false, activity = [], registry = {}, detach = null, waterfall = null } = {}) {
+function fakeCtx({ live = false, activity = [], registry = {}, detach = null, waterfall = null, detachThrows = false, noDetachCapability = false } = {}) {
   const calls = []
+  const state = { live }
+  const sessions = {
+    get: (id) => (state.live ? { id, header: { id } } : undefined),
+    flush: async () => { calls.push('flush') },
+  }
+  if (!noDetachCapability) {
+    sessions.liveEntryFor = (session) => ({
+      detach: () => {
+        calls.push('detach:' + session.id)
+        if (detachThrows) throw new Error('detach exploded')
+        if (detach) detach()
+        state.live = false
+      },
+    })
+  }
   const ctx = {
     calls,
+    state,
     get(name) {
-      if (name === 'sessions') {
-        return {
-          get: (id) => (live ? { id, header: { id } } : undefined),
-          liveEntryFor: (session) => ({ detach: () => { calls.push('detach:' + session.id); if (detach) detach() } }),
-          flush: async () => { calls.push('flush') },
-        }
-      }
+      if (name === 'sessions') return sessions
       if (name === 'workspaceRegistry') return registry
       return undefined
     },
@@ -123,23 +133,17 @@ test('removeSession refuses a running session before touching the disk', async (
   }
 })
 
-test('removeSession still deletes a live session without unload capability, flagging liveRemaining', async () => {
+test('removeSession refuses when the engine exposes no unload path (files stay)', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
-    const ctx = {
-      get(name) {
-        // 有 get、没有 liveEntryFor：模拟引擎不提供卸载能力
-        if (name === 'sessions') return { get: (id) => ({ id, header: { id } }) }
-        return undefined
-      },
-      waterfall: async () => [],
-    }
-    const result = await removeSession(ctx, ID)
-    assert.equal(result.ok, true)
-    assert.equal(result.liveRemaining, true)
-    assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
+    const ctx = fakeCtx({ live: true, activity: [], noDetachCapability: true })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'unload-failed',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
@@ -270,7 +274,7 @@ test('a non-array activity probe result refuses instead of guessing idle', async
   }
 })
 
-test('a live session is deleted, then detached (files go first)', async () => {
+test('a live session is unloaded before its files are removed', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
@@ -280,11 +284,29 @@ test('a live session is deleted, then detached (files go first)', async () => {
     const ctx = fakeCtx({ live: true, activity: [], detach: () => { dirPresentAtDetach = existsSync(dir) } })
     const result = await removeSession(ctx, ID)
     assert.equal(result.ok, true)
-    assert.equal(result.liveRemaining, undefined)
+    // 卸载发生在删文件之前：目录此时必须还在。
+    assert.equal(dirPresentAtDetach, true)
     assert.deepEqual(ctx.calls, ['detach:' + ID])
-    // 卸载必须在文件删掉之后：否则删除失败时用户先丢了正在看的会话。
-    assert.equal(dirPresentAtDetach, false)
+    // 卸载后不再 live（api-session/removed 因此会广播）。
+    assert.equal(ctx.get('sessions').get(ID), undefined)
     assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})
+
+test('a detach failure aborts the delete and keeps the files', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = fakeCtx({ live: true, activity: [], detachThrows: true })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'unload-failed',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
@@ -331,7 +353,7 @@ function codeOf(relative) {
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
 }
 
-test('host half never calls private session APIs (flush / liveEntryFor)', () => {
+test('host half never calls the flush API (it requires a live session)', () => {
   const source = codeOf('../src/index.js')
   assert.equal(/\.flush\s*\(/.test(source), false, 'flush(session) requires a live session; the plugin must not call it')
 })

@@ -2,11 +2,11 @@
  * Client half: a "Delete conversation" item in the session row menu.
  *
  * The engine has no delete action (issue #493), so the item asks the host route
- * (`POST /api/session-delete`) to remove the stored session. The host refuses
- * sessions that are still loaded or running, so the deleted one is never the one
- * on screen — the client only hides its row. Deletion is irreversible and always
- * confirmed in a modal — never `window.confirm`, which the Android shell
- * auto-approves.
+ * (`POST /api/session-delete`) to remove the stored session. The host unloads the
+ * session from its live set first (so sidebar/search/history drop it through the
+ * engine's own `api-session/removed`) and only then deletes the files. Deletion is
+ * irreversible and always confirmed in a modal — never `window.confirm`, which the
+ * Android shell auto-approves.
  */
 ;(function () {
   try {
@@ -22,74 +22,6 @@
         var h = react.createElement
 
         var NS = 'session-delete'
-        /**
-         * Session ids this device already deleted. The engine keeps loaded
-         * sessions in memory until the next start, so the row would otherwise
-         * stay visible (and a second click would 404). Hidden ids are applied
-         * as a stylesheet rule on the next load; capped to keep the entry small.
-         */
-        var HIDDEN_KEY = 'dsh.session-delete.hidden'
-        var HIDDEN_LIMIT = 200
-        /** Same tag as the host half so device logs can be grepped by one string. */
-        var TAG = '[dsh-session-delete]'
-        /** 构建戳：build.mjs 用源码哈希替换；与宿主 /api/session-delete-version 比对。 */
-        var BUILD_STAMP = '__BUILD_STAMP__'
-
-        /**
-         * Read the locally deleted session ids.
-         * @returns {string[]} ids, oldest first.
-         */
-        function readHiddenIds() {
-          try {
-            var raw = window.localStorage.getItem(HIDDEN_KEY)
-            var parsed = raw === null ? [] : JSON.parse(raw)
-            return Array.isArray(parsed) ? parsed.filter(function (id) { return typeof id === 'string' }) : []
-          } catch (_) {
-            return []
-          }
-        }
-
-        /**
-         * Remember one deleted session id for the local hide list.
-         * @param {string} sessionId - deleted session.
-         */
-        function rememberHiddenId(sessionId) {
-          try {
-            var ids = readHiddenIds().filter(function (id) { return id !== sessionId })
-            ids.push(sessionId)
-            window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(ids.slice(-HIDDEN_LIMIT)))
-          } catch (_) {
-            /* storage unavailable: the row simply stays visible until restart */
-          }
-        }
-
-        /** Style tag id carrying the local hide rules. */
-        var STYLE_ID = 'dsh-session-delete-hidden'
-
-        /**
-         * Rewrite the local hide rules from the stored ids.
-         *
-         * Runs on load and again right after a delete, so the row disappears
-         * without waiting for a reload (the open-conversation path never reloads).
-         */
-        function refreshHiddenStyles() {
-          var ids = readHiddenIds()
-          var style = document.getElementById(STYLE_ID)
-          if (ids.length === 0) {
-            if (style !== null) style.remove()
-            return
-          }
-          if (style === null) {
-            style = document.createElement('style')
-            style.id = STYLE_ID
-            style.dataset.plugin = 'dsh-session-delete'
-            document.head.appendChild(style)
-          }
-          style.textContent = ids.map(function (id) {
-            return '[data-row-key="session:' + id + '"]{display:none !important}'
-          }).join('\n')
-        }
-
         /**
          * Per-attempt timeout. A local delete answers in ~20ms; anything slower than
          * this is a dead keep-alive socket left over from an engine restart, and
@@ -182,7 +114,7 @@
         function errorText(t, code, fallback) {
           var key = code === 'session-active' ? 'error.active'
             : code === 'activity-unknown' ? 'error.unknown'
-              : code === 'session-loaded' ? 'error.loaded'
+              : code === 'unload-failed' ? 'error.unload'
                 : code === 'not-found' ? 'error.gone'
                   : null
           if (key === null) return fallback
@@ -211,9 +143,7 @@
           'error': '删除失败：{message}',
           'error.active': '这条对话正在运行，请先停止再删除。',
           'error.unknown': '无法确认这条对话是否空闲，已拒绝删除。',
-          'notice.title': '删除完成',
-          'notice.live': '已在本机删除。这条对话仍留在内存中，重启应用后会彻底消失。',
-          'ok': '知道了',
+          'error.unload': '无法从内存卸载这条对话，未删除任何文件。请稍后重试。',
           'error.gone': '这条对话已经不在了。',
           'close': '关闭',
         }
@@ -227,9 +157,7 @@
           'error': 'Delete failed: {message}',
           'error.active': 'This conversation is running. Stop it before deleting.',
           'error.unknown': 'Could not confirm the conversation is idle, so it was not deleted.',
-          'notice.title': 'Deleted',
-          'notice.live': 'Deleted on this device. The conversation is still loaded in memory; restart the app to remove it completely.',
-          'ok': 'Got it',
+          'error.unload': 'Could not unload this conversation from memory, so nothing was deleted. Try again later.',
           'error.gone': 'This conversation no longer exists.',
           'close': 'Close',
         }
@@ -401,13 +329,11 @@
          * @param {object} data - server payload.
          */
         function afterDeleted(sessionId, data) {
-          // live 会话在 host 侧已被拒绝，所以这里删的一定不是正在显示的会话：
-          // 只需把行藏起来（服务端已删，列表刷新后自然消失）。
-          rememberHiddenId(sessionId)
-          refreshHiddenStyles()
+          // 会话已从 Host live 集合卸载（api-session/removed 会广播），侧栏/搜索/历史
+          // 由引擎自己刷新，客户端不做任何隐藏或跳转。
           reportTrace({
             sessionId: sessionId,
-            decision: 'hidden-row-only',
+            decision: 'unloaded-and-deleted',
             alreadyGone: data !== undefined && data.alreadyGone === true,
             url: window.location.href,
           })
@@ -458,8 +384,8 @@
         function DeleteConfirmDialog(props) {
           var target = usePending()
           if (target === null) return null
-          // key 换成会话 id：换一条对话时组件重新挂载，busy/error/notice 不会从
-          // 上一次删除残留过来（否则删完 A 再点 B，会直接显示 A 的「已删除」提示）。
+          // key 换成会话 id：换一条对话时组件重新挂载，busy/error 不会从上一次
+          // 删除残留过来（否则删完 A 再点 B，会直接看到 A 的错误）。
           return h(ConfirmSessionDelete, { key: target.sessionId, target: target, t: props.t })
         }
 
@@ -477,14 +403,10 @@
           var errorPair = react.useState(null)
           var error = errorPair[0]
           var setError = errorPair[1]
-          var noticePair = react.useState(null)
-          var notice = noticePair[0]
-          var setNotice = noticePair[1]
 
           function close() {
             if (busy) return
             setError(null)
-            setNotice(null)
             setPending(null)
           }
 
@@ -515,18 +437,7 @@
             runDelete(sessionId)
               .then(function (data) {
                 clearTimeout(watchdog)
-                localTrace('done', {
-                  sessionId: sessionId,
-                  liveRemaining: data !== undefined && data.liveRemaining === true,
-                  resources: apiResourceTiming(),
-                })
-                // live 会话卸载是 best-effort：没卸掉时不要假装「彻底删完了」，
-                // 把「仍留在内存、重启后彻底消失」如实告诉用户。
-                if (data !== undefined && data.liveRemaining === true) {
-                  setBusy(false)
-                  setNotice(t('notice.live'))
-                  return
-                }
+                localTrace('done', { sessionId: sessionId, resources: apiResourceTiming() })
                 setPending(null)
               })
               .catch(function (reason) {
@@ -545,17 +456,13 @@
           return h(primitives.Modal, {
             open: true,
             onClose: close,
-            title: notice === null ? t('confirm.title') : t('notice.title'),
+            title: t('confirm.title'),
             closeLabel: t('close'),
-            description: notice === null ? t('confirm.desc', { title: target.title }) : notice,
+            description: t('confirm.desc', { title: target.title }),
             footer: h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end' } },
-              notice === null
-                ? [
-                  h('button', { key: 'cancel', type: 'button', style: cancelStyle, disabled: busy, onClick: close }, t('cancel')),
-                  h('button', { key: 'delete', type: 'button', style: deleteStyle, disabled: busy, onClick: confirmDelete },
-                    busy ? t('deleting') : t('delete')),
-                ]
-                : h('button', { type: 'button', style: cancelStyle, onClick: close }, t('ok'))),
+              h('button', { type: 'button', style: cancelStyle, disabled: busy, onClick: close }, t('cancel')),
+              h('button', { type: 'button', style: deleteStyle, disabled: busy, onClick: confirmDelete },
+                busy ? t('deleting') : t('delete'))),
           }, error === null ? null : h('p', {
             role: 'alert',
             style: { margin: '8px 0 0', color: 'var(--dsw-alias-state-error-primary)', fontSize: '12px', lineHeight: '18px' },
@@ -609,13 +516,6 @@
               })
             }, 600)
           }
-          ctx.effect(function () {
-            refreshHiddenStyles()
-            return function () {
-              var style = document.getElementById(STYLE_ID)
-              if (style !== null) style.remove()
-            }
-          }, 'session-delete: hide deleted rows')
           ctx.slots.inject('sidebar.workspaces.session.menu.item', function () {
             return ctx.slots.register({
               name: 'sidebar.workspaces.session.menu.item',
