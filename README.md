@@ -14,7 +14,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的安卓壳。应用名 `DeepCode`，包名 `com.dsharnessmobile.shell`。
 
-> 本项目基于 MIT 开源，仅供学习交流与研究，禁止用于商业或非法用途。
+> 本项目基于 MIT 开源，欢迎二次开发，二次分发，为项目提交建议与反馈。
 > AI 生成内容与执行的操作请自行判断；实验性能力会在对应条目如实标注。
 
 ## 它能做什么
