@@ -12,6 +12,12 @@
       android:name=".BrowserSpikeActivity"
       android:exported="false"
       android:theme="@android:style/Theme.Material.NoActionBar" />
+
+    <!-- BrowserProcessService 的 androidTest 宿主（仅 debug 构建）。 -->
+    <activity
+      android:name=".BrowserRendererHostActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Material.NoActionBar" />
   </application>
 
 </manifest>
