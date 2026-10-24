@@ -362,9 +362,11 @@
                     }) })
                     .catch(function (again) {
                       var message = String(again && again.message ? again.message : again)
-                      trace('error', 'delete failed after retry', { sessionId: target.sessionId, message: message })
-                      setError(message)
-                      setBusy(false)
+                      trace('error', 'delete failed after retry; reloading to rebuild the connection', { sessionId: target.sessionId, message: message })
+                      reportTrace({ event: 'delete-timeout-reload', sessionId: target.sessionId, message: message })
+                      // 两次都超时说明页面这条连接已经死了：重载是唯一可靠的恢复路径
+                      // （删除若已在服务端完成，重载后行会被本地隐藏规则挡住）。
+                      window.location.reload()
                     })
                 }
                 var message = String(reason && reason.message ? reason.message : reason)
@@ -392,6 +394,11 @@
 
         /** @param {object} ctx - cordis client context. */
         function apply(ctx) {
+          // 自证：页面里的这份代码能否连通 host。engine.log 里看到这条，说明
+          // 浏览器→引擎这条路是通的；看不到就说明页面还是旧连接/旧 bundle。
+          setTimeout(function () {
+            reportTrace({ event: 'plugin-loaded', url: window.location.href, hasAbort: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' })
+          }, 1200)
           ctx.effect(function () { return ctx.locale.register(NS, { zh: zh, en: en }) }, 'session-delete: dictionaries')
           ctx.effect(function () {
             refreshHiddenStyles()
