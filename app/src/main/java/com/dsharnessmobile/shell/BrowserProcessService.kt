@@ -425,7 +425,8 @@ class BrowserProcessService : Service() {
           if (loadState == "loading") loadState = "loaded"
           emit(id, JSONObject().put("type", "pageFinished")
             .put("url", finishedUrl).put("title", title).put("generation", generation.get())
-            .put("pageWidth", view.width).put("pageHeight", view.height))
+            .put("pageWidth", view.width).put("pageHeight", view.height)
+            .put("canGoBack", view.canGoBack()).put("canGoForward", view.canGoForward()))
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {

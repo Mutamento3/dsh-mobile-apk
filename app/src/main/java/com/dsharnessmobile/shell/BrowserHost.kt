@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.net.http.SslError
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -94,7 +95,7 @@ internal class BrowserHost(
   /** Complete per-session native authority; polling never changes selected workspace or visibility. */
   private fun tabSummaries(workspace: Workspace = requireWorkspace()): JSONArray {
     val density = dshWebView.resources.displayMetrics.density.coerceAtLeast(0.5f)
-    val profileAvailable = workspace.profile.isAssigned && workspace.profileError.isEmpty()
+    val profileAvailable = (remote != null || workspace.profile.isAssigned) && workspace.profileError.isEmpty()
     val profileReason = workspace.profileError.ifEmpty { if (profileAvailable) "" else "browser-profile-not-ready" }
     val out = JSONArray()
     for (tab in workspace.tabs.values) {
@@ -103,7 +104,8 @@ internal class BrowserHost(
         .apply { tab.uiTabId?.let { put("uiTabId", it) } }
         .put("url", tab.url).put("title", tab.title.take(1024))
         .put("pageGeneration", tab.generation.get()).put("loadState", tab.loadState)
-        .put("canGoBack", tab.view?.canGoBack() == true).put("canGoForward", tab.view?.canGoForward() == true)
+        .put("canGoBack", if (tab.view != null) tab.view!!.canGoBack() else tab.remoteCanGoBack)
+        .put("canGoForward", if (tab.view != null) tab.view!!.canGoForward() else tab.remoteCanGoForward)
         .put("identityId", tab.identityId)
         .put("viewportWidth", tab.requestedViewport?.width ?: (dshWebView.width / density).toInt())
         .put("viewportHeight", tab.requestedViewport?.height ?: (dshWebView.height / density).toInt())
@@ -121,13 +123,107 @@ internal class BrowserHost(
       candidate
     }
     tabs[wanted]?.let { return it }
-    val created = Tab(wanted)
+    val created = Tab(wanted, requireWorkspace())
     tabs[wanted] = created
     if (activeTabId == null) activeTabId = wanted
     return created
   }
 
   private val main = Handler(Looper.getMainLooper())
+
+  // ── 兼容档（process-suffix，WebView<114）执行位 ──────────────────────────
+  /** evaluateJs 序号 → 回调（tier-2；回调统一回主线程再派发）。 */
+  private val pendingJs = HashMap<Int, (String?) -> Unit>()
+
+  private val rendererListener = object : RemoteRendererHost.Listener {
+    override fun onRendererEvent(tabId: String, event: JSONObject) {
+      main.post { applyRendererEvent(tabId, event) }
+    }
+
+    override fun onRendererJsResult(tabId: String, seq: Int, result: JSONObject) {
+      main.post { pendingJs.remove(seq)?.invoke(result.optString("value")) }
+    }
+  }
+
+  // 仅在 MULTI_PROFILE 缺位且 API>=29 时存在；114+ 设备零开销（不建进程不绑定）。
+  private val remote: RemoteRendererHost? =
+    if (!BrowserHostProfile.supported() && Build.VERSION.SDK_INT >= 29) {
+      RemoteRendererHost(activity, allowAnonymousEngineAccess, rendererListener)
+    } else null
+
+  /** 档位解析（PR2 模型）：tier-2 就绪性 = 渲染进程已绑定。 */
+  private val isolation = BrowserIsolation(
+    multiProfileSupported = { BrowserHostProfile.supported() },
+    processSuffixSupported = { remote?.ready == true },
+  )
+
+  init {
+    remote?.connect { remote?.refreshEndpoint() }
+  }
+
+  /** 远端 tabId = 会话键/页 id（各会话页 id 都是 tab-N 序列，必须加前缀避免跨会话碰撞）。 */
+  private fun remoteTabId(workspace: Workspace, tab: Tab): String = workspace.sessionKey + "/" + tab.id
+
+  /** 远端页面事件 → 本地 Tab 状态（主线程；generation 采用远端计数器的单调值）。 */
+  private fun applyRendererEvent(remoteId: String, event: JSONObject) {
+    if (remoteId.isEmpty()) {
+      // 渲染进程断线：全部工作台显式降级，面板/模型立即看到 browser-renderer-unavailable。
+      for (workspace in workspaces.values) {
+        if (workspace.profileError.isEmpty()) workspace.profileError = "browser-renderer-unavailable"
+        for (tab in workspace.tabs.values) tab.remoteCreated = false
+      }
+      lastError = "browser-renderer-unavailable"
+      applyVisibility()
+      return
+    }
+    val slash = remoteId.indexOf('/')
+    if (slash <= 0) return
+    val workspace = workspaces[remoteId.substring(0, slash)] ?: return
+    val tab = workspace.tabs[remoteId.substring(slash + 1)] ?: return
+    when (event.optString("type")) {
+      "pageStarted" -> {
+        tab.generation.set(maxOf(event.optLong("generation", 0L), tab.generation.get() + 1))
+        synchronized(tab.refs) { tab.refs.clear() }
+        tab.errorPageUrl = null
+        tab.url = event.optString("url", tab.url)
+        tab.title = ""
+        tab.loadState = "loading"
+        tab.reason = ""
+      }
+      "pageFinished" -> {
+        tab.url = event.optString("url", tab.url)
+        if (tab.loadState == "loading") tab.loadState = "loaded"
+        tab.title = event.optString("title", tab.title)
+        tab.pageWidth = event.optInt("pageWidth", tab.pageWidth)
+        tab.pageHeight = event.optInt("pageHeight", tab.pageHeight)
+        tab.remoteCanGoBack = event.optBoolean("canGoBack", tab.remoteCanGoBack)
+        tab.remoteCanGoForward = event.optBoolean("canGoForward", tab.remoteCanGoForward)
+      }
+      "title" -> tab.title = event.optString("title", tab.title)
+      "loadError" -> {
+        tab.errorPageUrl = event.optString("url")
+        tab.url = event.optString("url", tab.url)
+        tab.loadState = "error"
+        tab.reason = event.optString("reason", "load-error")
+      }
+      "sslError" -> {
+        tab.loadState = "error"
+        tab.reason = event.optString("reason", "ssl-error-cancelled")
+      }
+      "scroll" -> {
+        tab.scrollY = event.optInt("y", tab.scrollY)
+        tab.scrollDirection = event.optInt("direction", tab.scrollDirection)
+      }
+      "renderGone" -> {
+        tab.generation.incrementAndGet()
+        tab.snapshotGeneration = -1L
+        synchronized(tab.refs) { tab.refs.clear() }
+        tab.remoteCreated = false
+        tab.loadState = "error"
+        tab.reason = event.optString("reason", "renderer-crashed")
+      }
+    }
+  }
 
   /**
    * 一个浏览器标签页的**全部页面级状态**（0.14.0 多页签）。
@@ -137,7 +233,7 @@ internal class BrowserHost(
    * browser_close_tab，模型因此「以为」能同时控多个网页（用户实测：开三个站点只有一页生效）。
    * 每个 tab 一份状态后，工具承诺与原生能力才对齐。
    */
-  private inner class Tab(val id: String) {
+  private inner class Tab(val id: String, val owner: Workspace) {
     var uiTabId: String? = null
     var reason = ""
     var requestedViewport: RequestedViewport? = null
@@ -148,6 +244,10 @@ internal class BrowserHost(
     var identityScriptHandler: ScriptHandler? = null
     val docStartHandlers = mutableListOf<ScriptHandler>()
     var view: WebView? = null
+    /** tier-2（process-suffix）：远端渲染器里该页的执行位是否已建立。 */
+    var remoteCreated = false
+    var remoteCanGoBack = false
+    var remoteCanGoForward = false
     var url = "about:blank"
     var title = ""
     var loadState = "idle"
@@ -245,9 +345,16 @@ internal class BrowserHost(
         browser.destroy()
       }
       tab.view = null
+      if (remote != null && tab.remoteCreated) {
+        tab.remoteCreated = false
+        runCatching { remote!!.renderer?.destroyTab(remoteTabId(workspace, tab)) }
+      }
       tab.snapshotGeneration = -1L
     }
-    try { workspace.profile.dispose() } catch (_: Throwable) {
+    if (remote != null) {
+      // tier-2 无 profile 对象；等价收尾 = flush cookie（保留登录数据的语义与 tier-1 dispose 一致）。
+      runCatching { remote!!.renderer?.flushCookies() }
+    } else try { workspace.profile.dispose() } catch (_: Throwable) {
       workspace.profileError = "browser-profile-dispose-failed"
       lastError = workspace.profileError
     }
@@ -437,20 +544,20 @@ internal class BrowserHost(
       }
       workspace.activeTabId = target.id
       if (action == "select") return@onMain nativeReply(workspace, target).toString()
-      val browser = ensureViewFor(target)
+      ensureSurface(target)
         ?: return@onMain nativeReply(workspace, target, workspace.profileError.ifEmpty { "browser-not-created" }).toString()
       if (action == "open") {
         val address = args.opt("url") as? String
         if (address == null || address.length > 16_384) return@onMain nativeReply(workspace, target, "unsupported-url").toString()
-        val normalized = workspace.profile.normalize(address)
+        val normalized = normalizeForWorkspace(workspace, address)
           ?: return@onMain nativeReply(workspace, target, "unsupported-url").toString()
         invalidateNavigation(target)
         target.url = normalized
-        browser.loadUrl(normalized)
+        loadInto(target, normalized)
       } else when (action) {
-        "back" -> if (browser.canGoBack()) { invalidateNavigation(target); browser.goBack() }
-        "forward" -> if (browser.canGoForward()) { invalidateNavigation(target); browser.goForward() }
-        "reload" -> { invalidateNavigation(target); browser.reload() }
+        "back" -> if (goBackTab(target)) invalidateNavigation(target)
+        "forward" -> if (goForwardTab(target)) invalidateNavigation(target)
+        "reload" -> { invalidateNavigation(target); reloadTab(target) }
       }
       nativeReply(workspace, target).toString()
     } finally {
@@ -469,11 +576,11 @@ internal class BrowserHost(
     .put("profileAvailable", false).put("profileReason", reason).put("reason", reason).toString()
 
   private fun nativeReply(workspace: Workspace, tab: Tab? = null, reason: String = ""): JSONObject {
-    val supported = BrowserHostProfile.supported()
-    val available = supported && workspace.profileError.isEmpty()
-    val isolated = available && workspace.profile.isAssigned
+    val tierOk = isolation.tier() != BrowserIsolationTier.UNAVAILABLE
+    val available = tierOk && workspace.profileError.isEmpty()
+    val isolated = available && (remote != null || workspace.profile.isAssigned)
     val profileReason = workspace.profileError.ifEmpty {
-      if (!supported) "browser-profile-unsupported" else if (!isolated) "browser-profile-not-ready" else ""
+      if (!tierOk) "browser-profile-unsupported" else if (!isolated) "browser-profile-not-ready" else ""
     }
     return JSONObject().put("ok", available && reason.isEmpty()).put("available", available)
       .put("session", workspace.sessionKey).put("ownerSessionId", workspace.sessionKey)
@@ -499,14 +606,15 @@ internal class BrowserHost(
   fun show(rawUrl: String?): String = onMain {
     val payload = showPayload(rawUrl)
     switchTo(workspaceFor(payload.second ?: viewerSessionId))
-    val browser = ensureView() ?: return@onMain rejected(lastError)
+    val shownTab = ensureTab(null)
+    ensureSurface(shownTab) ?: return@onMain rejected(lastError)
     val target = normalizeUrl(payload.first)
     if (payload.first?.isNotEmpty() == true && target == null) {
       lastError = "unsupported-url"
       return@onMain rejected(lastError)
     }
     requestedVisible = true
-    if (target != null && target != url) browser.loadUrl(target)
+    if (target != null && target != url) loadInto(shownTab, target)
     applyVisibility()
     status().toString()
   } ?: unavailable("main-thread-timeout")
@@ -541,25 +649,26 @@ internal class BrowserHost(
 
   /** Reload the current page only when a BrowserHost tab exists. */
   fun reload(): String = onMain {
-    val browser = view
-    if (browser == null) {
+    val reloadTarget = activeTab()
+    if (!surfaceReady(reloadTarget)) {
       lastError = "browser-not-created"
       return@onMain rejected(lastError)
     }
-    browser.reload()
+    reloadTab(reloadTarget!!)
     status().toString()
   } ?: unavailable("main-thread-timeout")
 
   /** Navigate only in a verified nonDefault profile; protected engine and unsafe URLs stay denied. */
   fun navigate(rawUrl: String): String = onMain {
-    val browser = ensureView() ?: return@onMain rejected(lastError)
+    val navTab = ensureTab(null)
+    ensureSurface(navTab) ?: return@onMain rejected(lastError)
     val target = normalizeUrl(rawUrl)
     if (target == null) {
       lastError = "unsupported-url"
       return@onMain rejected(lastError)
     }
     requestedVisible = true
-    browser.loadUrl(target)
+    loadInto(navTab, target)
     applyVisibility()
     status().toString()
   } ?: unavailable("main-thread-timeout")
@@ -651,7 +760,7 @@ internal class BrowserHost(
         val next = if (id == "device") null else RequestedViewport(id.ifBlank { "$width x $height" }, width, height)
         val changed = next != appliedViewport
         requestedViewport = next
-        if (changed && view != null) recycleView() else applyStageBounds()
+        if (changed && surfaceReady(activeTab())) recycleView() else applyStageBounds()
         status()
       }.toString()
     } catch (_: Throwable) { rejected("invalid-viewport") }
@@ -800,6 +909,11 @@ internal class BrowserHost(
       root.removeOnLayoutChangeListener(rootLayoutListener)
       // Activity disposal owns every workspace, not just the currently visible session.
       for (workspace in workspaces.values.toList()) dropWorkspace(workspace)
+      remote?.let { rh ->
+        runCatching { rh.renderer?.destroyAll() }
+        rh.disconnect()
+        rh.detachHostSurface()
+      }
       workspaces.clear()
       currentWorkspace = null
       Unit
@@ -836,6 +950,35 @@ internal class BrowserHost(
     if (existing != null) {
       if (workspace.profileError.isEmpty() && workspace.profile.isAssigned) return existing
       lastError = workspace.profileError.ifEmpty { "browser-profile-not-ready" }
+      return null
+    }
+    val rh = remote
+    if (rh != null) {
+      // tier-2：执行位在 :browser 渲染进程；进程边界即隔离，不存在 profile API 面。
+      if (tab.remoteCreated && workspace.profileError.isEmpty()) return null
+      if (!rh.ready && !rh.awaitBound(8L)) {
+        workspace.profileError = "browser-renderer-unavailable"
+        lastError = workspace.profileError
+        tab.loadState = "error"
+        return null
+      }
+      rh.refreshEndpoint()
+      val size = lastStageSize ?: (dshWebView.width.coerceAtLeast(320) to dshWebView.height.coerceAtLeast(480))
+      val config = JSONObject()
+        .put("widthPx", size.first).put("heightPx", size.second)
+        .put("identityId", tab.identityId).put("ua", tab.identityUa)
+        .put("viewportCssWidth", tab.requestedViewport?.width ?: 0)
+      val result = runCatching { rh.renderer?.ensureTab(remoteTabId(workspace, tab), root.windowToken, config.toString()) }
+        .getOrNull()?.let { runCatching { JSONObject(it) }.getOrNull() }
+      if (result == null || !result.optBoolean("ok")) {
+        workspace.profileError = result?.optString("reason")?.takeIf { it.isNotEmpty() } ?: "browser-renderer-unavailable"
+        lastError = workspace.profileError
+        tab.loadState = "error"
+        return null
+      }
+      rh.setProjectionSize(remoteTabId(workspace, tab), size.first, size.second)
+      tab.remoteCreated = true
+      workspace.profileError = ""
       return null
     }
     val sessionProfile = workspace.profile
@@ -1074,6 +1217,28 @@ internal class BrowserHost(
         topMargin = positionedTop
       }
     }
+    val rh = remote
+    if (rh != null) {
+      // tier-2：宿主 SurfaceView 布局到同一物理矩形，并同步远端 SCVH 窗口尺寸
+      //（spike 实锤：复用 WebView 的 SCVH 换手后需显式 layout 促使渲染器视口跟随）。
+      rh.attachHostSurface(root)
+      rh.hostSurface?.let { surface ->
+        val lp = surface.layoutParams as? FrameLayout.LayoutParams
+        if (lp == null || lp.width != width || lp.height != height ||
+          lp.leftMargin != positionedLeft || lp.topMargin != positionedTop
+        ) {
+          surface.layoutParams = FrameLayout.LayoutParams(width.coerceAtLeast(1), height.coerceAtLeast(1)).apply {
+            leftMargin = positionedLeft
+            topMargin = positionedTop
+          }
+        }
+      }
+      activeTab()?.let { tab ->
+        val rid = remoteTabId(tab.owner, tab)
+        rh.setProjectionSize(rid, width, height)
+        runCatching { rh.renderer?.relayout(rid, width, height) }
+      }
+    }
     stageVisible = true
     applyVisibility()
     // A repeated live lease can be the only signal after a renderer/surface stops drawing.
@@ -1126,6 +1291,28 @@ internal class BrowserHost(
         tab.view?.visibility = if (visible && tab.id == workspace.activeTabId) View.VISIBLE else View.INVISIBLE
       }
     }
+    val rh = remote ?: return
+    // tier-2：可见性 = 挂载哪个 tab 的投影包 + 输入焦点归属；SurfaceView 自身 INVISIBLE 即不打洞。
+    val currentWs = currentWorkspace
+    var visibleTab: Tab? = null
+    if (currentWs != null) {
+      val visibleNow = BrowserOverlayPolicy.visible(
+        isCurrent = true,
+        requestedVisible = currentWs.requestedVisible,
+        stageVisible = currentWs.stageVisible,
+        boundsAgeMs = BrowserOverlayPolicy.boundsAge(currentWs.boundsAt, now),
+        ttlMs = BrowserOverlayPolicy.STAGE_BOUNDS_TTL_MS,
+      )
+      if (visibleNow) visibleTab = currentWs.activeTabId?.let { currentWs.tabs[it] }
+    }
+    if (visibleTab != null && surfaceReady(visibleTab)) {
+      val rid = remoteTabId(visibleTab.owner, visibleTab)
+      rh.setActiveInputTab(rid)
+      rh.showTab(rid)
+    } else {
+      rh.setActiveInputTab(null)
+      rh.hideSurface()
+    }
   }
 
   /**
@@ -1171,7 +1358,7 @@ internal class BrowserHost(
    * （后者始终由阶段 bounds 下推的真实舞台决定）。
    */
   private fun layoutDetached() {
-    val browser = view ?: return
+    val browser = view
     // 尺寸优先级（越靠前越贴合「用户/AI 预期的那块画布」）：
     //   ① 用户刚见过的舞台尺寸；② 显式请求的分辨率档（browser_set_viewport 的物理像素）；
     //   ③ 主 UI WebView 的可用尺寸（= 手机可用视口，最合理的通用兜底）；④ 640x960 常量兜底。
@@ -1189,6 +1376,16 @@ internal class BrowserHost(
     val uiH = dshWebView.height.coerceAtLeast(1)
     val w = (stage?.first ?: preset?.width ?: uiW.coerceAtLeast(320)).coerceAtLeast(1)
     val h = (stage?.second ?: preset?.height ?: uiH.coerceAtLeast(480)).coerceAtLeast(1)
+    remote?.let { rh ->
+      // tier-2：舞台不可见≠页面可以不排版——远端窗口同样保持非退化尺寸，只把投影藏起来。
+      activeTab()?.let { tab ->
+        val rid = remoteTabId(tab.owner, tab)
+        rh.setProjectionSize(rid, w, h)
+        runCatching { rh.renderer?.relayout(rid, w, h) }
+      }
+      return
+    }
+    if (browser == null) return
     val lp = browser.layoutParams as? FrameLayout.LayoutParams
     if (lp != null && lp.width == w && lp.height == h) return
     browser.layoutParams = FrameLayout.LayoutParams(w, h)
@@ -1196,26 +1393,27 @@ internal class BrowserHost(
 
   private fun status(): JSONObject {
     val density = dshWebView.resources.displayMetrics.density.coerceAtLeast(0.5f)
-    val isolationTier = BrowserIsolation.DEFAULT.tier()
+    val isolationTier = isolation.tier()
     val isolationAvailable = isolationTier != BrowserIsolationTier.UNAVAILABLE && currentWorkspace?.profileError.isNullOrEmpty()
+    val profileEstablished = isolationAvailable && (remote != null || currentWorkspace?.profile?.isAssigned == true)
     return JSONObject()
       .put("ok", isolationAvailable)
       .put("available", isolationAvailable)
       .put("isolationTier", isolationTier.wire)
-      .put("profileAvailable", isolationAvailable && currentWorkspace?.profile?.isAssigned == true)
-      .put("profileReason", currentWorkspace?.profileError.orEmpty().ifEmpty { if (currentWorkspace?.profile?.isAssigned == true) "" else if (isolationAvailable) "browser-profile-not-ready" else "browser-profile-unsupported" })
+      .put("profileAvailable", profileEstablished)
+      .put("profileReason", currentWorkspace?.profileError.orEmpty().ifEmpty { if (profileEstablished) "" else if (isolationAvailable) "browser-profile-not-ready" else "browser-profile-unsupported" })
       .put("session", currentWorkspace?.sessionKey ?: "")
       .put("multiProfileSupported", BrowserHostProfile.supported())
-      .put("profileIsolation", if (currentWorkspace?.profile?.isAssigned == true) "isolated" else if (isolationAvailable) "not-created" else "unavailable")
-      .put("profileName", currentWorkspace?.profile?.takeIf { it.isAssigned }?.name ?: "")
-      .put("created", view != null)
-      .put("visible", view?.visibility == View.VISIBLE)
+      .put("profileIsolation", if (profileEstablished) "isolated" else if (isolationAvailable) "not-created" else "unavailable")
+      .put("profileName", currentWorkspace?.profile?.takeIf { it.isAssigned }?.name ?: if (remote != null) BrowserProcessService.SUFFIX else "")
+      .put("created", view != null || activeTab()?.remoteCreated == true)
+      .put("visible", view?.visibility == View.VISIBLE || (view == null && remote?.hostSurface?.visibility == View.VISIBLE))
       .put("url", url)
       .put("title", title)
       .put("loadState", loadState)
       .put("pageGeneration", generation.get())
-      .put("canGoBack", view?.canGoBack() == true)
-      .put("canGoForward", view?.canGoForward() == true)
+      .put("canGoBack", activeTab()?.let { if (it.view != null) it.view!!.canGoBack() else it.remoteCanGoBack } == true)
+      .put("canGoForward", activeTab()?.let { if (it.view != null) it.view!!.canGoForward() else it.remoteCanGoForward } == true)
       .put("identityId", identityId)
       // 会话标识改为「当前工作台的会话」：每个会话各有自己的页面与代次，不再是全局归属。
       .put("ownerSessionId", currentWorkspace?.sessionKey ?: "")
@@ -1253,7 +1451,7 @@ internal class BrowserHost(
     .toString()
 
   /** Isolation is established before this helper can admit any address. */
-  private fun normalizeUrl(raw: String?): String? = currentWorkspace?.profile?.normalize(raw)
+  private fun normalizeUrl(raw: String?): String? = currentWorkspace?.let { normalizeForWorkspace(it, raw) }
 
   /** 浏览器风格错误页（无脚本、无桥；重试链接为绝对 http(s) URL）。真源在 BrowserTabResources。 */
   private fun errorPageHtml(failedUrl: String, code: Int, description: String): String =
@@ -1269,7 +1467,7 @@ internal class BrowserHost(
     val documentStart = WebViewShim.supports(WebViewFeature.DOCUMENT_START_SCRIPT)
     val uaCh = WebViewShim.supports(WebViewFeature.USER_AGENT_METADATA)
     val multiProfile = BrowserHostProfile.supported()
-    val isolationTier = BrowserIsolation.DEFAULT.tier()
+    val isolationTier = isolation.tier()
     val isolationAvailable = isolationTier != BrowserIsolationTier.UNAVAILABLE && currentWorkspace?.profileError.isNullOrEmpty()
     return JSONObject()
       .put("ok", isolationAvailable)
@@ -1290,7 +1488,7 @@ internal class BrowserHost(
       .put("screenWidth", metrics.widthPixels)
       .put("screenHeight", metrics.heightPixels)
       .put("densityDpi", metrics.densityDpi)
-      .put("rendererProcesses", 0)
+      .put("rendererProcesses", if (remote?.ready == true) 1 else 0)
       .put("browserWebViewAvailable", isolationAvailable)
       .put("cdpEnabled", false)
       .put("viewportId", requestedViewport?.id ?: "device")
@@ -1358,15 +1556,15 @@ internal class BrowserHost(
       tab.identityId = nextIdentity
       tab.identityUa = nextUa
       // Rebuild at most once. Never replay the previous URL/form before the requested navigation.
-      if (reconfigure && tab.view != null) recycleView(reloadPreviousUrl = false)
-      val browser = ensureViewFor(tab) ?: return@controlOnMain status().put("ok", false)
-      val normalized = workspace.profile.normalize(raw) ?: return@controlOnMain status().put("ok", false)
+      if (reconfigure && surfaceReady(tab)) recycleView(reloadPreviousUrl = false)
+      ensureSurface(tab) ?: return@controlOnMain status().put("ok", false)
+      val normalized = normalizeForWorkspace(workspace, raw) ?: return@controlOnMain status().put("ok", false)
         .put("reason", "unsupported-url")
       workspace.modelTabId = tab.id
       invalidateNavigation(tab)
       tab.url = normalized
       val before = tab.generation.get()
-      browser.loadUrl(normalized)
+      loadInto(tab, normalized)
       JSONObject().put("__go", true).put("__before", before).put("__cold", cold)
     }
     if (!started.optBoolean("__go", false)) return started
@@ -1404,7 +1602,7 @@ internal class BrowserHost(
         target.workspace.modelTabId = tab.id
         val changed = requestedViewport != null
         requestedViewport = null
-        if (changed && view != null) recycleView() else applyStageBounds()
+        if (changed && surfaceReady(activeTab())) recycleView() else applyStageBounds()
         status().put("route", route).put("width", 0).put("height", 0)
       }
     }
@@ -1464,7 +1662,7 @@ internal class BrowserHost(
     val changed = profile != identityId || nextUa != identityUa || requestedViewport != appliedViewport
     identityId = profile
     identityUa = nextUa
-    if (view == null) {
+    if (activeTab()?.let { surfaceReady(it) } != true) {
       // 页面尚未建立：状态已记下，建页时按此应用（不报错、不假装已应用脚本）。
       return identityResult(profile, false, false)
     }
@@ -1476,7 +1674,7 @@ internal class BrowserHost(
     }
     if (!currentWorkspace?.profileError.isNullOrEmpty()) return status().put("ok", false)
     val reloaded = url != "about:blank"
-    return identityResult(profile, identityScriptHandler != null, reloaded)
+    return identityResult(profile, identityScriptHandler != null || (remote != null && activeTab()?.remoteCreated == true), reloaded)
   }
 
   private fun identityUaFor(profile: String, ua: String): String = if (profile == "android-real") "" else ua.ifBlank {
@@ -1522,6 +1720,26 @@ internal class BrowserHost(
    * document-start 脚本无法可靠替换（旧脚本会继续生效），故视口或身份变化一律重建。
    */
   private fun recycleView(reloadPreviousUrl: Boolean = true) {
+    val rh = remote
+    if (rh != null) {
+      // tier-2：recycle = 销毁远端页 → 按新身份/视口重建 → 重放 URL（doc-start 脚本不可替换）。
+      val tab = activeTab() ?: return
+      val reloadTarget = url.takeIf { reloadPreviousUrl && it != "about:blank" }
+      if (tab.remoteCreated) {
+        runCatching { rh.renderer?.destroyTab(remoteTabId(tab.owner, tab)) }
+        tab.remoteCreated = false
+      }
+      tab.generation.incrementAndGet()
+      tab.snapshotGeneration = -1L
+      synchronized(tab.refs) { tab.refs.clear() }
+      tab.loadState = "idle"
+      ensureViewFor(tab)
+      if (reloadTarget != null && requireWorkspace().profileError.isEmpty()) {
+        normalizeUrl(reloadTarget)?.let { loadInto(tab, it) }
+      }
+      applyVisibility()
+      return
+    }
     val browser = view ?: return
     val reloadTarget = url.takeIf { reloadPreviousUrl && it != "about:blank" }
     recycling = true
@@ -1597,6 +1815,10 @@ internal class BrowserHost(
       browser.destroy()
     }
     tab.view = null
+    if (remote != null && tab.remoteCreated) {
+      tab.remoteCreated = false
+      runCatching { remote!!.renderer?.destroyTab(remoteTabId(tab.owner, tab)) }
+    }
     tabs.remove(tab.id)
     if (workspace.modelTabId == tab.id) workspace.modelTabId = tabs.keys.firstOrNull()
     if (tabs.isEmpty()) {
@@ -1640,30 +1862,35 @@ internal class BrowserHost(
     return awaitMain(8_000) { done ->
       targetProblem(target)?.let { done(targetFailure(target, it)); return@awaitMain }
       val tab = target.tab
-      val browser = tab?.view
-      if (browser == null) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
-      browser.evaluateJavascript(expr, ValueCallback { raw ->
-        targetProblem(target, browser)?.let { done(targetFailure(target, it)); return@ValueCallback }
-        val value = decodeJs(raw)
-        done(pageReply(target).put("ok", true).put("value", when (value) {
-          null -> ""
-          is String -> value
-          else -> value.toString()
-        }))
-      })
+      if (tab == null || !surfaceReady(tab)) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
+      evaluateOnTab(tab, expr) { raw ->
+        val problem = targetProblem(target, tab.view)
+        if (problem != null) {
+          done(targetFailure(target, problem))
+        } else {
+          val value = decodeJs(raw)
+          done(pageReply(target).put("ok", true).put("value", when (value) {
+            null -> ""
+            is String -> value
+            else -> value.toString()
+          }))
+        }
+      }
     }
   }
 
   private fun snapshotOp(target: ControlTarget): JSONObject = awaitMain(8_000) { done ->
     targetProblem(target)?.let { done(targetFailure(target, it)); return@awaitMain }
     val tab = target.tab
-    val browser = tab?.view
-    if (tab == null || browser == null) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
+    if (tab == null || !surfaceReady(tab)) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
     val startedGeneration = tab.generation.get()
-    browser.evaluateJavascript(SNAPSHOT_JS, ValueCallback { raw ->
-      targetProblem(target, browser)?.let { done(targetFailure(target, it)); return@ValueCallback }
+    evaluateOnTab(tab, SNAPSHOT_JS) { raw ->
+      val problem = targetProblem(target, tab.view)
+      if (problem != null) {
+        done(targetFailure(target, problem)); return@evaluateOnTab
+      }
       if (tab.generation.get() != startedGeneration) {
-        done(targetFailure(target, "stale-page-generation")); return@ValueCallback
+        done(targetFailure(target, "stale-page-generation")); return@evaluateOnTab
       }
       try {
         val payload = decodeJsObject(raw) ?: throw IllegalStateException("snapshot-unparsable")
@@ -1683,7 +1910,7 @@ internal class BrowserHost(
       } catch (t: Throwable) {
         done(targetFailure(target, "snapshot-failed").put("detail", t.javaClass.simpleName + ": " + (t.message ?: "")))
       }
-    })
+    }
   }
 
   /** Main-thread ref validation on the captured tab, both before JS and before native tap dispatch. */
@@ -1717,35 +1944,37 @@ internal class BrowserHost(
     return awaitMain(8_000) { done ->
       resolveRef(args, target)?.let { done(it); return@awaitMain }
       val tab = target.tab!!
-      val browser = tab.view
-      if (browser == null) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
+      if (!surfaceReady(tab)) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
       val startedGeneration = tab.generation.get()
-      browser.evaluateJavascript(RESOLVE_REF_JS.replace("__REF__", ref), ValueCallback { raw ->
-        targetProblem(target, browser)?.let { done(targetFailure(target, it)); return@ValueCallback }
-        resolveRef(args, target)?.let { done(it); return@ValueCallback }
+      evaluateOnTab(tab, RESOLVE_REF_JS.replace("__REF__", ref)) { raw ->
+        val problem = targetProblem(target, tab.view)
+        val earlyReject = problem?.let { targetFailure(target, it) } ?: resolveRef(args, target)
+        if (earlyReject != null) { done(earlyReject); return@evaluateOnTab }
         val payload = decodeJsObject(raw)
         if (payload == null || !payload.optBoolean("found")) {
-          done(targetFailure(target, "stale-ref").put("ref", ref)); return@ValueCallback
+          done(targetFailure(target, "stale-ref").put("ref", ref)); return@evaluateOnTab
         }
         if (payload.optBoolean("disabled", false)) {
-          done(targetFailure(target, "element-disabled").put("ref", ref)); return@ValueCallback
+          done(targetFailure(target, "element-disabled").put("ref", ref)); return@evaluateOnTab
         }
         val vw = payload.optDouble("vw", 0.0)
         val vh = payload.optDouble("vh", 0.0)
-        if (vw <= 0.0 || vh <= 0.0 || browser.width <= 0 || browser.height <= 0) {
-          done(targetFailure(target, "viewport-unavailable")); return@ValueCallback
+        val viewW = tabViewportSize(tab).first
+        val viewH = tabViewportSize(tab).second
+        if (vw <= 0.0 || vh <= 0.0 || viewW <= 0 || viewH <= 0) {
+          done(targetFailure(target, "viewport-unavailable")); return@evaluateOnTab
         }
-        val viewX = (payload.optDouble("x") * browser.width / vw).toFloat()
-        val viewY = (payload.optDouble("y") * browser.height / vh).toFloat()
-        dispatchTap(browser, viewX, viewY)
+        val viewX = (payload.optDouble("x") * viewW / vw).toFloat()
+        val viewY = (payload.optDouble("y") * viewH / vh).toFloat()
+        tapOnTab(tab, viewX, viewY)
         main.postDelayed({
-          val problem = targetProblem(target, browser)
+          val problem = targetProblem(target, tab.view)
           if (problem != null) done(targetFailure(target, problem)) else {
             done(pageReply(target).put("ok", true).put("ref", ref)
               .put("changed", tab.generation.get() != startedGeneration))
           }
         }, 220)
-      })
+      }
     }
   }
 
@@ -1757,18 +1986,18 @@ internal class BrowserHost(
     return awaitMain(8_000) { done ->
       resolveRef(args, target)?.let { done(it); return@awaitMain }
       val tab = target.tab!!
-      val browser = tab.view
-      if (browser == null) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
+      if (!surfaceReady(tab)) { done(targetFailure(target, "browser-not-created")); return@awaitMain }
       val startedGeneration = tab.generation.get()
-      browser.evaluateJavascript(script, ValueCallback { raw ->
-        targetProblem(target, browser)?.let { done(targetFailure(target, it)); return@ValueCallback }
+      evaluateOnTab(tab, script) { raw ->
+        val problem = targetProblem(target, tab.view)
+        if (problem != null) { done(targetFailure(target, problem)); return@evaluateOnTab }
         if (tab.generation.get() != startedGeneration) {
-          done(targetFailure(target, "stale-page-generation")); return@ValueCallback
+          done(targetFailure(target, "stale-page-generation")); return@evaluateOnTab
         }
         val payload = decodeJsObject(raw)
         if (payload == null || !payload.optBoolean("found")) done(targetFailure(target, "stale-ref").put("ref", ref))
         else done(pageReply(target).put("ok", true).put("ref", ref).put("value", payload.optString("value", "")))
-      })
+      }
     }
   }
 
@@ -1782,18 +2011,37 @@ internal class BrowserHost(
       .put("guidance", "支持 Enter/Tab/Escape/Backspace/Delete/方向键/PageUp/PageDown/Home/End，或单个可打印字符。")
     return controlOnMain(target) {
       val tab = target.tab ?: return@controlOnMain targetFailure(target, "browser-not-created")
-      val browser = tab.view ?: return@controlOnMain targetFailure(target, "browser-not-created")
+      if (!surfaceReady(tab)) return@controlOnMain targetFailure(target, "browser-not-created")
       if (args.has("pageGeneration") && args.optLong("pageGeneration", -1L) != tab.generation.get()) {
         return@controlOnMain targetFailure(target, "stale-page-generation")
       }
       // Explicit dispatch does not take focus from another Session's trusted editor/stage.
-      dispatchKey(browser, keyCode)
+      keyOnTab(tab, keyCode)
       status().put("ok", true).put("key", rawKey)
     }
   }
 
   private fun shotOp(args: JSONObject, target: ControlTarget): JSONObject = controlOnMain(target) {
-    val browser = target.tab?.view ?: return@controlOnMain targetFailure(target, "browser-not-created")
+    val tab = target.tab ?: return@controlOnMain targetFailure(target, "browser-not-created")
+    if (!surfaceReady(tab)) return@controlOnMain targetFailure(target, "browser-not-created")
+    val rh = remote
+    if (rh != null) {
+      // tier-2：渲染进程 draw → PNG → 应用私有目录（与 tier-1 同一交付语义）。
+      val png = rh.capturePng(remoteTabId(tab.owner, tab), 1600, 2400)
+        ?: return@controlOnMain targetFailure(target, "shot-failed:renderer")
+      val dir = File(File(activity.filesDir, "home/tmp"), "dsh-tmp").apply { mkdirs() }
+      val file = File.createTempFile("browser-shot-", ".png", dir)
+      FileOutputStream(file).use { it.write(png) }
+      // PNG IHDR 宽高（字节 16..23 大端）——不做整图解码。
+      val w = if (png.size > 24) ((png[16].toInt() and 0xff) shl 24 or ((png[17].toInt() and 0xff) shl 16)
+        or ((png[18].toInt() and 0xff) shl 8) or (png[19].toInt() and 0xff)) else 0
+      val h = if (png.size > 24) ((png[20].toInt() and 0xff) shl 24 or ((png[21].toInt() and 0xff) shl 16)
+        or ((png[22].toInt() and 0xff) shl 8) or (png[23].toInt() and 0xff)) else 0
+      return@controlOnMain pageReply(target).put("ok", true).put("path", file.absolutePath).put("bytes", file.length())
+        .put("width", w).put("height", h).put("health", "ok")
+        .apply { if (!args.optBoolean("inline", false)) put("note", "截图落在应用私有目录的引擎可读路径；工具层读完即删。") }
+    }
+    val browser = tab.view ?: return@controlOnMain targetFailure(target, "browser-not-created")
     try {
       if (browser.width <= 0 || browser.height <= 0) return@controlOnMain targetFailure(target, "viewport-unavailable")
       val bitmap = Bitmap.createBitmap(browser.width, browser.height, Bitmap.Config.ARGB_8888)
@@ -1856,6 +2104,92 @@ internal class BrowserHost(
     is String -> try { JSONObject(value) } catch (_: Throwable) { null }
     else -> null
   }
+
+  // ── tier 分派的视图原语（tier-1 = 本地 WebView；tier-2 = :browser 渲染进程）────
+
+  private fun surfaceReady(tab: Tab?): Boolean =
+    tab != null && (tab.view != null || (remote != null && tab.remoteCreated))
+
+  /** 与 ensureViewFor 同语义，但 tier-2 以「远端执行位已建立」为成功判据。 */
+  private fun ensureSurface(tab: Tab): Tab? {
+    val browser = ensureViewFor(tab)
+    if (browser != null) return tab
+    return if (remote != null && tab.remoteCreated && requireWorkspace().profileError.isEmpty()) tab else null
+  }
+
+  private fun loadInto(tab: Tab, url: String) {
+    tab.view?.let { it.loadUrl(url); return }
+    val rh = remote ?: return
+    runCatching { rh.renderer?.loadUrl(remoteTabId(tab.owner, tab), url) }
+  }
+
+  private fun reloadTab(tab: Tab) {
+    tab.view?.let { it.reload(); return }
+    runCatching { remote?.renderer?.reload(remoteTabId(tab.owner, tab)) }
+  }
+
+  /** 渲染器 AIDL 的 JSON 回执（{ok:bool,...}）→ Boolean；异常/断线按 false。 */
+  private fun remoteCallOk(call: () -> String?): Boolean = runCatching {
+    call()?.let { JSONObject(it).optBoolean("ok") } == true
+  }.getOrDefault(false)
+
+  private fun goBackTab(tab: Tab): Boolean {
+    val browser = tab.view
+    if (browser != null) {
+      if (!browser.canGoBack()) return false
+      browser.goBack()
+      return true
+    }
+    if (!tab.remoteCanGoBack) return false
+    return remoteCallOk { remote?.renderer?.goBack(remoteTabId(tab.owner, tab)) }
+  }
+
+  private fun goForwardTab(tab: Tab): Boolean {
+    val browser = tab.view
+    if (browser != null) {
+      if (!browser.canGoForward()) return false
+      browser.goForward()
+      return true
+    }
+    if (!tab.remoteCanGoForward) return false
+    return remoteCallOk { remote?.renderer?.goForward(remoteTabId(tab.owner, tab)) }
+  }
+
+  /** tier-1 直接走 WebView 回调（主线程）；tier-2 经渲染进程序号回执（统一回主线程）。 */
+  private fun evaluateOnTab(tab: Tab, script: String, callback: (String?) -> Unit) {
+    val browser = tab.view
+    if (browser != null) {
+      browser.evaluateJavascript(script) { raw -> callback(raw) }
+      return
+    }
+    val rh = remote ?: run { callback(null); return }
+    val seq = rh.nextSeq()
+    pendingJs[seq] = callback
+    if (!rh.evaluateJs(remoteTabId(tab.owner, tab), script, seq)) {
+      pendingJs.remove(seq)
+      callback(null)
+    }
+  }
+
+  private fun tabViewportSize(tab: Tab): Pair<Int, Int> =
+    tab.view?.let { it.width to it.height }
+      ?: (remote?.projectionSizes[remoteTabId(tab.owner, tab)] ?: (0 to 0))
+
+  private fun tapOnTab(tab: Tab, x: Float, y: Float) {
+    tab.view?.let { dispatchTap(it, x, y); return }
+    runCatching { remote?.dispatchTap(remoteTabId(tab.owner, tab), x, y) }
+  }
+
+  private fun keyOnTab(tab: Tab, keyCode: Int) {
+    tab.view?.let { dispatchKey(it, keyCode); return }
+    runCatching { remote?.dispatchKey(remoteTabId(tab.owner, tab), keyCode) }
+  }
+
+  /** tier-1 走 profile（带 isAssigned 闸门）；tier-2 直接走策略——隔离由进程边界保证。 */
+  private fun normalizeForWorkspace(workspace: Workspace, raw: String?): String? =
+    if (remote != null) {
+      BrowserHostNavigationPolicy.normalize(raw, isolatedProfile = true, allowAnonymousEngineAccess = allowAnonymousEngineAccess)
+    } else workspace.profile.normalize(raw)
 
   private fun dispatchTap(browser: WebView, x: Float, y: Float) {
     val downAt = SystemClock.uptimeMillis()
