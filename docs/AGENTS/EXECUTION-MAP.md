@@ -2098,6 +2098,7 @@ app/src/main/java/com/dsharnessmobile/shell/BrowserIsolationTier.kt
 =======
 app/src/main/java/com/dsharnessmobile/shell/BrowserProcessService.kt
 app/src/main/java/com/dsharnessmobile/shell/BrowserTabResources.kt
+app/src/main/java/com/dsharnessmobile/shell/RemoteRendererHost.kt
 app/src/debug/java/com/dsharnessmobile/shell/BrowserRendererHostActivity.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/BrowserRendererServiceTest.kt
 >>>>>>> 8a6cc679 (docs: 执行地图覆盖远端渲染器文件（账本+K08 行，CI CHECK-CODE-MAP）)
