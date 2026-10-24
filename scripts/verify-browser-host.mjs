@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 // verify-browser-host.mjs — device-side BrowserHost lifecycle and isolation regression.
 // Usage: node scripts/verify-browser-host.mjs <main-webview-cdp-ws-url>
-const [, , mainWs] = process.argv
+const argv = process.argv.slice(2)
+const mainWs = argv.find((x) => x.startsWith('ws://'))
+const argOf = (name) => { const i = argv.indexOf('--' + name); return i >= 0 ? (argv[i + 1]) : undefined }
+// tier-2（process-suffix）：浏览器页不在主进程 WebView 的 CDP 花名册里，而在 :browser
+// 进程自己的 devtools socket。传 --browser-cdp <http-base>（该 socket 的 /json/list 基址，
+// 如 http://127.0.0.1:9342）；页面 target 会随隔离 WebView 重建而变更，须按 URL 动态解析。
+// tier-1（profile-api）无需此参数。
+const browserCdpArg = argOf('browser-cdp')
+let tier = 'profile-api'
 if (!mainWs) {
-  console.error('Usage: node scripts/verify-browser-host.mjs <main-webview-cdp-ws-url>')
+  console.error('Usage: node scripts/verify-browser-host.mjs <main-webview-cdp-ws-url> [--browser-cdp <http-base>]')
   process.exit(2)
 }
 
@@ -51,11 +59,18 @@ function cdpListUrl(wsUrl) {
   return `http://${parsed.host}/json/list`
 }
 
+/** tier-2 浏览器页花名册基址（:browser 进程 devtools socket 的 http 基址）。 */
+function browserRosterBase() {
+  if (tier !== 'process-suffix') return mainWs
+  if (!browserCdpArg) fail('tier-2（process-suffix）需要 --browser-cdp 提供 :browser 进程 devtools socket 的 http 基址')
+  return browserCdpArg.replace(/\/$/, '') + '/devtools/page/__tier2__'
+}
+
 /** 分辨率变化会重建隔离 WebView（密度覆盖）→ CDP target 变更；按 URL 重新解析。 */
-async function resolveTarget(mainWs, url, timeoutMs = 15_000) {
+async function resolveTarget(url, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs
   do {
-    const targets = await (await fetch(cdpListUrl(mainWs))).json()
+    const targets = await (await fetch(cdpListUrl(browserRosterBase()))).json()
     const found = targets.find(target => target.url === url)
     if (found?.webSocketDebuggerUrl) return found.webSocketDebuggerUrl
     await new Promise(resolve => setTimeout(resolve, 300))
@@ -73,10 +88,13 @@ try {
   if (before.available !== true || before.created !== false || before.visible !== false) {
     fail('unexpected initial BrowserHost state: ' + JSON.stringify(before))
   }
+  // 档位与引擎活端口：deny 用例必须打「本代真实引擎源」，写死 3080 会随动态端点（#490）失真。
+  tier = before.isolationTier ?? 'profile-api'
+  const engineOrigin = await evaluate(mainWs, 'location.origin')
   const metrics = await evaluate(mainWs, '({ width: innerWidth, height: innerHeight })')
   const bounds = await bridge(`window.androidBridge.browserHostBounds(JSON.stringify({ left: 12, top: 140, width: Math.max(180, ${metrics.width} - 24), height: Math.max(160, ${metrics.height} - 180), viewportWidth: ${metrics.width}, viewportHeight: ${metrics.height}, visible: true }))`)
   if (bounds.ok !== true) fail('BrowserHost rejected trusted stage bounds: ' + JSON.stringify(bounds))
-  const denied = await bridge("window.androidBridge.browserHostShow('http://127.0.0.1:3080/')")
+  const denied = await bridge(`window.androidBridge.browserHostShow('${engineOrigin}/')`)
   if (denied.ok !== false || denied.reason !== 'unsupported-url') {
     fail('BrowserHost allowed trusted loopback navigation: ' + JSON.stringify(denied))
   }
@@ -95,7 +113,7 @@ try {
   if (live.created !== true || live.visible !== true || live.url !== 'https://example.com/') {
     fail('BrowserHost did not become visible at its requested URL: ' + JSON.stringify(live))
   }
-  const targets = await (await fetch(cdpListUrl(mainWs))).json()
+  const targets = await (await fetch(cdpListUrl(browserRosterBase()))).json()
   const browserTarget = targets.find(target => target.url === 'https://example.com/')
   if (!browserTarget?.webSocketDebuggerUrl) fail('isolated BrowserHost target is absent from CDP roster')
   const thirdPartyBridge = await evaluate(browserTarget.webSocketDebuggerUrl, 'typeof window.androidBridge')
@@ -117,7 +135,7 @@ try {
   do {
     await sleep(300)
     try {
-      const ws = await resolveTarget(mainWs, 'https://example.com/', 4_000)
+      const ws = await resolveTarget('https://example.com/', 4_000)
       cssViewport = await evaluate(ws, '({ width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio })')
     } catch { cssViewport = null }
     live2 = await bridge('window.androidBridge.browserHostStatus()')
@@ -144,9 +162,18 @@ try {
       + ' letterbox rounding / ratio preserved): ' + JSON.stringify({
       cssViewport, requested: { width: 390, height: 844 }, requestedRatio, widthOk, heightOk, ratioOk, live2 }))
   }
-  if (live2.pageWidth !== cssViewport.width || live2.pageHeight !== cssViewport.height) {
-    fail('host-reported page viewport must match the page: ' + JSON.stringify({ live2, cssViewport }))
+  // host 上报是异步落账（远端事件 + 追测），对页面实测做有界收敛轮询，而不是单拍硬比。
+  const convergeDeadline = Date.now() + 8_000
+  let live2Settled = live2
+  do {
+    live2Settled = await bridge('window.androidBridge.browserHostStatus()')
+    if (live2Settled.pageWidth === cssViewport.width && Math.abs(live2Settled.pageHeight - cssViewport.height) <= 2) break
+    await sleep(300)
+  } while (Date.now() < convergeDeadline)
+  if (live2Settled.pageWidth !== cssViewport.width || Math.abs(live2Settled.pageHeight - cssViewport.height) > 2) {
+    fail('host-reported page viewport must match the page: ' + JSON.stringify({ live2: live2Settled, cssViewport }))
   }
+  live2 = live2Settled
   // PC 身份档：UA + platform / maxTouchPoints / screen 必须为桌面形态（document-start 注入，无桥）。
   const identity = await bridge("window.androidBridge.browserHostIdentity(JSON.stringify({ profile: 'linux-desktop', ua: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36', preset: 'custom', width: 1280, height: 720 }))")
   if (identity.ok !== true) fail('BrowserHost identity switch rejected: ' + JSON.stringify(identity))
@@ -155,7 +182,7 @@ try {
   do {
     await sleep(300)
     try {
-      const ws = await resolveTarget(mainWs, 'https://example.com/', 4_000)
+      const ws = await resolveTarget('https://example.com/', 4_000)
       desktopSignals = await evaluate(ws, `({
         ua: navigator.userAgent.slice(0, 40),
         platform: navigator.platform,
@@ -182,7 +209,7 @@ try {
   if (restoreIdentity.ok !== true) fail('BrowserHost identity restore failed: ' + JSON.stringify(restoreIdentity))
   const reset = await bridge('window.androidBridge.browserHostViewport(JSON.stringify({ id: \'device\', width: 0, height: 0 }))')
   if (reset.ok !== true || reset.viewportId !== 'device') fail('BrowserHost viewport reset failed: ' + JSON.stringify(reset))
-  console.log(JSON.stringify({ ok: true, before, bounds, denied, live, thirdPartyBridge, hidden, viewport, cssViewport, live2, identity, desktopSignals, reset }))
+  console.log(JSON.stringify({ ok: true, tier, engineOrigin, before, bounds, denied, live, thirdPartyBridge, hidden, viewport, cssViewport, live2, identity, desktopSignals, reset }))
 } catch (error) {
   console.error('BROWSERHOST-REGRESSION FAILED: ' + String(error?.stack ?? error))
   process.exitCode = 1
