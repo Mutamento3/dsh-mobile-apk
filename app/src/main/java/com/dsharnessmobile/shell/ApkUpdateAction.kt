@@ -555,7 +555,8 @@ internal class ApkUpdateController(private val activity: Activity) {
       if (artifactVerdict() is ApkArtifactVerdict.Accept) {
         reused = true // 上次下完但没装成（授权中断/安装取消）→ 复用已验证的包，不重复拉 169MB
       } else {
-        val used = UpdateChecker.download(r.apkUrl, dest) { pct -> onDownloadProgress(pct) }
+        // #513：元数据缺 sha256 时第三方镜像产物无摘要可校验——只允许官方直连（fail-closed）。
+        val used = UpdateChecker.download(r.apkUrl, dest, { pct -> onDownloadProgress(pct) }, allowMirrors = expectedSha != null)
         if (used == null) {
           failDownload("下载失败：镜像链全部不可用（直连与加速镜像均失败）——请稍后重试", ApkUpdateState.KIND_DOWNLOAD_FAILED)
           return
