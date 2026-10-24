@@ -61,6 +61,19 @@ internal object ShellOps {
   /** 嵌套执行体再切一层的深度上限（与引擎侧 `MAX_NESTING` 相同）。 */
   private const val MAX_NESTING = 4
 
+  /**
+   * 管道/输入重定向喂**裸 shell 解释器**的段（`| sh`、`| xargs bash`、段尾裸 `sh`）。
+   *
+   * `echo 'screencap -d 0' | sh` 切段后：喂入段是引号文本（stripQuotedText 抹空，无命令词），
+   * 接收段是裸 `sh`（同样无命令词）——两条都不进屏幕命令词面 ⇒ 判 ALLOW；执行时 sh 从
+   * stdin 读到命令照跑，virtual-only 下真实屏可读（#509）。该形态在本通道没有正当用途：
+   * 合法执行本来就整条传给 `shExec`（本身就是 `sh -c`），要嵌套也有 `sh -c '…'`（载荷可见、
+   * 由 SHELL_C_PAYLOAD 展开队列正常判定）。故裸解释器段一律按看不懂拒绝（fail-closed），
+   * 与引擎侧 `screen-scope.ts` 的同构判据同批演进（fixture 权威源用例另行补充）。
+   */
+  private val BARE_SHELL_SEGMENT =
+    Regex("""^(?:(?:[^\s/]*/)+)?(?:(?:xargs|busybox|toybox)[ \t]+)*(?:sh|bash|mksh|ash|dash|zsh)$""", RegexOption.IGNORE_CASE)
+
   /** `sh -c '<内层>'` 形式（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。 */
   private val SHELL_C_PAYLOAD = Regex(
     """(?:^|[ \t])(?:[^\s]*/)?(?:sh|bash|mksh|ash|dash|zsh|busybox|toybox|su)[ \t]+(?:-[^\s]+[ \t]+)*-c[ \t]+([\s\S]*)$""",
@@ -206,6 +219,8 @@ internal object ShellOps {
     val parsed = splitCommandSegments(command)
     if (parsed.unparsed) return false
     for (segment in parsed.segments) {
+      // 裸解释器段同 virtual-only：载荷不可见即不可证明（连「目标是不是物理屏 0」都无从核对）。
+      if (BARE_SHELL_SEGMENT.matches(stripQuotedText(segment).trim())) return false
       val bare = stripQuotedText(segment)
       val options = displayOptionsIn(bare)
       val normalized = stripDisplayOptions(bare)
@@ -311,6 +326,10 @@ internal object ShellOps {
     if (parsed.unparsed) return ScreenCommandVerdict.DENY_UNPARSED
     for (segment in parsed.segments) {
       val bare = stripQuotedText(segment)
+      // 裸解释器段：管道/重定向喂 shell 的载荷对判定器不可见（#509），fail-closed。
+      if (BARE_SHELL_SEGMENT.matches(bare.trim())) {
+        return ScreenCommandVerdict.DENY_UNPARSED
+      }
       val options = displayOptionsIn(bare)
       val normalized = stripDisplayOptions(bare)
       val families = SCREEN_FAMILIES.filter { it.pattern.containsMatchIn(normalized) }
