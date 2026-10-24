@@ -5,7 +5,10 @@
  * on-disk half. It is deliberately narrow:
  * - same-origin authenticated route (client-connection rejection is honoured);
  * - `session-<uuid>` ids only;
- * - a session still open in the engine is refused (409), never deleted under a writer;
+ * - a session with running work is refused (409), and an unverifiable activity probe
+ *   refuses too — "unknown" is never treated as "idle";
+ * - a loaded-but-idle session is unloaded (detach + flush) after the directory leaves
+ *   the scan path, so it stops appearing in search;
  * - archive/pin membership is dropped best-effort before the directory goes away.
  *
  * The client half (session row menu) is the only caller; the route is not a
@@ -171,7 +174,7 @@ export async function removeSession(ctx, sessionId) {
   log(ctx, 'info', 'host delete start', {
     sessionId,
     live,
-    activity: activity === null ? 'unknown (no waterfall)' : activity.map((entry) => entry?.kind ?? 'unknown'),
+    activity: activity.map((entry) => entry?.kind ?? 'unknown'),
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     hasRegistry: registry !== undefined,
   })
@@ -230,7 +233,7 @@ function failureOf(error) {
   const status = code === 'invalid-id' || code === 'invalid-body'
     ? 400
     : code === 'not-found' ? 404
-      : code === 'session-active' ? 409
+      : code === 'session-active' || code === 'activity-unknown' || code === 'ambiguous' ? 409
         : 500
   return { status, code, message: String(error?.message ?? error) }
 }

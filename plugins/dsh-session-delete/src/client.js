@@ -422,8 +422,9 @@
             .then(function (res) {
               return res.json().catch(function () { return {} }).then(function (data) {
                 if (!res.ok || data.ok !== true) {
-                  // 404 = already gone (deleted earlier, or the engine restarted).
-                  if (res.status === 404) {
+                  // 404 只有带着本路由的 error 码才算「已经删掉」；否则可能是宿主插件
+                  // 没加载（路由不存在），不能把「没删」当成成功。
+                  if (res.status === 404 && data.error === 'not-found') {
                     trace('warn', 'session already gone; treating as deleted', { sessionId: sessionId })
                     return { ok: true, sessionId: sessionId, alreadyGone: true }
                   }

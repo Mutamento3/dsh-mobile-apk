@@ -9,8 +9,9 @@
  *
  * Safety rules:
  * - only `session-<uuid>` ids are accepted (no paths, no globs);
- * - a live session (open in the engine) is refused — deleting under a writer
- *   would corrupt its log;
+ * - a session with running work is refused; a loaded-but-idle one is allowed, and
+ *   the caller unloads it through `afterRename` once the directory left the scan
+ *   path (see `deleteStoredSession`);
  * - the id must resolve to exactly one directory (two matches are ambiguous and
  *   nothing is deleted);
  * - the directory is renamed first so a concurrent scan cannot observe a
