@@ -392,4 +392,3 @@ test('sweepGraveyards is a no-op without a sessions root', async () => {
   assert.deepEqual(await sweepGraveyards(home), [])
   assert.deepEqual(await sweepGraveyards(''), [])
 })
-
