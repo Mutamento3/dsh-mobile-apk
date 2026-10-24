@@ -57,6 +57,13 @@ internal object RepairState {
   /** 启动流放行后显式花掉本进程的一次冷启自动尝试；幂等。 */
   fun spendColdStartAutoAttempt() { autoAttemptSpent = true }
 
+  /**
+   * 本进程的冷启自动尝试是否**在途**：已花掉这一次，且之后没有再落过门。
+   * 此时引擎若健康收敛（页面自报就绪），允许 [reset] 清门——「修好了就直接跑起来」；
+   * 若再次失败，[requireRepair] 置 armedInThisProcess，本判定立即回假，守卫恢复原语义。
+   */
+  fun coldStartAttemptInFlight(): Boolean = autoAttemptSpent && !armedInThisProcess
+
   /** 仅供 JVM 单测复位进程内簿记；生产代码不得调用。 */
   internal fun resetProcessStateForTest() {
     armedInThisProcess = false

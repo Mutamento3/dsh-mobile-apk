@@ -266,7 +266,9 @@ internal class EngineStartFlow(private val activity: MainActivity) {
    */
   fun onPageReadyReported(rawLine: String) {
     if (!canRunEngineWork()) return
-    if (clientPluginTreeFailed || RepairState.required(activity)) return
+    // 冷启自动尝试在途时允许健康收敛清门（否则自动尝试拉起引擎后门永远清不掉，
+    // 页面就绪报文被这道守卫原样丢弃）；本进程内再落门则恢复原语义。
+    if (clientPluginTreeFailed || (RepairState.required(activity) && !RepairState.coldStartAttemptInFlight())) return
     RepairState.reset(activity)
     pageReadyReported = true
     if (pageReadyLogged) return
