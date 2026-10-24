@@ -127,7 +127,9 @@ internal object RepairConversationStore {
   private fun atomicWrite(target: File, text: String) {
     val temp = File(target.parentFile, target.name + ".tmp")
     temp.writeText(text)
-    if (!temp.renameTo(target)) {
+    // 复用仓内标准（Files.move ATOMIC_MOVE + 不先删目标的单次回退）：renameTo 在部分文件系统上
+    // 失败的旧回退是直写 target，崩溃窗口内半写文件会被 load 的容错当「不存在」整段丢弃（#511）。
+    if (!AtomicFileReplace.publish(temp, target)) {
       target.writeText(text)
       temp.delete()
     }
