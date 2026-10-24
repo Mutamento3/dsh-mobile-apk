@@ -132,6 +132,32 @@ object EngineAuth {
     return logModifiedMs >= generationStartMs - slackMs
   }
 
+  /**
+   * [tokenFromCurrentLog] 的完整时间闸门：mtime 恒必要；btime 可用时作纵深校验，**不可用时降级
+   * 为仅 mtime 判据，绝不 fail-closed**。
+   *
+   * 实锤（2026-10-24，MuMu 12 x86_64 ext4）：文件系统不报告 STATX_BTIME，`stat -c %W` 得 `?`，
+   * `BasicFileAttributes.creationTime()` 恒为 0（epoch）。旧实现把 `createdMs=0` 当
+   * 「不属于本代」直接拒绝，于是**端口采纳永不发生**（dsh-engine-probe 恒 `awaiting-endpoint`），
+   * 引擎明明已打印 `dsh web: http://127.0.0.1:3080/` 并健康监听，仍在 90s 启动预算内被壳判死、
+   * 两次后落持久修复门。3080 硬编码时代的旧壳不查这个，同一引擎同一快照一切正常——缺陷
+   * 只随动态端点握手（#490）显形。
+   *
+   * 降级后的归属保证并未变弱到不可用：本代日志由 spawn 前的隔离检查
+   * （EngineManager 启动时 `engine.log` 已存在即拒启）+ mtime 闸门共同兜底；btime 只是对
+   * 「旧文件补写 mtime 伪装新代」这一种攻击面的纵深防御，文件系统读不到它时回退到
+   * mtime-only 是接受降级，而不是把健康引擎关在门外。
+   */
+  internal fun logTimesBelongToCurrentGeneration(
+    modifiedMs: Long,
+    createdMs: Long,
+    generationStartMs: Long,
+  ): Boolean {
+    if (!logBelongsToCurrentGeneration(modifiedMs, generationStartMs)) return false
+    if (createdMs <= 0L) return true // 文件系统不报告 btime：降级为仅 mtime 判据
+    return logBelongsToCurrentGeneration(createdMs, generationStartMs)
+  }
+
   @Volatile private var cached: String? = null
 
   /**
@@ -324,8 +350,7 @@ object EngineAuth {
     }
     val modifiedMs = attributes.lastModifiedTime().toMillis()
     val createdMs = attributes.creationTime().toMillis()
-    if (!logBelongsToCurrentGeneration(modifiedMs, generationStartMs)) return null
-    if (!logBelongsToCurrentGeneration(createdMs, generationStartMs)) return null
+    if (!logTimesBelongToCurrentGeneration(modifiedMs, createdMs, generationStartMs)) return null
 
     return try {
       // Rotated logs are diagnostics only; they can never prove the current generation.

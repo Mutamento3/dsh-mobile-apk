@@ -285,6 +285,7 @@ if (peer) {
     'plugins/dsh-android-browser',
     'plugins/dsh-android-vdisplay',
     'plugins/dsh-android-file-open',
+    'plugins/dsh-session-delete',
     'scripts/build-release.ps1',
     'scripts/check-manifest-hardening.mjs',
     'scripts/check-bounded-io.mjs',

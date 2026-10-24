@@ -698,20 +698,39 @@ object UpdateChecker {
   }
 
   /**
+   * 下载重定向的最终域白名单（#513）：直连与镜像域名之外的一律放弃该线路走下一条。
+   * 旧实现 `instanceFollowRedirects = true` 无白名单——镜像被劫持 302 到任意域会直接跟随
+   * （对照 linux-bootstrap 的 github.js assertResponse，同为下载链标准应对齐）。
+   */
+  internal val ALLOWED_DOWNLOAD_HOSTS = setOf(
+    "github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com",
+    "gh-proxy.com", "ghfast.top", "ghproxy.net",
+  )
+
+  /** 纯判据（JVM 单测）：跟随至多 maxHops 跳后，每个中间/最终 URL 的 host 是否都在白名单内。 */
+  internal fun redirectChainAllowed(hops: List<String>, allowed: Set<String> = ALLOWED_DOWNLOAD_HOSTS): Boolean =
+    hops.isNotEmpty() && hops.all { raw ->
+      val host = try { URL(raw).host.lowercase() } catch (_: Exception) { return@all false }
+      host in allowed
+    }
+
+  /**
    * 通过镜像链把 GitHub 资产 URL 逐级尝试下载到目标文件（.tmp → rename 原子落盘）。
    *
    * 前缀表与确认链**同一份**（[MIRROR_PREFIXES]）：查版本与下 APK 若走不同线路集合，
    * 就会出现"能查到新版却下不下来"这种介于两者之间的状态，而没有任何一层为它负责。
+   *
+   * @param allowMirrors false = 只允许官方直连（#513：元数据缺 sha256 时，第三方镜像产物
+   *   无摘要可校验、直通安装器——fail-closed，宁可下载失败也不裸奔）。
    */
-  fun download(url: String, dest: File, onProgress: (percent: Int) -> Unit): String? {
+  fun download(url: String, dest: File, onProgress: (percent: Int) -> Unit, allowMirrors: Boolean = true): String? {
     val path = url.removePrefix("https://github.com/")
-    for (mirror in MIRROR_PREFIXES) {
+    val prefixes = if (allowMirrors) MIRROR_PREFIXES else listOf(MIRROR_PREFIXES[0])
+    for (mirror in prefixes) {
       val candidate = if (mirror == MIRROR_PREFIXES[0]) url else mirror + path
       try {
-        val conn = URL(candidate).openConnection(Proxy.NO_PROXY) as HttpURLConnection
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 30_000
-        conn.instanceFollowRedirects = true
+        val conn = openRedirectVerified(candidate)
+        if (conn == null) { continue }
         if (conn.responseCode != 200) { conn.disconnect(); continue }
         val total = conn.contentLengthLong
         dest.parentFile?.mkdirs()
@@ -742,6 +761,32 @@ object UpdateChecker {
         File(dest.parentFile, dest.name + ".tmp").delete()
       }
     }
+    return null
+  }
+
+  /**
+   * 打开连接并手动跟随重定向（≤3 跳），每一跳的最终域都必须在 [ALLOWED_DOWNLOAD_HOSTS] 内；
+   * 越域或超跳数返回 null（调用方按"该线路失败"走下一条镜像，绝不盲跟）。
+   */
+  private fun openRedirectVerified(startUrl: String): HttpURLConnection? {
+    var current = startUrl
+    var conn: HttpURLConnection? = null
+    for (hop in 0..3) {
+      if (!redirectChainAllowed(listOf(current))) return null
+      conn = try { URL(current).openConnection(Proxy.NO_PROXY) as HttpURLConnection } catch (_: Exception) { return null }
+      conn.connectTimeout = 10_000
+      conn.readTimeout = 30_000
+      conn.instanceFollowRedirects = false
+      val code = try { conn.responseCode } catch (_: Exception) { conn.disconnect(); return null }
+      if (code in 300..399) {
+        val location = conn.getHeaderField("Location") ?: run { conn.disconnect(); return null }
+        conn.disconnect()
+        current = if (location.startsWith("http")) location else URL(URL(current), location).toString()
+        continue
+      }
+      return conn
+    }
+    conn?.disconnect()
     return null
   }
 

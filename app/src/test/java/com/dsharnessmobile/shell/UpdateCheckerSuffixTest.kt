@@ -57,4 +57,21 @@ class UpdateCheckerSuffixTest {
     assertTrue("fx 后缀不得被剥（否则修订链断裂）", stripped.contains("fx-2"))
     assertTrue(UpdateChecker.isNewer(stripped, "0.13.7fx-1"))
   }
+
+
+  /** #513：重定向链白名单——镜像域内跟随合法，越域（劫持 302）整链放弃。 */
+  @Test
+  fun redirectChainAllowedAcceptsOnlyKnownHosts() {
+    assertEquals(true, UpdateChecker.redirectChainAllowed(listOf(
+      "https://gh-proxy.com/https://github.com/a/b/releases/download/v1/x.apk")))
+    assertEquals(true, UpdateChecker.redirectChainAllowed(listOf(
+      "https://github.com/...",
+      "https://objects.githubusercontent.com/...",
+      "https://release-assets.githubusercontent.com/...")))
+    assertEquals("劫持到任意域必须整链拒绝", false,
+      UpdateChecker.redirectChainAllowed(listOf(
+        "https://ghfast.top/https://github.com/a",
+        "https://evil.example.com/x.apk")))
+    assertEquals("空链拒绝", false, UpdateChecker.redirectChainAllowed(emptyList()))
+  }
 }

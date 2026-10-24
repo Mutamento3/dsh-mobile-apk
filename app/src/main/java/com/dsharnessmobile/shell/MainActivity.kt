@@ -294,7 +294,8 @@ class MainActivity : ComponentActivity() {
   /** 引擎启动流（委托 EngineStartFlow.start）。 */
   internal fun startEngineFlow(splash: Boolean = false) {
     if (isFinishing || isDestroyed) return
-    if (startupEntryDecision(RepairState.required(this), explicitUserRetry = false) ==
+    // 冷启自动尝试（0.14.10）：门若是上一进程落的残留，允许本进程一次自动越过；本进程内仍有界。
+    if (startupEntryDecision(RepairState.required(this), explicitUserRetry = RepairState.coldStartAutoAttemptAvailable(this)) ==
       StartupEntryDecision.BLOCKED_FOR_REPAIR) {
       showGuide()
       applyRepairRequiredGuide()
@@ -980,6 +981,9 @@ class MainActivity : ComponentActivity() {
         } catch (_: Throwable) {
           // 回收是尽力而为：任何异常都不得影响界面（资源会在下次回收窗口再试）。
         }
+        // 冻结态兜底供能（0.14.10）：页面轮询不在前台/未挂载时，reaper 兼任限频重试触发；
+        // reaper 本就不触碰几何，重算走 applyStageBounds 同一幂等入口。
+        if (::vdisplayHost.isInitialized) vdisplayHost.recheck()
         handler.postDelayed(this, VDISPLAY_REAP_INTERVAL_MS)
       }
     }

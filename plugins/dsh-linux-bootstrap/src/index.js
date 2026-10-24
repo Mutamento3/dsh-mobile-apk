@@ -75,7 +75,6 @@ function availableRuntimes(state) {
 function statusShape(state, mobileVersion, operation, packageVersion) {
   return Object.freeze({
     experimental: true,
-    experimental: true,
     enabledByDefault: false,
     sandboxed: false,
     installed: Boolean(state.installedLinuxVersion),

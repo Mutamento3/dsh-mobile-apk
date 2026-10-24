@@ -55,6 +55,38 @@ class EngineAuthPolicyTest {
     assertFalse("起点前 30s（超出容差）必须拒绝", EngineAuth.logBelongsToCurrentGeneration(generationStart - 30_000L, generationStart))
   }
 
+  /** 文件系统不报告 btime（creationTime 恒 0）时必须降级为仅 mtime 判据，不得 fail-closed。 */
+  @Test
+  fun `missing birth time degrades to mtime-only instead of failing closed`() {
+    val generationStart = 1_000_000L
+    assertTrue(
+      "btime 缺席 + 本代 mtime 必须接受（MuMu ext4 实锤形态）",
+      EngineAuth.logTimesBelongToCurrentGeneration(
+        modifiedMs = generationStart + 3_000L, createdMs = 0L, generationStartMs = generationStart,
+      ),
+    )
+    assertFalse(
+      "btime 可用且早于本代（旧文件补写 mtime）必须拒绝——纵深防御保留",
+      EngineAuth.logTimesBelongToCurrentGeneration(
+        modifiedMs = generationStart + 3_000L, createdMs = generationStart - 60_000L,
+        generationStartMs = generationStart,
+      ),
+    )
+    assertFalse(
+      "mtime 早于本代无论 btime 如何都必须拒绝",
+      EngineAuth.logTimesBelongToCurrentGeneration(
+        modifiedMs = generationStart - 60_000L, createdMs = generationStart + 1_000L,
+        generationStartMs = generationStart,
+      ),
+    )
+    assertFalse(
+      "mtime=0（文件缺失/不可读）必须拒绝",
+      EngineAuth.logTimesBelongToCurrentGeneration(
+        modifiedMs = 0L, createdMs = 0L, generationStartMs = generationStart,
+      ),
+    )
+  }
+
   /** Unknown generation is fail-closed; a zero timestamp cannot prove current ownership. */
   @Test
   fun `unknown generation start and missing file are rejected`() {

@@ -266,7 +266,9 @@ internal class EngineStartFlow(private val activity: MainActivity) {
    */
   fun onPageReadyReported(rawLine: String) {
     if (!canRunEngineWork()) return
-    if (clientPluginTreeFailed || RepairState.required(activity)) return
+    // 冷启自动尝试在途时允许健康收敛清门（否则自动尝试拉起引擎后门永远清不掉，
+    // 页面就绪报文被这道守卫原样丢弃）；本进程内再落门则恢复原语义。
+    if (clientPluginTreeFailed || (RepairState.required(activity) && !RepairState.coldStartAttemptInFlight())) return
     RepairState.reset(activity)
     pageReadyReported = true
     if (pageReadyLogged) return
@@ -550,8 +552,11 @@ internal class EngineStartFlow(private val activity: MainActivity) {
    */
   fun start() {
     if (!canRunEngineWork()) return
-    if (startupEntryDecision(RepairState.required(activity), explicitUserRetry = false) ==
+    // 冷启自动尝试（0.14.10）：与 MainActivity.startEngineFlow 同一出口语义；RepairState 内部保证每进程一次。
+    if (startupEntryDecision(RepairState.required(activity), explicitUserRetry = RepairState.coldStartAutoAttemptAvailable(activity)) ==
       StartupEntryDecision.BLOCKED_FOR_REPAIR) { requireNativeRepair(); return }
+    // 放行即花掉本进程的一次冷启自动尝试（查询不消耗，两道闸门共用一次额度）。
+    RepairState.spendColdStartAutoAttempt()
     // EngineManager.ensurePrivateDshData() establishes the active profile and
     // migrates legacy DSH_HOME layouts. The handoff used to happen as a side
     // effect of starting the engine; selecting and validating a model happens
