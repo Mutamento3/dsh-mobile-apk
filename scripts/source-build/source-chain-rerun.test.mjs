@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 const ROOT = resolve(import.meta.dirname, '../..')
 const yaml = readFileSync(join(ROOT, '.github/workflows/build-apk-source.yml'), 'utf8').replaceAll('\r\n', '\n')
 function step(name, workflow = yaml) {
@@ -25,7 +25,7 @@ function fixture(fn) {
 function bash(script, root, extra = {}) {
   const r = spawnSync('/bin/bash', ['--noprofile', '--norc', '-c', 'set -euo pipefail\n' + script], {
     cwd: root, encoding: 'utf8', timeout: 10000, maxBuffer: 262144,
-    env: { PATH: join(root, 'bin') + ':/usr/bin:/bin', HOME: root, TMPDIR: root, LC_ALL: 'C', GITHUB_WORKSPACE: root, ...extra },
+    env: { PATH: join(root, 'bin') + ':' + dirname(process.execPath) + ':/usr/bin:/bin', HOME: root, TMPDIR: root, LC_ALL: 'C', GITHUB_WORKSPACE: root, ...extra },
   })
   if (r.error) throw r.error
   return r
