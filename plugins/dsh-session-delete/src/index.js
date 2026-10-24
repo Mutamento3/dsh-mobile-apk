@@ -169,6 +169,15 @@ export async function removeSession(ctx, sessionId) {
   // 只暴露给创建者。因此只要会话还是 live，就拒绝删除——否则会留下「文件没了但内存里还在」
   // 的幽灵会话，继续参与搜索。重启应用后 live 集合清空，即可删除。
   const activity = await sessionActivity(ctx, sessionId)
+  const registry = ctx.get('workspaceRegistry')
+  // 先落一行现场再判定：拒绝也要能从 engine.log 看出是 live / 有活动 / 探测失败。
+  log(ctx, 'info', 'host delete start', {
+    sessionId,
+    live,
+    activity: activity === null ? 'unknown' : activity.map((entry) => entry?.kind ?? 'unknown'),
+    home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
+    hasRegistry: registry !== undefined,
+  })
   if (activity === null) {
     throw new SessionDeleteError('activity-unknown', 'cannot verify whether the conversation is idle; refusing to delete', { sessionId })
   }
@@ -178,14 +187,6 @@ export async function removeSession(ctx, sessionId) {
   if (live) {
     throw new SessionDeleteError('session-loaded', 'the conversation is still loaded in the app; restart the app and try again', { sessionId })
   }
-  const registry = ctx.get('workspaceRegistry')
-  log(ctx, 'info', 'host delete start', {
-    sessionId,
-    live,
-    activity: activity.map((entry) => entry?.kind ?? 'unknown'),
-    home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
-    hasRegistry: registry !== undefined,
-  })
   return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
