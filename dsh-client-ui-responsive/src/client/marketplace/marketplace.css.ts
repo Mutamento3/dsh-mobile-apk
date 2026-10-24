@@ -345,6 +345,12 @@ export const MARKETPLACE_CSS: string = `
   line-height: 18px;
 }
 
+/* 加载/错误/空态现在渲染在列表里（一条 li），而不在页面顶部。 */
+.dshm-list > .dshm-state {
+  list-style: none;
+  text-align: center;
+}
+
 .dshm-error {
   border-left: 2px solid var(--dsw-alias-state-error-primary);
   background: transparent;

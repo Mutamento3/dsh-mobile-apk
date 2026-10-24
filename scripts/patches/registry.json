@@ -75,6 +75,13 @@
       "marker": "dshm-pager"
     },
     {
+      "id": "market-G-state",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "加载/错误/空态从页面顶部移到列表处（.dshm-list 内一条 li）",
+      "provenance": "0.15.0 用户定例：状态提示显示在插件显示处",
+      "marker": "dshm-list\"},(l!==\"ready\""
+    },
+    {
       "id": "undo-E1",
       "target": "dsh-undo-savepoint/lib/client.js",
       "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",

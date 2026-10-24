@@ -467,6 +467,24 @@ const IMPLS = {
     },
   },
 
+  // ── marketplace G：加载/错误/空态改到「插件显示处」──
+  // 用户定例（0.15.0）：状态提示不应出现在页面顶部（搜索框与复选框之下），
+  // 而应出现在列表本该出现的位置。三态统一迁进 .dshm-list 里的一条 li。
+  'market-G-state': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => !s.includes('l==="loading"?s.default.createElement("p",{className:"dshm-state"}'),
+    apply: (s) => {
+      const STATES_OLD = ',l==="loading"?s.default.createElement("p",{className:"dshm-state"},e("loading")):null,l==="error"?s.default.createElement("p",{className:"dshm-state"},e("error")):null,l==="ready"&&z.length===0?s.default.createElement("p",{className:"dshm-state"},e("empty")):null'
+      const LIST_OLD = '{className:"dshm-list"},z.map(o=>'
+      const LIST_NEW = '{className:"dshm-list"},(l!=="ready"||z.length===0)?s.default.createElement("li",{className:"dshm-state"},e(l==="error"?"error":l==="ready"?"empty":"loading")):z.map(o=>'
+      if (!s.includes(STATES_OLD)) throw new Error('market-G 状态段锚点未命中——三态渲染已变')
+      if (!s.includes(LIST_OLD)) throw new Error('market-G 列表锚点未命中——列表起点已变（需先应用 market-E-collapse）')
+      s = s.replace(STATES_OLD, '').replace(LIST_OLD, LIST_NEW)
+      if (s.includes('l==="loading"?s.default.createElement("p"')) throw new Error('market-G 复核失败——顶部状态仍在')
+      return s
+    },
+  },
+
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用
