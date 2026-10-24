@@ -275,3 +275,26 @@ test('a live session is detached and flushed before its files are removed', asyn
     else process.env.DSH_HOME = previous
   }
 })
+
+test('a delete that fails before the rename must not unload the live session', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  const dir = join(sessionsRoot(home), '--workspace--', ID)
+  try {
+    // beforeRemove 里把目录移走 → rename 必然 ENOENT → not-found
+    const ctx = fakeCtx({
+      live: true,
+      activity: [],
+      registry: { unarchiveSession: async () => { await rm(dir, { recursive: true, force: true }) }, unpinSession: async () => {} },
+    })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'not-found',
+    )
+    assert.deepEqual(ctx.calls.filter((c) => c.startsWith('detach')), [])
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})

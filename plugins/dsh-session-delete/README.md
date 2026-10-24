@@ -23,9 +23,10 @@
     `workspace/session-activity` 瀑布（与上游归档同一判据）判断，有活动才 **409**；
   - **探测状态未知一律拒绝**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）：
     返回 `activity-unknown`（409），绝不把「不知道」当「空闲」；
-  - 删除前**卸载内存里的会话**：`sessions.liveEntryFor(session).detach()`（服务公开方法）
-    移除 live 记录并派发 `session/disposed`，再 `sessions.flush()` 落盘——否则只删磁盘，
-    会话仍留在 `sessions.list()` 里参与搜索；
+  - **改名成功后**卸载内存里的会话：`sessions.liveEntryFor(session).detach()`（服务公开方法，
+    移除 live 记录并派发 `session/disposed`）→ `sessions.flush()` 落盘 → 再递归删目录。
+    顺序很重要：卸载放在改名之前，一旦删除失败用户会白丢正在看的会话；只删磁盘不卸载，
+    会话又会留在 `sessions.list()` 里参与搜索；
   - 删除前 best-effort 调用 `workspaceRegistry.unarchiveSession/unpinSession`，清掉归档/置顶成员关系。
 - **src/session-delete.js**：可单测的删除核心——定位 `<DSH_HOME>/sessions/<cwd-key>/<id>/`，
   命中 0 个报 `not-found`、命中 2 个报 `ambiguous`（一个都不删），先 `rename` 成 `.deleting-<t>` 再递归删除，

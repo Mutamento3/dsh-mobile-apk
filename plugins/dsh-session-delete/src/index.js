@@ -175,34 +175,34 @@ export async function removeSession(ctx, sessionId) {
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     hasRegistry: registry !== undefined,
   })
-  // 先卸载内存里的会话：只删磁盘会让它继续留在 sessions.list() 里参与搜索。
-  // sessions.liveEntryFor(session) 是服务上的公开方法，entry.detach() 会移除 live
-  // 记录并派发 session/disposed（上游搜索与侧栏据此更新）。
-  if (live) {
-    try {
-      const session = sessions?.get?.(sessionId)
-      const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
-      if (entry !== undefined && typeof entry.detach === 'function') {
-        entry.detach()
-        log(ctx, 'info', 'detached the live session', { sessionId })
-      } else {
-        log(ctx, 'warn', 'live session has no detach capability; it may stay in the live list', { sessionId })
-      }
-    } catch (error) {
-      log(ctx, 'warn', 'session detach failed', { sessionId, error: String(error?.message ?? error) })
-    }
-    try {
-      await sessions?.flush?.()
-      log(ctx, 'info', 'flushed session persistence after detach', { sessionId })
-    } catch (error) {
-      log(ctx, 'warn', 'flush after detach failed', { sessionId, error: String(error?.message ?? error) })
-    }
-  }
   return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
     isActive: active,
     logger: (level, message, extra) => log(ctx, level, message, extra),
+    // 只删磁盘会让会话继续留在 sessions.list() 里参与搜索；但卸载必须发生在
+    // 「目录已改名」之后，否则删除失败时用户白丢正在看的会话。
+    afterRename: async () => {
+      if (!live) return
+      try {
+        const session = sessions?.get?.(sessionId)
+        const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
+        if (entry !== undefined && typeof entry.detach === 'function') {
+          entry.detach()
+          log(ctx, 'info', 'detached the live session', { sessionId })
+        } else {
+          log(ctx, 'warn', 'live session has no detach capability; it may stay in the live list', { sessionId })
+        }
+      } catch (error) {
+        log(ctx, 'warn', 'session detach failed', { sessionId, error: String(error?.message ?? error) })
+      }
+      try {
+        await sessions?.flush?.()
+        log(ctx, 'info', 'flushed session persistence after detach', { sessionId })
+      } catch (error) {
+        log(ctx, 'warn', 'flush after detach failed', { sessionId, error: String(error?.message ?? error) })
+      }
+    },
     beforeRemove: async () => {
       try {
         await registry?.unarchiveSession?.(sessionId)

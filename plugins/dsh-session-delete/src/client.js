@@ -239,6 +239,21 @@
          * @param {string} message - step description.
          * @param {object} [extra] - structured fields.
          */
+        /**
+         * 把服务端错误码翻成界面文案；未知码原样显示。
+         * @param {Function} t - locale-bound translator.
+         * @param {string|undefined} code - server error code.
+         * @param {string} fallback - server message.
+         * @returns {string} user-facing text.
+         */
+        function errorText(t, code, fallback) {
+          var key = code === 'session-active' ? 'error.active'
+            : code === 'activity-unknown' ? 'error.unknown'
+              : code === 'not-found' ? 'error.gone'
+                : null
+          return key === null ? fallback : t(key)
+        }
+
         function trace(level, message, extra) {
           var line = TAG + ' ' + message
           if (level === 'error') console.error(line, extra === undefined ? '' : extra)
@@ -253,6 +268,9 @@
           'delete': '删除',
           'deleting': '正在删除…',
           'error': '删除失败：{message}',
+          'error.active': '这条对话正在运行，请先停止再删除。',
+          'error.unknown': '无法确认这条对话是否空闲，已拒绝删除。',
+          'error.gone': '这条对话已经不在了。',
           'close': '关闭',
         }
         var en = {
@@ -263,6 +281,9 @@
           'delete': 'Delete',
           'deleting': 'Deleting…',
           'error': 'Delete failed: {message}',
+          'error.active': 'This conversation is running. Stop it before deleting.',
+          'error.unknown': 'Could not confirm the conversation is idle, so it was not deleted.',
+          'error.gone': 'This conversation no longer exists.',
           'close': 'Close',
         }
 
@@ -405,7 +426,9 @@
                     trace('warn', 'session already gone; treating as deleted', { sessionId: sessionId })
                     return { ok: true, sessionId: sessionId, alreadyGone: true }
                   }
-                  throw new Error(data.message || data.error || ('HTTP ' + res.status))
+                  var failure = new Error(data.message || data.error || ('HTTP ' + res.status))
+                  failure.code = typeof data.error === 'string' ? data.error : 'http-' + res.status
+                  throw failure
                 }
                 return data
               })
@@ -593,6 +616,8 @@
               .then(function (res) { return res.ok ? res.json() : null })
               .then(function (data) {
                 if (data === null || typeof data.stamp !== 'string') return
+                // 宿主拿不到自己的构建戳（build.json 缺失）：不据此重载，避免每次启动白刷一次。
+                if (data.stamp === 'unknown' || data.stamp === '') return
                 if (data.stamp === BUILD_STAMP) {
                   window.sessionStorage.removeItem('dsh.session-delete.reloaded')
                   return

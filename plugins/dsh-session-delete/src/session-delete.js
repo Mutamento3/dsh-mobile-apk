@@ -96,11 +96,12 @@ export async function findSessionDir(root, sessionId) {
  * @param {string} options.sessionId - session to delete.
  * @param {boolean} options.isActive - whether any provider reports running work for the session.
  * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.beforeRemove] - bookkeeping hook (unarchive/unpin).
+ * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.afterRename] - runs after the directory left the scan path (detach/flush).
  * @param {(level: 'info'|'warn'|'error', message: string, extra?: object) => void} [options.logger] - step logger.
  * @returns {Promise<{ ok: true, sessionId: string, dir: string }>} outcome.
  * @throws {SessionDeleteError} on every refused state.
  */
-export async function deleteStoredSession({ home, sessionId, isActive, beforeRemove, logger }) {
+export async function deleteStoredSession({ home, sessionId, isActive, beforeRemove, afterRename, logger }) {
   const log = typeof logger === 'function' ? logger : () => {}
   assertSessionId(sessionId)
   log('info', 'delete requested', { sessionId, isActive: isActive === true })
@@ -120,6 +121,9 @@ export async function deleteStoredSession({ home, sessionId, isActive, beforeRem
   try {
     log('info', 'moving session directory out of the scan path', { sessionId, from: dir, to: graveyard })
     await rename(dir, graveyard)
+    // 改名成功 = 已越过不可回退点：这时才卸载内存会话。若放在改名之前，删除失败
+    // 会让用户丢掉正在看的会话、而文件还在（重启后又冒出来）。
+    if (typeof afterRename === 'function') await afterRename({ sessionId, dir })
     log('info', 'removing session directory', { sessionId, dir: graveyard })
     await rm(graveyard, { recursive: true, force: true })
     log('info', 'session deleted', { sessionId })
