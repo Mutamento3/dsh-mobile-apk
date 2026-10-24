@@ -428,14 +428,67 @@ export const MARKETPLACE_CSS: string = `
   line-height: 18px;
 }
 
-/* 临时诊断行（排查中）：定位后随组件里的同名段落一起删除。 */
-.dsh-market-diag {
-  margin: 0 0 8px;
-  padding: 6px 8px;
+/* 市场整页（0.15.0 用户定例）：浮层拉满整屏、面板占满，顶部一条「返回 + 标题」页头，
+   读起来是独立页面而不是浮在 UI 上的小窗。 */
+.dshm-overlay {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dshm-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dshm-pagebar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 12px 8px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.dshm-back {
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
   border-radius: var(--dsw-radius-sm);
-  background: var(--dsw-alias-bg-layer-2);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dshm-back:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dshm-pagetitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+/* 面板里的内容自己滚，页头固定。 */
+.dshm-panel > .dshm {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
 }
 `

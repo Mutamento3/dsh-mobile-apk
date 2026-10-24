@@ -503,6 +503,27 @@ const IMPLS = {
     },
   },
 
+  // ── marketplace J：市场对话框改成整页（带返回条）──
+  // 用户定例（0.15.0）：市场要是「完整的、可返回上级的界面」，不是浮在 UI 上的小窗。
+  // 该页所在面（插件页）不在设置对话框内，DOM 里没有设置导航，跳设置分区不可行；
+  // 因此把市场自己的浮层拉满整屏，并在面板里加一条「返回 + 标题」页头。
+  'market-J-fullpage': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => s.includes('dshm-pagebar'),
+    apply: (s) => {
+      const OLD = 's.default.createElement("div",{className:"dshm-panel",onClick:l=>l.stopPropagation()},s.default.createElement(T,{t:r,localeService:t,initialQuery:m}))'
+      const BAR = 's.default.createElement("div",{className:"dshm-pagebar"},'
+        + 's.default.createElement("button",{type:"button",className:"dshm-back","aria-label":"\\u8FD4\\u56DE",onClick:()=>e.close()},"\\u2039"),'
+        + 's.default.createElement("span",{className:"dshm-pagetitle"},"\\u63D2\\u4EF6\\u5E02\\u573A"))'
+      const NEW = 's.default.createElement("div",{className:"dshm-panel",onClick:l=>l.stopPropagation()},'
+        + BAR + ',s.default.createElement(T,{t:r,localeService:t,initialQuery:m}))'
+      if (!s.includes(OLD)) throw new Error('market-J 锚点未命中——市场浮层面板结构已变')
+      s = s.replace(OLD, NEW, 1)
+      if (!s.includes('dshm-pagebar')) throw new Error('market-J 复核失败——不写回')
+      return s
+    },
+  },
+
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用

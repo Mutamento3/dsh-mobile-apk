@@ -89,6 +89,13 @@
       "marker": "__dshMarketplacePanel"
     },
     {
+      "id": "market-J-fullpage",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "市场浮层拉满整屏 + 面板内加「返回 + 标题」页头",
+      "provenance": "0.15.0 用户定例：要完整的可返回界面，不要浮在 UI 上的小窗",
+      "marker": "dshm-pagebar"
+    },
+    {
       "id": "undo-E1",
       "target": "dsh-undo-savepoint/lib/client.js",
       "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",
