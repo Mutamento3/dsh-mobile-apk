@@ -1,11 +1,17 @@
 // 直接驱动 host 的三条路由：鉴权、方法、请求体上限、错误码映射。
 // 这些分支此前只靠 curl 手工验证，回归没有覆盖。
 import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { apply, removeSession } from '../src/index.js'
+
+// apply() 注册路由前会对 DSH_HOME 跑一次 graveyard 清扫（best-effort）。
+// 测试进程必须把它钉在临时目录上：否则开发机上真实 ~/.dsh/sessions 里若有
+// .deleting-* 残留，跑一遍测试就会动真实数据——测试不拥有那个目录。
+process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-session-delete-test-home-'))
 
 /** 收集注册的路由并提供一个可注入依赖的 ctx。 */
 function makeHost(overrides = {}) {
