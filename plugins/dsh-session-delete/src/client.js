@@ -211,7 +211,9 @@
           'error': '删除失败：{message}',
           'error.active': '这条对话正在运行，请先停止再删除。',
           'error.unknown': '无法确认这条对话是否空闲，已拒绝删除。',
-          'error.loaded': '这条对话还在应用里加载着，重启应用后再删除。',
+          'notice.title': '删除完成',
+          'notice.live': '已在本机删除。这条对话仍留在内存中，重启应用后会彻底消失。',
+          'ok': '知道了',
           'error.gone': '这条对话已经不在了。',
           'close': '关闭',
         }
@@ -225,7 +227,9 @@
           'error': 'Delete failed: {message}',
           'error.active': 'This conversation is running. Stop it before deleting.',
           'error.unknown': 'Could not confirm the conversation is idle, so it was not deleted.',
-          'error.loaded': 'This conversation is still loaded in the app. Restart the app, then delete it.',
+          'notice.title': 'Deleted',
+          'notice.live': 'Deleted on this device. The conversation is still loaded in memory; restart the app to remove it completely.',
+          'ok': 'Got it',
           'error.gone': 'This conversation no longer exists.',
           'close': 'Close',
         }
@@ -418,13 +422,12 @@
           return attemptDelete(sessionId, 0).then(function (data) {
             localTrace('deleted', { sessionId: sessionId, alreadyGone: data.alreadyGone === true })
             clearPending()
-            // 成功必须先收掉确认框：否则删除已经完成，弹窗还停在「正在删除…」。
-            setPending(null)
             try {
               afterDeleted(sessionId, data)
             } catch (error) {
               localTrace('after-failed', { sessionId: sessionId, message: String(error && error.message ? error.message : error) })
             }
+            return data
           })
         }
 
@@ -461,12 +464,16 @@
           var errorPair = react.useState(null)
           var error = errorPair[0]
           var setError = errorPair[1]
+          var noticePair = react.useState(null)
+          var notice = noticePair[0]
+          var setNotice = noticePair[1]
 
           if (target === null) return null
 
           function close() {
             if (busy) return
             setError(null)
+            setNotice(null)
             setPending(null)
           }
 
@@ -495,9 +502,21 @@
               window.location.reload()
             }, WATCHDOG_MS)
             runDelete(sessionId)
-              .then(function () {
+              .then(function (data) {
                 clearTimeout(watchdog)
-                localTrace('done', { sessionId: sessionId, resources: apiResourceTiming() })
+                localTrace('done', {
+                  sessionId: sessionId,
+                  liveRemaining: data !== undefined && data.liveRemaining === true,
+                  resources: apiResourceTiming(),
+                })
+                // live 会话卸载是 best-effort：没卸掉时不要假装「彻底删完了」，
+                // 把「仍留在内存、重启后彻底消失」如实告诉用户。
+                if (data !== undefined && data.liveRemaining === true) {
+                  setBusy(false)
+                  setNotice(t('notice.live'))
+                  return
+                }
+                setPending(null)
               })
               .catch(function (reason) {
                 clearTimeout(watchdog)
@@ -515,13 +534,17 @@
           return h(primitives.Modal, {
             open: true,
             onClose: close,
-            title: t('confirm.title'),
+            title: notice === null ? t('confirm.title') : t('notice.title'),
             closeLabel: t('close'),
-            description: t('confirm.desc', { title: target.title }),
+            description: notice === null ? t('confirm.desc', { title: target.title }) : notice,
             footer: h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end' } },
-              h('button', { type: 'button', style: cancelStyle, disabled: busy, onClick: close }, t('cancel')),
-              h('button', { type: 'button', style: deleteStyle, disabled: busy, onClick: confirmDelete },
-                busy ? t('deleting') : t('delete'))),
+              notice === null
+                ? [
+                  h('button', { key: 'cancel', type: 'button', style: cancelStyle, disabled: busy, onClick: close }, t('cancel')),
+                  h('button', { key: 'delete', type: 'button', style: deleteStyle, disabled: busy, onClick: confirmDelete },
+                    busy ? t('deleting') : t('delete')),
+                ]
+                : h('button', { type: 'button', style: cancelStyle, onClick: close }, t('ok'))),
           }, error === null ? null : h('p', {
             role: 'alert',
             style: { margin: '8px 0 0', color: 'var(--dsw-alias-state-error-primary)', fontSize: '12px', lineHeight: '18px' },

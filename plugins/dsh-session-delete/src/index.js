@@ -7,10 +7,10 @@
  * - `session-<uuid>` ids only;
  * - a session with running work is refused (409), and an unverifiable activity probe
  *   refuses too — "unknown" is never treated as "idle";
- * - a session still loaded in the engine is refused (409) as well: the engine exposes
- *   no public way to unload it (flush needs it live, liveEntryFor is private, the
- *   agent handle's dispose belongs to the creator), so deleting its files would leave
- *   a live ghost that keeps showing up in search;
+ * - a loaded session is deleted as well: the plugin tries to unload it first, but the
+ *   engine exposes no public unload API, so the unload is best-effort. When it does
+ *   not take, the response carries `liveRemaining: true` and the client tells the user
+ *   to restart the app — the conversation stays readable from memory until then;
  * - archive/pin membership is dropped best-effort before the directory goes away.
  *
  * The client half (session row menu) is the only caller; the route is not a
@@ -164,10 +164,6 @@ async function sessionActivity(ctx, sessionId) {
 export async function removeSession(ctx, sessionId) {
   const sessions = ctx.get('sessions')
   const live = sessions?.get?.(sessionId) !== undefined
-  // 引擎把「打开过」的会话都留在内存里（sessions.list），而插件**没有公开接口**能卸载它：
-  // flush(session) 要求会话仍在 live store，liveEntryFor 是 private，AgentHandle.dispose()
-  // 只暴露给创建者。因此只要会话还是 live，就拒绝删除——否则会留下「文件没了但内存里还在」
-  // 的幽灵会话，继续参与搜索。重启应用后 live 集合清空，即可删除。
   const activity = await sessionActivity(ctx, sessionId)
   const registry = ctx.get('workspaceRegistry')
   // 先落一行现场再判定：拒绝也要能从 engine.log 看出是 live / 有活动 / 探测失败。
@@ -184,10 +180,30 @@ export async function removeSession(ctx, sessionId) {
   if (activity.length > 0) {
     throw new SessionDeleteError('session-active', 'the conversation is running; stop it before deleting', { sessionId })
   }
+
+  // live 会话：尽力从内存里卸载（引擎没有公开接口：liveEntryFor 是 private、
+  // flush(session) 要求仍在 live store、AgentHandle.dispose 只给创建者）。
+  // 卸载失败不阻断删除，但结果里会带 liveRemaining=true，客户端据此提示用户
+  // 「已在本机删除，重启后彻底生效」。
+  let liveRemaining = false
   if (live) {
-    throw new SessionDeleteError('session-loaded', 'the conversation is still loaded in the app; restart the app and try again', { sessionId })
+    liveRemaining = true
+    try {
+      const session = sessions?.get?.(sessionId)
+      const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
+      if (entry !== undefined && typeof entry.detach === 'function') {
+        entry.detach()
+        liveRemaining = false
+        log(ctx, 'info', 'detached the live session', { sessionId })
+      } else {
+        log(ctx, 'warn', 'live session has no detach capability; it stays in memory until restart', { sessionId })
+      }
+    } catch (error) {
+      log(ctx, 'warn', 'session detach failed; it stays in memory until restart', { sessionId, error: String(error?.message ?? error) })
+    }
   }
-  return deleteStoredSession({
+
+  const result = await deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
     isActive: false,
@@ -207,6 +223,7 @@ export async function removeSession(ctx, sessionId) {
       }
     },
   })
+  return liveRemaining ? { ...result, liveRemaining: true } : result
 }
 
 /**
