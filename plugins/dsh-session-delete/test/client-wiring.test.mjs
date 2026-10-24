@@ -39,9 +39,10 @@ function createReact() {
 }
 
 /** 载入客户端 bundle，返回 { apply }。 */
-function loadClient() {
+function loadClient(options = {}) {
   let factory = null
   const sent = []
+  const reloads = []
   const storage = new Map()
   const react = createReact()
   const primitives = {
@@ -56,6 +57,9 @@ function loadClient() {
     send(body) { this.body = body; sent.push({ method: this.method, url: this.url, body }) }
   }
   FakeXHR.instances = []
+  if (options.pending !== undefined) {
+    storage.set('dsh.session-delete.pending', JSON.stringify({ sessionId: options.pending, at: Date.now() }))
+  }
   const context = {
     window: {
       __ModuleLoader__: { load: ({ factory: f }) => { factory = f } },
@@ -65,7 +69,7 @@ function loadClient() {
         removeItem: (k) => { storage.delete(k) },
       },
       sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
-      location: { href: 'http://127.0.0.1:3080/', reload: () => {} },
+      location: { href: 'http://127.0.0.1:3080/', reload: () => { reloads.push(Date.now()) } },
       addEventListener: () => {},
     },
     document: {
@@ -73,7 +77,10 @@ function loadClient() {
       head: { appendChild: () => {} },
       getElementById: () => null,
       createElement: () => ({ dataset: {}, remove: () => {} }),
-      querySelector: () => null,
+      querySelector: (selector) => {
+        if (options.mountedId === undefined || selector !== '[data-conversation-session]') return null
+        return { getAttribute: () => options.mountedId }
+      },
       querySelectorAll: () => [],
       visibilityState: 'visible',
     },
@@ -91,7 +98,7 @@ function loadClient() {
   vm.runInContext(SOURCE, sandbox)
   assert.equal(typeof factory, 'function', 'client bundle did not call __ModuleLoader__.load')
   const module = factory((id) => (id === 'react' ? react : primitives))
-  return { module, react, sent, FakeXHR, sandbox }
+  return { module, react, sent, FakeXHR, sandbox, reloads, storage }
 }
 
 test('menu item click opens the overlay and the confirm button sends the request', async () => {
@@ -138,4 +145,122 @@ test('menu item click opens the overlay and the confirm button sends the request
   assert.equal(sent[0].url, '/api/session-delete')
   assert.equal(JSON.parse(sent[0].body).sessionId, 'session-11111111-1111-4111-8111-111111111111')
   assert.equal(FakeXHR.instances.length >= 1, true)
+})
+
+test('deleting the conversation on screen reloads the page (no private navigation)', async () => {
+  const SESSION = 'session-22222222-2222-4222-8222-222222222222'
+  const { module, react, FakeXHR, reloads } = loadClient({ mountedId: SESSION })
+  const registrations = []
+  module.apply({
+    get: () => undefined,
+    effect: (fn) => fn(),
+    locale: { register: () => () => {} },
+    slots: { inject: (_n, f) => { registrations.push(f()) }, register: (def, component) => ({ def, component }) },
+  })
+  const menu = registrations.find((r) => r.def.name === 'sidebar.workspaces.session.menu.item')
+  const overlay = registrations.find((r) => r.def.name === 'shell.overlay')
+  const t = (k) => k
+  const menuTree = react.render(menu.component, {
+    sessionId: SESSION,
+    displayTitle: 'x',
+    useMenuOpenState: () => [true, () => {}],
+    t,
+  })
+  menuTree.props.onSelect()
+  const dialog = react.render(overlay.component, { t })
+  const inner = react.render(dialog.type, dialog.props)
+  inner.props.footer.props.children[1].props.onClick()
+
+  const xhr = FakeXHR.instances.at(-1)
+  xhr.status = 200
+  xhr.responseText = '{"ok":true,"sessionId":"' + SESSION + '"}'
+  xhr.onload()
+  for (let i = 0; i < 8; i += 1) await Promise.resolve()
+
+  assert.equal(reloads.length, 1, 'deleting the mounted conversation must reload the page')
+})
+
+/** 打开确认框并点「删除」，返回当前 XHR 实例。 */
+function clickConfirm(module, react) {
+  const registrations = []
+  module.apply({
+    get: () => undefined,
+    effect: (fn) => fn(),
+    locale: { register: () => () => {} },
+    slots: { inject: (_n, f) => { registrations.push(f()) }, register: (def, component) => ({ def, component }) },
+  })
+  const t = (k) => k
+  const menu = registrations.find((r) => r.def.name === 'sidebar.workspaces.session.menu.item')
+  const overlay = registrations.find((r) => r.def.name === 'shell.overlay')
+  const menuTree = react.render(menu.component, {
+    sessionId: 'session-44444444-4444-4444-8444-444444444444',
+    displayTitle: 'x',
+    useMenuOpenState: () => [true, () => {}],
+    t,
+  })
+  menuTree.props.onSelect()
+  const dialog = react.render(overlay.component, { t })
+  const inner = react.render(dialog.type, dialog.props)
+  inner.props.footer.props.children[1].props.onClick()
+}
+
+test('a timeout is retried, and a final failure is recorded with its code', async () => {
+  const { module, react, FakeXHR, storage } = loadClient()
+  clickConfirm(module, react)
+  assert.equal(FakeXHR.instances.length, 1)
+
+  FakeXHR.instances.at(-1).ontimeout()
+  for (let i = 0; i < 8; i += 1) await Promise.resolve()
+  assert.equal(FakeXHR.instances.length, 2, 'timeout must trigger a retry')
+
+  FakeXHR.instances.at(-1).ontimeout()
+  for (let i = 0; i < 8; i += 1) await Promise.resolve()
+  assert.equal(FakeXHR.instances.length, 3, 'second timeout must trigger the last attempt')
+
+  const last = FakeXHR.instances.at(-1)
+  last.status = 409
+  last.responseText = JSON.stringify({ ok: false, error: 'session-active', message: 'running' })
+  last.onload()
+  for (let i = 0; i < 12; i += 1) await Promise.resolve()
+
+  const trace = JSON.parse(storage.get('dsh.session-delete.trace') ?? '[]')
+  const failed = trace.filter((row) => row.step === 'failed')
+  assert.equal(failed.length, 1, 'the failure must be recorded')
+  assert.equal(failed[0].extra.code, 'session-active')
+})
+
+test('a 404 carrying not-found is treated as already deleted', async () => {
+  const { module, react, FakeXHR, storage, reloads } = loadClient()
+  clickConfirm(module, react)
+  const xhr = FakeXHR.instances.at(-1)
+  xhr.status = 404
+  xhr.responseText = JSON.stringify({ ok: false, error: 'not-found', message: 'gone' })
+  xhr.onload()
+  for (let i = 0; i < 12; i += 1) await Promise.resolve()
+
+  const trace = JSON.parse(storage.get('dsh.session-delete.trace') ?? '[]')
+  assert.equal(trace.some((row) => row.step === 'deleted'), true, '404 must count as deleted')
+  assert.equal(trace.some((row) => row.step === 'failed'), false, '404 must not be reported as failure')
+  assert.equal(reloads.length, 0, 'nothing mounted ⇒ no reload')
+})
+
+test('a pending delete from a previous page resumes automatically', async () => {
+  const SESSION = 'session-66666666-6666-4666-8666-666666666666'
+  const { module, FakeXHR, storage } = loadClient({ pending: SESSION })
+  module.apply({
+    get: () => undefined,
+    effect: (fn) => fn(),
+    locale: { register: () => () => {} },
+    slots: { inject: () => {}, register: () => ({}) },
+  })
+  await new Promise((resolve) => setTimeout(resolve, 700))
+  assert.equal(FakeXHR.instances.length, 1, 'resume must fire the request without user input')
+  assert.equal(JSON.parse(FakeXHR.instances[0].body).sessionId, SESSION)
+
+  const xhr = FakeXHR.instances[0]
+  xhr.status = 200
+  xhr.responseText = '{"ok":true}'
+  xhr.onload()
+  for (let i = 0; i < 12; i += 1) await Promise.resolve()
+  assert.equal(storage.has('dsh.session-delete.pending'), false, 'resume success must clear the pending entry')
 })
