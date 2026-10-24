@@ -113,6 +113,16 @@ class LogSanitizerTest {
     assertTrue("头名要保留", out.contains("Set-Cookie"))
   }
 
+  /** #508：curl verbose / 抓包导出的请求头带行内前缀（`> Cookie: …`），行首锚定会整行放过。 */
+  @Test
+  fun cookieHeaderWithRequestPrefixIsMasked() {
+    val out = LogSanitizer.sanitizeOrNull("> Cookie: session=" + sessionToken + "\n> GET /v1 HTTP/1.1")
+    assertNotNull(out)
+    assertFalse("带前缀的 Cookie 值不得残留", out!!.contains(sessionToken))
+    assertTrue("头名要保留", out.contains("Cookie:"))
+    assertTrue("无关行不受影响", out.contains("> GET /v1 HTTP/1.1"))
+  }
+
   @Test
   fun environmentExportsAreMasked() {
     val out = LogSanitizer.sanitizeOrNull(
@@ -122,6 +132,19 @@ class LogSanitizerTest {
     assertFalse(out!!.contains(skKey))
     assertFalse(out.contains(sessionToken))
     assertTrue("非敏感环境变量不受影响", out.contains("PATH=/usr/bin:/bin"))
+  }
+
+  /**
+   * #508：`export FOO_KEY=…` 导出行。裸 `KEY` 后缀（无 api 前缀）是 SENSITIVE_KV
+   * 子串匹配兜不到的形态，ENV 规则去掉行首锚定后由它唯一覆盖。
+   */
+  @Test
+  fun environmentExportPrefixIsMasked() {
+    val out = LogSanitizer.sanitizeOrNull("export MY_SERVICE_KEY=" + sessionToken + "\nexport PATH=/usr/bin:/bin")
+    assertNotNull(out)
+    assertFalse("export 导出的键值不得残留", out!!.contains(sessionToken))
+    assertTrue("键名要保留", out.contains("export MY_SERVICE_KEY="))
+    assertTrue("非敏感导出不受影响", out.contains("export PATH=/usr/bin:/bin"))
   }
 
   @Test
