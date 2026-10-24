@@ -215,10 +215,15 @@ export const MARKETPLACE_CSS: string = `
   outline-offset: 1px;
 }
 
+/* 省略号纯装饰：不接收任何指针事件，也不参与选中。
+   它紧邻首/末页按钮，触点落偏一点就会打到旁边那颗按钮上（表现为「点三个点跳到末页」）。 */
 .dshm-page-gap {
-  padding: 0 2px;
+  padding: 0 6px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .dshm-page-input {
