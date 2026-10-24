@@ -10,6 +10,8 @@
   - `shell.overlay`：确认框本体（自绘 Modal，不用 `window.confirm`——壳侧会自动批准 JS 弹窗）。
     确认后 `POST /api/session-delete`，成功 `location.reload()` 让列表/索引/搜索重读。
   - **幂等**：host 返回 404（会话已删/引擎已重启）时按成功处理，不再弹「session not found」。
+  - **删的是当前打开的会话**：不重载（重载会恢复到那条已删的会话），改为点应用自己的
+    「新会话」控件切到新对话；找不到控件时回退为重载。
   - **隐藏已删行**：引擎把加载过的会话留在内存里直到下次启动，所以删掉的行还会出现一会儿。
     client 把已删 id 记进 `localStorage['dsh.session-delete.hidden']`（上限 200），
     下次加载注入 `[data-row-key="session:<id>"]{display:none}`；引擎重启后列表本就干净，条目无副作用。

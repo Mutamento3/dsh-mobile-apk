@@ -60,20 +60,50 @@
           }
         }
 
+        /** Style tag id carrying the local hide rules. */
+        var STYLE_ID = 'dsh-session-delete-hidden'
+
         /**
-         * Hide rows whose session was deleted on this device.
-         * @returns {Function} disposer removing the injected style.
+         * Rewrite the local hide rules from the stored ids.
+         *
+         * Runs on load and again right after a delete, so the row disappears
+         * without waiting for a reload (the open-conversation path never reloads).
          */
-        function installHiddenStyles() {
+        function refreshHiddenStyles() {
           var ids = readHiddenIds()
-          if (ids.length === 0) return function () {}
-          var style = document.createElement('style')
-          style.dataset.plugin = 'dsh-session-delete'
+          var style = document.getElementById(STYLE_ID)
+          if (ids.length === 0) {
+            if (style !== null) style.remove()
+            return
+          }
+          if (style === null) {
+            style = document.createElement('style')
+            style.id = STYLE_ID
+            style.dataset.plugin = 'dsh-session-delete'
+            document.head.appendChild(style)
+          }
           style.textContent = ids.map(function (id) {
             return '[data-row-key="session:' + id + '"]{display:none !important}'
           }).join('\n')
-          document.head.appendChild(style)
-          return function () { style.remove() }
+        }
+
+        /**
+         * Open a fresh conversation through the app's own control.
+         *
+         * Deleting the mounted session cannot just reload: the engine keeps the
+         * session in its live list, so the reload restores the deleted page.
+         * The sidebar's new-session button creates and selects a new session.
+         * @returns {boolean} true when a control was found and clicked.
+         */
+        function goToNewSession() {
+          var buttons = Array.prototype.slice.call(document.querySelectorAll('button'))
+          var match = buttons.find(function (button) {
+            var label = (button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')
+            return /新会话|New session/i.test(label)
+          })
+          if (match === undefined) return false
+          match.click()
+          return true
         }
 
         /**
@@ -220,6 +250,12 @@
               })
               .then(function (data) {
                 rememberHiddenId(target.sessionId)
+                refreshHiddenStyles()
+                var mounted = document.documentElement.getAttribute('data-dsh-session-id')
+                if (mounted === target.sessionId && goToNewSession()) {
+                  trace('info', 'deleted the open conversation; switched to a new one', { sessionId: target.sessionId })
+                  return
+                }
                 trace('info', 'delete succeeded, reloading', { sessionId: target.sessionId, dir: data.dir, alreadyGone: data.alreadyGone === true })
                 window.location.reload()
               })
@@ -250,7 +286,13 @@
         /** @param {object} ctx - cordis client context. */
         function apply(ctx) {
           ctx.effect(function () { return ctx.locale.register(NS, { zh: zh, en: en }) }, 'session-delete: dictionaries')
-          ctx.effect(installHiddenStyles, 'session-delete: hide deleted rows')
+          ctx.effect(function () {
+            refreshHiddenStyles()
+            return function () {
+              var style = document.getElementById(STYLE_ID)
+              if (style !== null) style.remove()
+            }
+          }, 'session-delete: hide deleted rows')
           ctx.slots.inject('sidebar.workspaces.session.menu.item', function () {
             return ctx.slots.register({
               name: 'sidebar.workspaces.session.menu.item',
