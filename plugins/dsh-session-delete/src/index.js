@@ -192,6 +192,26 @@ function failureOf(error) {
  */
 export function apply(ctx) {
   log(ctx, 'info', 'registering route', { path: ROUTE })
+  // 客户端决策回传：删除后界面为什么没切换，只有浏览器侧知道；把它的选择写进
+  // engine.log（[dsh-session-delete] client trace …），现场问题不必再靠猜。
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/api/session-delete-trace',
+    handler: async (req, res) => {
+      if (!authorize(req, res, ctx)) return
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { ok: false, error: 'method-not-allowed' })
+        return
+      }
+      try {
+        const body = await readJsonBody(req)
+        log(ctx, 'info', 'client trace', body)
+      } catch (error) {
+        log(ctx, 'warn', 'client trace unreadable', { error: String(error?.message ?? error) })
+      }
+      sendJson(res, 200, { ok: true })
+    },
+  })
   ctx.webServer.register({
     kind: 'exact',
     path: '/api/session-delete',

@@ -95,6 +95,22 @@
          * The sidebar's new-session button creates and selects a new session.
          * @returns {boolean} true when a control was found and clicked.
          */
+        /**
+         * Report the post-delete navigation decision to the host log.
+         * @param {object} payload - decision details.
+         */
+        function reportTrace(payload) {
+          try {
+            fetch('/api/session-delete-trace', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(payload),
+            }).catch(function () {})
+          } catch (_) {
+            /* diagnostics only */
+          }
+        }
+
         function goToNewSession() {
           var buttons = Array.prototype.slice.call(document.querySelectorAll('button'))
           var match = buttons.find(function (button) {
@@ -262,12 +278,34 @@
                 rememberHiddenId(target.sessionId)
                 refreshHiddenStyles()
                 var mounted = document.documentElement.getAttribute('data-dsh-session-id')
-                if (mounted === target.sessionId && goToNewSession()) {
-                  trace('info', 'deleted the open conversation; switched to a new one', { sessionId: target.sessionId })
+                var report = { sessionId: target.sessionId, mountedBefore: mounted, url: window.location.href }
+                if (mounted !== target.sessionId) {
+                  report.decision = 'reload-not-mounted'
+                  reportTrace(report)
+                  window.location.reload()
                   return
                 }
-                trace('info', 'delete succeeded, reloading', { sessionId: target.sessionId, dir: data.dir, alreadyGone: data.alreadyGone === true })
-                window.location.reload()
+                var clicked = goToNewSession()
+                report.newSessionControl = clicked
+                setTimeout(function () {
+                  var afterNew = document.documentElement.getAttribute('data-dsh-session-id')
+                  report.mountedAfterNewSession = afterNew
+                  if (afterNew !== target.sessionId) {
+                    report.decision = 'switched-to-new-session'
+                    reportTrace(report)
+                    return
+                  }
+                  // 兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
+                  var row = document.querySelector('[data-row-key^="session:"]')
+                  report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
+                  if (row !== null) row.click()
+                  setTimeout(function () {
+                    report.mountedAfterRowClick = document.documentElement.getAttribute('data-dsh-session-id')
+                    report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
+                    reportTrace(report)
+                    if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
+                  }, 600)
+                }, 700)
               })
               .catch(function (reason) {
                 var message = String(reason && reason.message ? reason.message : reason)
