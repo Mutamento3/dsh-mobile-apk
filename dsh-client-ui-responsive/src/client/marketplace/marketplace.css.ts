@@ -462,6 +462,11 @@ export const MARKETPLACE_CSS: string = `
   min-height: 52px;
   padding: 6px 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  /* 页头永远在最上层、且自带底色：内容滚动时不会被盖住，也不会「看不见」。 */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--dsw-alias-bg-layer-1);
 }
 
 /* 返回：明确的「‹ 返回」文字按钮，44px 高（可点面积够大，不再是一个小箭头）。 */
@@ -470,16 +475,23 @@ export const MARKETPLACE_CSS: string = `
   display: inline-flex;
   flex: none;
   align-items: center;
-  height: 44px;
-  padding: 0 12px 0 8px;
-  border: 0;
-  border-radius: var(--dsw-radius-sm);
-  background: transparent;
+  height: 40px;
+  padding: 0 14px 0 10px;
+  /* 实心胶囊：不依赖「透明底 + 文字色」这类可能被主题吞掉的组合。 */
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
   font: inherit;
   font-size: 15px;
+  font-weight: 500;
   line-height: 22px;
   cursor: pointer;
+}
+
+.dshm-back:active {
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .dshm-back:active {
