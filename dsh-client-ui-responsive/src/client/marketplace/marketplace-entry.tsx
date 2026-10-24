@@ -24,6 +24,8 @@ import { tr } from '../i18n.ts'
 const MARKET_LABELS = ['插件市场', 'Plugin store']
 /** 隐藏标记：避免 MutationObserver 反复处理同一行。 */
 const HIDDEN_ATTR = 'data-dsh-market-nav-hidden'
+/** 首次成功切到市场分区后，才隐藏导航行（避免隐藏本身干扰切换）。 */
+let navigated = false
 
 /** 说明行与末端箭头的标记（本包 mobile/settings-nav.ts 写入）。 */
 const DESC_ATTR = 'data-dsh-settings-nav-desc'
@@ -42,8 +44,27 @@ function rowLabel(button: HTMLButtonElement): string {
 }
 
 function findMarketNavButton(): HTMLButtonElement | undefined {
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('nav button'))
-  return buttons.find((button) => MARKET_LABELS.includes(rowLabel(button)))
+  // 先找导航里的行；手机形态下导航可能被容器层移动过，故再退一步找全文档按钮。
+  const inNav = Array.from(document.querySelectorAll<HTMLButtonElement>('nav button'))
+  const hit = inNav.find((button) => MARKET_LABELS.includes(rowLabel(button)))
+  if (hit !== undefined) return hit
+  const all = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
+  return all.find((button) => MARKET_LABELS.includes(rowLabel(button)))
+}
+
+/**
+ * 取 React 挂在 DOM 节点上的 props（`__reactProps$…` 键）。
+ *
+ * 为什么要它：真机上给隐藏行派发 mousedown/click 没有触发分区切换（用户实测始终停在
+ * 弹窗兜底）。直接调用行按钮的 onClick 绕开「元素不可见 / 指针事件被拦」这一类因素。
+ * 键名取不到时退回真实事件序列，两条路都不改上游代码。
+ */
+function reactOnClick(node: Element): ((event: unknown) => void) | undefined {
+  const key = Object.keys(node).find((name) => name.startsWith('__reactProps$'))
+  if (key === undefined) return undefined
+  const props = (node as unknown as Record<string, { onClick?: unknown }>)[key]
+  const handler = props?.onClick
+  return typeof handler === 'function' ? (handler as (event: unknown) => void) : undefined
 }
 
 /**
@@ -56,9 +77,20 @@ function findMarketNavButton(): HTMLButtonElement | undefined {
 export function openMarketplacePage(): boolean {
   const button = findMarketNavButton()
   if (button === undefined) return false
+  const handler = reactOnClick(button)
+  if (handler !== undefined) {
+    try {
+      handler({ nativeEvent: {}, target: button, currentTarget: button, preventDefault() {}, stopPropagation() {} })
+      navigated = true
+      return true
+    } catch {
+      // 落到下面的真实事件序列
+    }
+  }
   for (const type of ['mousedown', 'mouseup', 'click'] as const) {
     button.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
   }
+  navigated = true
   return true
 }
 
@@ -92,6 +124,7 @@ export function openMarketplaceDialog(ctx: unknown): boolean {
 /** 隐藏市场分区的导航行；返回清理函数。 */
 export function hideMarketplaceNavRow(): () => void {
   const hide = () => {
+    if (!navigated) return
     const button = findMarketNavButton()
     if (button === undefined) return
     const row = (button.closest('[data-dsh-settings-nav]') ?? button.parentElement) as HTMLElement | null
