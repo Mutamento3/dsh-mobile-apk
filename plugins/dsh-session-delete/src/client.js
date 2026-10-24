@@ -574,8 +574,9 @@
               .catch(function (reason) {
                 clearTimeout(watchdog)
                 clearPending()
-                var message = String(reason && reason.message ? reason.message : reason)
-                localTrace('failed', { sessionId: sessionId, message: message, resources: apiResourceTiming() })
+                var raw = String(reason && reason.message ? reason.message : reason)
+                var message = errorText(t, reason && reason.code, raw)
+                localTrace('failed', { sessionId: sessionId, message: raw, code: reason && reason.code, resources: apiResourceTiming() })
                 trace('error', 'delete failed', { sessionId: sessionId, message: message })
                 reportTrace({ event: 'delete-failed', sessionId: sessionId, message: message })
                 setError(message)
