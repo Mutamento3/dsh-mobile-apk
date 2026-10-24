@@ -2,10 +2,11 @@
  * Client half: a "Delete conversation" item in the session row menu.
  *
  * The engine has no delete action (issue #493), so the item asks the host route
- * (`POST /api/session-delete`) to remove the stored session, then reloads the
- * page so every list/index reads the new state. Deletion is irreversible and
- * therefore always confirmed in a modal — never `window.confirm`, which the
- * Android shell auto-approves.
+ * (`POST /api/session-delete`) to remove the stored session, then leaves the
+ * deleted conversation through the public `session.new` shortcut action (with a
+ * reload as the last resort). Deletion is irreversible and therefore always
+ * confirmed in a modal — never `window.confirm`, which the Android shell
+ * auto-approves.
  */
 ;(function () {
   try {
@@ -90,14 +91,6 @@
         }
 
         /**
-         * Open a fresh conversation through the app's own control.
-         *
-         * Deleting the mounted session cannot just reload: the engine keeps the
-         * session in its live list, so the reload restores the deleted page.
-         * The sidebar's new-session button creates and selects a new session.
-         * @returns {boolean} true when a control was found and clicked.
-         */
-        /**
          * Session currently rendered on screen.
          *
          * `[data-conversation-session]` is the conversation body's own id and is
@@ -134,7 +127,7 @@
          * dialog would sit on「正在删除…」forever (measured: zero route hits in
          * engine.log while curl answered in 13 ms).
          * @param {string} sessionId - session to delete.
-         * @returns {Promise<Response>} the fetch response.
+         * @returns {Promise<{ok: boolean, status: number, json: () => Promise<object>}>} XHR result.
          */
         function postDelete(sessionId) {
           // 用 XHR 而不是 fetch：XHR 的 timeout 由浏览器网络栈保证触发，fetch 的
@@ -234,12 +227,6 @@
         }
 
         /**
-         * Client-side trace (browser console; visible over CDP).
-         * @param {'info'|'warn'|'error'} level - severity.
-         * @param {string} message - step description.
-         * @param {object} [extra] - structured fields.
-         */
-        /**
          * 把服务端错误码翻成界面文案；未知码原样显示。
          * @param {Function} t - locale-bound translator.
          * @param {string|undefined} code - server error code.
@@ -255,6 +242,12 @@
           return typeof t === 'function' ? t(key) : fallback
         }
 
+        /**
+         * Client-side trace (browser console; visible over CDP).
+         * @param {'info'|'warn'|'error'} level - severity.
+         * @param {string} message - step description.
+         * @param {object} [extra] - structured fields.
+         */
         function trace(level, message, extra) {
           var line = TAG + ' ' + message
           if (level === 'error') console.error(line, extra === undefined ? '' : extra)
@@ -311,13 +304,6 @@
           cursor: 'pointer',
         }
 
-        /**
-         * Pending deletion shared by the menu item and the overlay dialog.
-         *
-         * The menu item cannot own the dialog: selecting an item closes the menu,
-         * which unmounts the item — a dialog rendered there would never appear.
-         * The item only records the target; `shell.overlay` renders the confirm.
-         */
         /** Client context, captured in apply so the overlay can reach upstream services. */
         var pluginCtx = null
         /** 待办删除：请求卡死时先重载页面，重载后自动续做（幂等）。 */
@@ -384,7 +370,7 @@
             if (raw === null) return null
             var value = JSON.parse(raw)
             if (value === null || typeof value !== 'object' || typeof value.sessionId !== 'string') return null
-            if (Date.now() - Number(value.at) > 120000) {
+            if (!Number.isFinite(Number(value.at)) || Date.now() - Number(value.at) > 120000) {
               window.localStorage.removeItem(PENDING_KEY)
               return null
             }
@@ -397,6 +383,13 @@
         function clearPending() {
           try { window.localStorage.removeItem(PENDING_KEY) } catch (_) { /* ignore */ }
         }
+        /**
+         * Pending deletion shared by the menu item and the overlay dialog.
+         *
+         * The menu item cannot own the dialog: selecting an item closes the menu,
+         * which unmounts the item — a dialog rendered there would never appear.
+         * The item only records the target; `shell.overlay` renders the confirm.
+         */
         var pending = null
         var listeners = new Set()
         function setPending(next) {
