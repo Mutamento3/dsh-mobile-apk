@@ -21,7 +21,8 @@
     - `workspace/session-activity` 瀑布报告有活动 → `session-active`；
     - **探测状态未知**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）→ `activity-unknown`，
       绝不把「不知道」当「空闲」；
-    - **加载中的会话仍可删除**，但卸载是 best-effort：引擎没有公开卸载接口
+    - **加载中的会话仍可删除**：先删文件，再尽力卸载（顺序反了的话，删除失败会让用户白丢正在看的会话）。
+      卸载是 best-effort：引擎没有公开卸载接口
       （`flush(session)` 要求会话仍在 live store、`liveEntryFor` 是 private、
       `AgentHandle.dispose()` 只暴露给创建者），卸不掉时响应带 `liveRemaining: true`，
       客户端据此提示「已在本机删除，仍在内存中，重启后彻底消失」；

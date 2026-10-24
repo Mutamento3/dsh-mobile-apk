@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, writeFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -269,16 +270,20 @@ test('a non-array activity probe result refuses instead of guessing idle', async
   }
 })
 
-test('a live session is deleted and detached first (no restart needed)', async () => {
+test('a live session is deleted, then detached (files go first)', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
+  const dir = join(sessionsRoot(home), '--workspace--', ID)
+  let dirPresentAtDetach = null
   try {
-    const ctx = fakeCtx({ live: true, activity: [] })
+    const ctx = fakeCtx({ live: true, activity: [], detach: () => { dirPresentAtDetach = existsSync(dir) } })
     const result = await removeSession(ctx, ID)
     assert.equal(result.ok, true)
     assert.equal(result.liveRemaining, undefined)
     assert.deepEqual(ctx.calls, ['detach:' + ID])
+    // 卸载必须在文件删掉之后：否则删除失败时用户先丢了正在看的会话。
+    assert.equal(dirPresentAtDetach, false)
     assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME

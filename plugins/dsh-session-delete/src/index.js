@@ -181,28 +181,6 @@ export async function removeSession(ctx, sessionId) {
     throw new SessionDeleteError('session-active', 'the conversation is running; stop it before deleting', { sessionId })
   }
 
-  // live 会话：尽力从内存里卸载（引擎没有公开接口：liveEntryFor 是 private、
-  // flush(session) 要求仍在 live store、AgentHandle.dispose 只给创建者）。
-  // 卸载失败不阻断删除，但结果里会带 liveRemaining=true，客户端据此提示用户
-  // 「已在本机删除，重启后彻底生效」。
-  let liveRemaining = false
-  if (live) {
-    liveRemaining = true
-    try {
-      const session = sessions?.get?.(sessionId)
-      const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
-      if (entry !== undefined && typeof entry.detach === 'function') {
-        entry.detach()
-        liveRemaining = false
-        log(ctx, 'info', 'detached the live session', { sessionId })
-      } else {
-        log(ctx, 'warn', 'live session has no detach capability; it stays in memory until restart', { sessionId })
-      }
-    } catch (error) {
-      log(ctx, 'warn', 'session detach failed; it stays in memory until restart', { sessionId, error: String(error?.message ?? error) })
-    }
-  }
-
   const result = await deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
@@ -223,6 +201,26 @@ export async function removeSession(ctx, sessionId) {
       }
     },
   })
+
+  // 文件删掉之后才尽力卸载内存会话：反过来的话，一旦删除失败，用户已经丢掉了正在看的
+  // 会话、而文件还在（重启后又冒出来）。卸载失败不改变删除结果，只如实标记 liveRemaining。
+  let liveRemaining = false
+  if (live) {
+    liveRemaining = true
+    try {
+      const session = sessions?.get?.(sessionId)
+      const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
+      if (entry !== undefined && typeof entry.detach === 'function') {
+        entry.detach()
+        liveRemaining = false
+        log(ctx, 'info', 'detached the live session', { sessionId })
+      } else {
+        log(ctx, 'warn', 'live session has no detach capability; it stays in memory until restart', { sessionId })
+      }
+    } catch (error) {
+      log(ctx, 'warn', 'session detach failed; it stays in memory until restart', { sessionId, error: String(error?.message ?? error) })
+    }
+  }
   return liveRemaining ? { ...result, liveRemaining: true } : result
 }
 

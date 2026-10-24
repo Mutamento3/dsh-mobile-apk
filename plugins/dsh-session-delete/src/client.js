@@ -456,8 +456,21 @@
          * @returns {object|null} React element or null while idle.
          */
         function DeleteConfirmDialog(props) {
-          var t = props.t
           var target = usePending()
+          if (target === null) return null
+          // key 换成会话 id：换一条对话时组件重新挂载，busy/error/notice 不会从
+          // 上一次删除残留过来（否则删完 A 再点 B，会直接显示 A 的「已删除」提示）。
+          return h(ConfirmSessionDelete, { key: target.sessionId, target: target, t: props.t })
+        }
+
+        /**
+         * One session's confirmation dialog; remounted per session id.
+         * @param {object} props - `target` (session + title) and `t`.
+         * @returns {object} React element.
+         */
+        function ConfirmSessionDelete(props) {
+          var t = props.t
+          var target = props.target
           var busyPair = react.useState(false)
           var busy = busyPair[0]
           var setBusy = busyPair[1]
@@ -467,8 +480,6 @@
           var noticePair = react.useState(null)
           var notice = noticePair[0]
           var setNotice = noticePair[1]
-
-          if (target === null) return null
 
           function close() {
             if (busy) return
