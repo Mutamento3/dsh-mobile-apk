@@ -98,10 +98,20 @@
         function goToNewSession() {
           var buttons = Array.prototype.slice.call(document.querySelectorAll('button'))
           var match = buttons.find(function (button) {
+            // Upstream marks the control with css.newSession (CSS Modules keep the
+            // name). The visible label is「在“X”中新建会话」/“New session in X”, which
+            // does NOT contain the substring「新会话」— matching text alone missed it
+            // and fell back to a reload that restored the deleted page.
+            var className = button.className
+            if (typeof className === 'string' && className.indexOf('newSession') !== -1) return true
             var label = (button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')
-            return /新会话|New session/i.test(label)
+            return /新会话|新建会话|New session/i.test(label)
           })
           if (match === undefined) return false
+          trace('info', 'clicking the new-session control', {
+            className: String(match.className || ''),
+            label: match.getAttribute('aria-label') || '',
+          })
           match.click()
           return true
         }
