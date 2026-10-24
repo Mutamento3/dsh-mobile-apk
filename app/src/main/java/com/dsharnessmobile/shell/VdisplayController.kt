@@ -340,10 +340,10 @@ object VdisplayController {
       .put("code", bound.optString("code", "shizuku-not-ready"))
       .put("guidance", bound.optString("guidance", "Shizuku 未就绪。"))
 
-    if (existing >= MAX_VIRTUAL_DISPLAYS) {
-      return status(appContext).put("ok", false).put("code", "vdisplay-limit")
-        .put("guidance", "已达到本机虚拟屏上限（$MAX_VIRTUAL_DISPLAYS 块）；先销毁一块再创建。")
-    }
+    // #520：旧版此处曾有 `existing >= MAX_VIRTUAL_DISPLAYS → vdisplay-limit` 分支，但它被上面的
+    // 幂等复用早退（existing > 0 即 return）挡成死代码——MAX=1 时上限语义由「存在即复用」表达，
+    // vdisplay-limit 错误码永不返回。刻意删除而非保留：未来把 MAX 调大时，放行面在这里补回
+    // 上限分支并同步幂等早退条件（复用仅应发生在「未达上限」时），而不是让两个入口互相矛盾。
     val real = DisplayMetrics()
     @Suppress("DEPRECATION")
     (appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(real)
