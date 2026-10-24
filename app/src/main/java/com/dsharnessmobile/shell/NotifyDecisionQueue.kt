@@ -230,7 +230,7 @@ object NotifyDecisionQueue {
     }
   }
 
-  /** 压缩：只保留未完成项（临时文件 + rename 原子替换）。 */
+  /** 压缩：只保留未完成项（临时文件 + 原子替换；回退直写会让 fold 跳过半写行——用户作答静默丢失）。 */
   @Synchronized
   fun compact(context: Context) {
     try {
@@ -238,8 +238,12 @@ object NotifyDecisionQueue {
       val keep = load(context).filter { it.state == State.PENDING.wire || it.state == State.FAILED.wire }
       val tmp = File(f.parentFile, FILE_NAME + ".tmp")
       tmp.writeText(keep.joinToString("") { serialize(it) + "\n" })
-      if (!tmp.renameTo(f)) f.writeText(tmp.readText())
-      tmp.delete()
+      // 同款纪律已见 RepairConversationStore（#518）：renameTo 失败的直写回退非原子，
+      // 崩溃窗口内半写行会被 fold 的 parse 跳过——决策（用户作答）静默丢失。
+      if (!AtomicFileReplace.publish(tmp, f)) {
+        f.writeText(tmp.readText())
+        tmp.delete()
+      }
       LogCollector.log(TAG, "decision file compacted, kept=" + keep.size)
     } catch (t: Throwable) {
       LogCollector.log(TAG, "decision compact failed: " + t.message)
