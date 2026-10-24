@@ -494,9 +494,12 @@ const IMPLS = {
     check: (s) => !s.includes('settings.plugins.tab'),
     apply: (s) => {
       const TAB = ',e.slots.inject("settings.plugins.tab",()=>e.slots.register({name:"settings.plugins.tab",id:"dshmarketplace",order:20,label:()=>r("settings.tab"),locale:u,inject:()=>({t:r,localeService:e.locale})},P))'
+      // Tab → 独立设置分区：同一个面板组件 P，改注册到 settings.section（整页而不是页内 Tab）。
+      const SECTION = ',e.slots.inject("settings.section",()=>e.slots.register({name:"settings.section",id:"android-marketplace",order:60,label:()=>r("settings.tab"),locale:u,inject:()=>({t:r,localeService:e.locale})},P))'
       if (!s.includes(TAB)) throw new Error('market-H 锚点未命中——市场 Tab 注册段已变')
-      s = s.replace(TAB, '')
+      s = s.replace(TAB, SECTION)
       if (s.includes('settings.plugins.tab')) throw new Error('market-H 复核失败——Tab 注册仍在')
+      if (!s.includes('id:"android-marketplace"')) throw new Error('market-H 复核失败——分区注册未写入')
       return s
     },
   },
