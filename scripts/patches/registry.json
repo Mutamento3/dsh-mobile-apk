@@ -82,13 +82,6 @@
       "marker": "dshm-list\"},(l!==\"ready\""
     },
     {
-      "id": "market-I-panel-global",
-      "target": "dshmarketplace-plugin/lib/client.js",
-      "summary": "把市场面板组件挂到 window.__dshMarketplacePanel，供本包分区直接渲染",
-      "provenance": "0.15.0 用户定例：市场作为独立整页；跨分区 renderSlot 取不到 tab 槽",
-      "marker": "__dshMarketplacePanel"
-    },
-    {
       "id": "market-J-fullpage",
       "target": "dshmarketplace-plugin/lib/client.js",
       "summary": "市场浮层拉满整屏 + 面板内加「返回 + 标题」页头",

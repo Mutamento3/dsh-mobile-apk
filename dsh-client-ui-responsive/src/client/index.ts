@@ -359,8 +359,8 @@ export function apply(ctx: ClientContext): void {
   // 把它拉到与本页其余分区同一套上游行规，不碰对方的行为与数据。
   ctx.effect(() => injectStyle('marketplace', MARKETPLACE_CSS), 'ui-responsive: marketplace row alignment')
 
-  // 插件市场入口：挪进「插件」页的「添加插件」下拉（原来的 settings.plugins.tab 入口
-  // 由 market-H-no-tab 补丁去掉）。点选后发 `store` 命令回执，市场插件据此打开对话框。
+  // 插件市场入口：在「插件」页的「添加插件」下拉里。点选后发 `store` 命令回执，
+  // 市场插件据此打开它的浮层；该浮层由 market-J-fullpage 补丁做成整页（满屏 + 返回页头）。
   ctx.effect(() => registerMarketplaceAction(ctx.slots, ctx), 'ui-responsive: marketplace menu entry')
   // 插件市场不注册设置分区：入口只在「添加插件」下拉，点开是市场自己的整页浮层
   // （market-J-fullpage 补丁把它做成满屏 + 「‹ 返回」页头）。

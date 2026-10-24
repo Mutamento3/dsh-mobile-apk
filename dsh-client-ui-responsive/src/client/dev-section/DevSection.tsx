@@ -405,7 +405,6 @@ export function DevSection({ renderSlot }: DevSectionProps) {
       )}
       {incomingMsg !== null && <p className="dsh-dev-hint" {...noticeDataAttrs(incomingMsg)}>{incomingMsg.text}</p>}
       <p className="dsh-dev-hint">{tr('清理会删除临时工作区内的外部文件；相关会话中的文件引用将失效。', 'Clearing deletes external files in the temporary workspace; references in sessions stop working.')}</p>
-      <p className="dsh-dev-hint">{logPathHint}</p>
       <p className="dsh-dev-warn">{tr('日志包含命令与模型内容，仅用于排查，请及时清理。', 'Logs contain commands and model content; use them only for debugging and clear them soon.')}</p>
 
       {confirm !== null && (

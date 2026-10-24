@@ -123,14 +123,13 @@ describe('DevSection（开发者选项设置页）', () => {
 
   it('未授予所有文件访问时提示私有目录', async () => {
     const el = await render({ hasAllFilesAccess: () => false })
-    const hints = [...el.querySelectorAll('p')].map(p => p.textContent)
-    expect(hints.some(h => h?.includes('应用私有目录'))).toBe(true)
+    // 说明现在挂在「调试日志」行的 desc（div）里，不再是一条独立段落——断言整块文本。
+    expect(el.textContent).toContain('应用私有目录')
   })
 
   it('已授权时提示公共目录路径', async () => {
     const el = await render({ hasAllFilesAccess: () => true })
-    const hints = [...el.querySelectorAll('p')].map(p => p.textContent)
-    expect(hints.some(h => h?.includes('Documents/dshdata/log'))).toBe(true)
+    expect(el.textContent).toContain('Documents/dshdata/log')
   })
 
   it('桥缺失时安全降级（不抛异常，默认关）', async () => {

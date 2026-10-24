@@ -229,6 +229,10 @@ export const DEV_SECTION_CSS: string = `
   justify-content: flex-end;
 }
 
+/* 原生勾选行（标签 + 16px checkbox）。
+ * 本包自己的三页已全部换成上游 Switch，但**旧版通用设置**（0.14.9 的 GeneralSettings，
+ * 沉浸式状态栏那一行）仍用 dsh-dev-row + dsh-dev-switch 两个类；那条路径的样式就来自本表。
+ * 在它被下一个 APK 换代之前，这两条规则不能删——删了那一行的勾选框会失去尺寸与间距。 */
 .dsh-dev-switch {
   font-size: 14px;
   color: var(--dsw-alias-label-primary);
@@ -345,9 +349,6 @@ export const DEV_SECTION_CSS: string = `
 .dsh-root-step + .dsh-root-step { padding-top: 12px; border-top: 1px solid var(--dsw-alias-border-l2); }
 .dsh-root-access-card .dsh-dev-btn { min-height: 44px; width: 100%; }
 .dsh-root-access-card .dsh-dev-link { min-height: 44px; justify-self: start; text-align: left; }
-.dsh-root-toggle-row { display: flex; align-items: center; gap: 14px; min-height: 44px; }
-.dsh-root-toggle-row > span { flex: 1 1 auto; }
-.dsh-root-toggle-row > input { flex: 0 0 auto; width: 24px; height: 24px; margin: 0; accent-color: #4d6bfe; }
 .dsh-root-maintenance { padding-top: 8px; border-top: 1px solid var(--dsw-alias-border-l2); }
 .dsh-root-maintenance summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--dsw-alias-label-primary); }
 .dsh-root-maintenance[open] { display: grid; gap: 8px; }
@@ -459,22 +460,6 @@ export const DEV_SECTION_CSS: string = `
   border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
   background: var(--dsw-alias-bg-layer-2);
-}
-
-.dsh-dev-notify-cats {
-  display: grid;
-  gap: 4px;
-}
-
-/* 每个分类开关 + 它的「关掉会怎样」说明（批 4 / P0-5：纯标签开关会让用户按旧语义做决定）。 */
-.dsh-dev-notify-cat {
-  display: grid;
-  gap: 2px;
-  padding: 4px 0;
-}
-
-.dsh-dev-notify-cat .dsh-dev-hint {
-  margin: 0 0 0 2px;
 }
 
 /* #43 深色兜底（2026-08-18 首修 / 2026-09-25 二次修）。
