@@ -22,6 +22,10 @@
         var h = react.createElement
 
         var NS = 'session-delete'
+        /** Same tag as the host half so device logs can be grepped by one string. */
+        var TAG = '[dsh-session-delete]'
+        /** 构建戳：build.mjs 用源码哈希替换；与宿主 /api/session-delete-version 比对。 */
+        var BUILD_STAMP = '__BUILD_STAMP__'
         /**
          * Per-attempt timeout. A local delete answers in ~20ms; anything slower than
          * this is a dead keep-alive socket left over from an engine restart, and
@@ -370,6 +374,7 @@
             icon: h(primitives.IconTrashOutlineRegular, { size: 14 }),
             onSelect: function () {
               trace('info', 'menu item selected', { sessionId: props.sessionId })
+              localTrace('menu-selected', { sessionId: props.sessionId })
               setMenuOpen(false)
               setPending({ sessionId: props.sessionId, title: props.displayTitle || props.sessionId })
             },

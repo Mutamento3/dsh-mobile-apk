@@ -232,7 +232,7 @@
   disabled: true
 
 # 删除对话（issue #493）：会话行菜单「删除对话」+ 受鉴权 host 路由 /api/session-delete。
-# 引擎没有 session/delete RPC，插件负责删磁盘上的会话目录；活会话拒绝删除。
+# 引擎没有 session/delete RPC，插件负责先卸载内存会话，再删磁盘目录；运行中的会话拒绝删除。
 - insert:
     - id: session-delete
       name: '@dsh-android/dsh-session-delete'
