@@ -123,7 +123,15 @@ export async function deleteStoredSession({ home, sessionId, isActive, beforeRem
     await rename(dir, graveyard)
     // 改名成功 = 已越过不可回退点：这时才卸载内存会话。若放在改名之前，删除失败
     // 会让用户丢掉正在看的会话、而文件还在（重启后又冒出来）。
-    if (typeof afterRename === 'function') await afterRename({ sessionId, dir })
+    // 这个钩子是 best-effort：它失败不能让已经改名的目录留在 .deleting-* 里，
+    // 更不能把「文件已删」报成失败。
+    if (typeof afterRename === 'function') {
+      try {
+        await afterRename({ sessionId, dir })
+      } catch (error) {
+        log('warn', 'post-rename hook failed (ignored)', { sessionId, error: String(error?.message ?? error) })
+      }
+    }
     log('info', 'removing session directory', { sessionId, dir: graveyard })
     await rm(graveyard, { recursive: true, force: true })
     log('info', 'session deleted', { sessionId })

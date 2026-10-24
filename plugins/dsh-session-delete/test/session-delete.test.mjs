@@ -298,3 +298,16 @@ test('a delete that fails before the rename must not unload the live session', a
     else process.env.DSH_HOME = previous
   }
 })
+
+test('a failing post-rename hook never leaves a renamed directory behind', async () => {
+  const home = await homeWith([ID])
+  const result = await deleteStoredSession({
+    home,
+    sessionId: ID,
+    afterRename: async () => { throw new Error('detach exploded') },
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
+  const leftovers = (await readdir(join(sessionsRoot(home), '--workspace--'))).filter((n) => n.includes('.deleting-'))
+  assert.deepEqual(leftovers, [])
+})

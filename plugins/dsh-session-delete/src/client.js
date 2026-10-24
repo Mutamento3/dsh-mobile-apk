@@ -251,7 +251,8 @@
             : code === 'activity-unknown' ? 'error.unknown'
               : code === 'not-found' ? 'error.gone'
                 : null
-          return key === null ? fallback : t(key)
+          if (key === null) return fallback
+          return typeof t === 'function' ? t(key) : fallback
         }
 
         function trace(level, message, extra) {
