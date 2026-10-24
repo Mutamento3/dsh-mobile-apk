@@ -25,6 +25,18 @@ class RepairGateTest {
   }
 
   @Test
+  fun `cold start auto attempt is one-shot per process and only for a stale gate`() {
+    RepairState.resetProcessStateForTest()
+    try {
+      assertTrue("上一进程落的门：第一次自动尝试必须放行", RepairState.coldStartAutoAttempt(required = true))
+      assertFalse("同一进程只花一次", RepairState.coldStartAutoAttempt(required = true))
+      assertFalse("门不存在时无尝试可言", RepairState.coldStartAutoAttempt(required = false))
+    } finally {
+      RepairState.resetProcessStateForTest()
+    }
+  }
+
+  @Test
   fun `automatic retry remains bounded and never clears the durable gate`() {
     assertFalse("required 时不得自动重试", shouldScheduleAutomaticRetry(required = true, retries = 0, retryPending = false))
     assertFalse("已有排队重试时不得叠加", shouldScheduleAutomaticRetry(required = false, retries = 0, retryPending = true))
@@ -36,8 +48,8 @@ class RepairGateTest {
   @Test
   fun `only the explicit retry clears required and the retry budget`() {
     val start = source("EngineStartFlow.kt").substringAfter("fun start()").substringBefore("resetBootStall()")
-    assertTrue("自动 start 必须以 explicitUserRetry = false 过闸门",
-      start.contains("startupEntryDecision(RepairState.required(activity), explicitUserRetry = false)"))
+    assertTrue("自动 start 过闸门只能走每进程一次的冷启自动尝试（0.14.10），不得自由通过",
+      start.contains("startupEntryDecision(RepairState.required(activity), explicitUserRetry = RepairState.coldStartAutoAttempt(activity))"))
     assertFalse("自动 start 不得清除持久闸门", start.contains("beginUserRetry"))
 
     val main = source("MainActivity.kt")
