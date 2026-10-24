@@ -365,6 +365,59 @@ const IMPLS = {
     },
   },
 
+  // ── marketplace E：按仓库折叠（一行一仓，展开列子包）──
+  // 0.15.0 用户指定做法：市场列表里同一 monorepo 的子包共用仓库 star，连排时
+  // 「作者全一样、star 全一样」看起来像数据错误。改为一行一仓库（仓库名/作者/star），
+  // 展开后才列出该仓库的子包；只有一个包的仓库不折叠，直接显示原插件行（保留安装入口）。
+  'market-E-collapse': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => s.includes('kidOpen'),
+    apply: (s) => {
+      const identTags = ['Y', 'R', 's.default.Fragment']
+      const el = (tag, props, ...kids) =>
+        's.default.createElement(' + (identTags.includes(tag) ? tag : JSON.stringify(tag)) + ',' + props +
+        kids.map((k) => ',' + k).join('') + ')'
+
+      const GROUP_OLD = 'z=s.default.useMemo(()=>I(c,""),[c]);'
+      const GROUP_NEW = 'z=s.default.useMemo(()=>{let acc=new Map();for(let it of I(c,"")){let r=String(it.fullName||"").split("#")[0];let hit=acc.get(r);if(hit){hit.__children.push(it)}else{let parts=r.split("/");acc.set(r,Object.assign({},it,{name:parts[1]||parts[0],owner:parts[0],__repo:r,__children:[it]}))}}return Array.from(acc.values())},[c]);'
+      const STATE_OLD = '[b,x]=s.default.useState(null),z='
+      const STATE_NEW = '[b,x]=s.default.useState(null),[kidOpen,setKidOpen]=s.default.useState({}),z='
+      const LIST_OLD = 's.default.createElement("ul",{className:"dshm-list"},z.map(o=>s.default.createElement(s.default.Fragment,{key:o.fullName},s.default.createElement(Y,{plugin:o,locale:a,t:e,status:E[o.fullName],onInstall:H}),S[o.fullName]?s.default.createElement(R,{error:S[o.fullName],t:e}):null))),'
+
+      const head = el('div', '{className:"dshm-row-head"}',
+        el('span', '{className:"dshm-name"}', 'o.name'),
+        el('span', '{className:"dshm-owner"}', 'o.owner'),
+        el('span', '{className:"dshm-stars"}', '"\\u2605 ",Number(o.stars??0).toLocaleString()'))
+      const toggle = el('button',
+        '{type:"button",className:"dshm-kids-toggle","aria-expanded":kidOpen[o.__repo]?"true":"false",' +
+        'onClick:()=>setKidOpen(v=>Object.assign({},v,{[o.__repo]:!v[o.__repo]}))}',
+        '(kidOpen[o.__repo]?"\\u6536\\u8D77 ":"\\u5C55\\u5F00 ")+o.__children.length+" \\u4E2A\\u5B50\\u5305"')
+      const kids = 'kidOpen[o.__repo]?' + el('ul', '{className:"dshm-kids"}',
+        'o.__children.map(ch=>' + el('s.default.Fragment', '{key:ch.fullName}',
+          el('Y', '{plugin:ch,locale:a,t:e,status:E[ch.fullName],onInstall:H}'),
+          'S[ch.fullName]?' + el('R', '{error:S[ch.fullName],t:e}') + ':null') + ')') + ':null'
+      const repoLi = el('li', '{className:"dshm-row dshm-repo"}',
+        el('div', '{className:"dshm-row-main"}', head,
+          el('p', '{className:"dshm-summary"}', 'k(o,a)'),
+          'o.__children.length>1?' + toggle + ':null',
+          kids))
+      const rowExpr = 'o.__children.length===1?' +
+        el('Y', '{plugin:o.__children[0],locale:a,t:e,status:E[o.__children[0].fullName],onInstall:H}') +
+        ':' + repoLi
+      const LIST_NEW = el('ul', '{className:"dshm-list"}', 'z.map(o=>' + rowExpr + ')') + ','
+
+      if (LIST_NEW.split('(').length !== LIST_NEW.split(')').length) {
+        throw new Error('E 渲染表达式括号不平衡——拒绝写回')
+      }
+      for (const [old, name] of [[GROUP_OLD, '归并'], [STATE_OLD, '状态'], [LIST_OLD, '列表']]) {
+        if (!s.includes(old)) throw new Error('market-E ' + name + '锚点未命中——上游客户端包已变，请人工核对')
+      }
+      s = s.replace(GROUP_OLD, GROUP_NEW).replace(STATE_OLD, STATE_NEW).replace(LIST_OLD, LIST_NEW)
+      if (!s.includes('kidOpen') || !s.includes('dshm-repo')) throw new Error('market-E 复核失败——不写回')
+      return s
+    },
+  },
+
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用

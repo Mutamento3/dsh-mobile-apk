@@ -54,6 +54,13 @@
       "marker": "dshm-compat"
     },
     {
+      "id": "market-E-collapse",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "插件市场按仓库折叠：一行一仓库（仓库名/作者/star），展开后列出子包；单包仓库不折叠",
+      "provenance": "0.15.0 用户指定做法（monorepo 子包共用仓库 star，连排时看起来像数据错误）",
+      "marker": "kidOpen"
+    },
+    {
       "id": "undo-E1",
       "target": "dsh-undo-savepoint/lib/client.js",
       "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",

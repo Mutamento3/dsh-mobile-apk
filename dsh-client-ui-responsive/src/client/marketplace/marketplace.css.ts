@@ -154,6 +154,13 @@ export const MARKETPLACE_CSS: string = `
   padding-left: 8px;
 }
 
+/* 子包行的作者与 star 与所属仓库行完全重复（同一仓库、同一个 star 数），
+   在缩进列表里再显示两遍是纯噪音：子包只保留包名、简介、元信息与安装按钮。 */
+.dshm-kids .dshm-owner,
+.dshm-kids .dshm-stars {
+  display: none;
+}
+
 /* 列表：去掉与 head 叠成双线的上边线。 */
 .dshm-list {
   border-top: 0;
