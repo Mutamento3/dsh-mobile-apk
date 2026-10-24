@@ -85,14 +85,16 @@ export const DEV_SECTION_CSS: string = `
   align-items: center;
 }
 
-/* 一行放多个动作按钮（通知页的三个按钮）：等分宽度、不换行。 */
+/* 一行放多个动作按钮（通知页的三个按钮）：按内容取宽、禁止换行。
+   之前写成三等分 + 允许换行，中文标签被挤成「系统通知设 / 置」两行，
+   还会顶到上一行的开关上。 */
 .dsh-dev-actions {
   flex-wrap: nowrap;
   gap: 8px;
 }
 .dsh-dev-actions > button {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* 破坏性动作：沿用上游 Button 的形状，只把文字/描边染成错误语义色。 */
