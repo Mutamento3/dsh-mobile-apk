@@ -2319,6 +2319,8 @@ glob:plugins/dsh-linux-bootstrap/src/*.js
 glob:plugins/dsh-linux-bootstrap/client/*.js
 glob:plugins/dsh-android-file-open/test/*.mjs
 glob:plugins/dsh-android-linux-env/test/*.mjs
+glob:plugins/dsh-session-delete/src/*.js
+glob:plugins/dsh-session-delete/test/*.mjs
 glob:plugins/dsh-android-model-capability/test/*.mjs
 glob:plugins/dsh-model-capability/test/*.mjs
 dsh-client-ui-responsive/src/index.ts
