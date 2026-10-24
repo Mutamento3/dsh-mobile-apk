@@ -25,9 +25,25 @@ const MARKET_LABELS = ['插件市场', 'Plugin store']
 /** 隐藏标记：避免 MutationObserver 反复处理同一行。 */
 const HIDDEN_ATTR = 'data-dsh-market-nav-hidden'
 
+/** 说明行与末端箭头的标记（本包 mobile/settings-nav.ts 写入）。 */
+const DESC_ATTR = 'data-dsh-settings-nav-desc'
+const CHEVRON_ATTR = 'data-dsh-settings-nav-chevron'
+
+/**
+ * 一级行的 label：按钮里第一个非本模块添加的 `span`。
+ *
+ * 不能直接用 `button.textContent`：自有分区会被 `settings-nav.ts` 追加一行短说明，
+ * 拼起来是「插件市场浏览社区插件…」，精确匹配必然失败（这就是点击一直走兜底弹窗的原因）。
+ */
+function rowLabel(button: HTMLButtonElement): string {
+  const spans = Array.from(button.querySelectorAll<HTMLElement>(':scope > span'))
+  const label = spans.find((node) => !node.hasAttribute(DESC_ATTR) && !node.hasAttribute(CHEVRON_ATTR))
+  return (label?.textContent ?? '').trim()
+}
+
 function findMarketNavButton(): HTMLButtonElement | undefined {
   const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('nav button'))
-  return buttons.find((button) => MARKET_LABELS.includes((button.textContent ?? '').trim()))
+  return buttons.find((button) => MARKET_LABELS.includes(rowLabel(button)))
 }
 
 /**

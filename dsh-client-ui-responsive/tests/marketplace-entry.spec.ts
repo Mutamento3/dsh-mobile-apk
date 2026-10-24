@@ -3,13 +3,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { hideMarketplaceNavRow, openMarketplacePage } from '../src/client/marketplace/marketplace-entry.tsx'
 
-function mountNav(label: string) {
+function mountNav(label: string, withDesc = false) {
   document.body.innerHTML = ''
   const nav = document.createElement('nav')
   const row = document.createElement('div')
-  row.setAttribute('data-dsh-settings-nav', 'other')
+  row.setAttribute('data-dsh-settings-nav', 'own')
   const button = document.createElement('button')
-  button.textContent = label
+  const labelSpan = document.createElement('span')
+  labelSpan.textContent = label
+  button.appendChild(labelSpan)
+  if (withDesc) {
+    const desc = document.createElement('span')
+    desc.setAttribute('data-dsh-settings-nav-desc', '')
+    desc.textContent = '浏览社区插件，按移动端兼容性筛选'
+    button.appendChild(desc)
+  }
   row.appendChild(button)
   nav.appendChild(row)
   document.body.appendChild(nav)
@@ -29,6 +37,14 @@ describe('插件市场入口', () => {
 
   it('英文标签同样可识别（市场 locale 用 Plugin store）', () => {
     const { button } = mountNav('Plugin store')
+    const clicked = vi.fn()
+    button.addEventListener('click', clicked)
+    expect(openMarketplacePage()).toBe(true)
+    expect(clicked).toHaveBeenCalledOnce()
+  })
+
+  it('行里带短说明时仍能识别（自有分区的常态）', () => {
+    const { button } = mountNav('插件市场', true)
     const clicked = vi.fn()
     button.addEventListener('click', clicked)
     expect(openMarketplacePage()).toBe(true)
