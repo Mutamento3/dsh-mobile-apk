@@ -1255,14 +1255,20 @@ internal class BrowserHost(
    * 旧布局，2026-10-24 实测 1043x420 vs 390x845），故事件落账后再补测一次；relayout 后
    * 同样补测。只回填仍登记在册的同一个 tab，重建/关闭后的迟到回执作废。
    */
-  private fun measureRemotePage(tab: Tab) {
+  private fun measureRemotePage(tab: Tab, settleChase: Int = 2) {
     if (tab.view != null) return
     evaluateOnTab(tab, "(function(){return JSON.stringify({w:window.innerWidth||0,h:window.innerHeight||0,dpr:window.devicePixelRatio||0})})()") { raw ->
       if (tabOrNull(tab.id) !== tab) return@evaluateOnTab
-      val value = decodeJsObject(raw) ?: return@evaluateOnTab
-      tab.pageWidth = value.optInt("w", tab.pageWidth)
-      tab.pageHeight = value.optInt("h", tab.pageHeight)
-      tab.pageDevicePixelRatio = value.optDouble("dpr", tab.pageDevicePixelRatio)
+      val value = decodeJsObject(raw)
+      if (value != null) {
+        tab.pageWidth = value.optInt("w", tab.pageWidth)
+        tab.pageHeight = value.optInt("h", tab.pageHeight)
+        tab.pageDevicePixelRatio = value.optDouble("dpr", tab.pageDevicePixelRatio)
+      }
+      // 视口脚本重排可能晚于本次探测（实测 776x1680 → 稳态 390x845）：有界追测直到稳定。
+      if (settleChase > 0) main.postDelayed({
+        if (tabOrNull(tab.id) === tab && tab.view == null) measureRemotePage(tab, settleChase - 1)
+      }, 600)
     }
   }
 
