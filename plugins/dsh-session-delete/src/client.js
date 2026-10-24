@@ -279,6 +279,57 @@
          */
         /** Client context, captured in apply so the overlay can reach upstream services. */
         var pluginCtx = null
+        /** 待办删除：请求卡死时先重载页面，重载后自动续做（幂等）。 */
+        var PENDING_KEY = 'dsh.session-delete.pending'
+        /** 客户端步骤留痕（localStorage，断网也能读；诊断用）。 */
+        var TRACE_KEY = 'dsh.session-delete.trace'
+        /** 请求看门狗：超过这个时间还没结果就重载页面重建连接。 */
+        var WATCHDOG_MS = 4000
+
+        /**
+         * 本地留痕：不依赖网络，写入 WebView 的 localStorage（可被现场取证）。
+         * @param {string} step - 步骤名。
+         * @param {object} [extra] - 附加字段。
+         */
+        function localTrace(step, extra) {
+          try {
+            var raw = window.localStorage.getItem(TRACE_KEY)
+            var list = raw === null ? [] : JSON.parse(raw)
+            if (!Array.isArray(list)) list = []
+            list.push({ at: Date.now(), step: step, extra: extra === undefined ? null : extra })
+            window.localStorage.setItem(TRACE_KEY, JSON.stringify(list.slice(-60)))
+          } catch (_) {
+            /* 诊断用，失败不影响功能 */
+          }
+        }
+
+        /** @param {string} sessionId - 待办会话。 */
+        function savePending(sessionId) {
+          try {
+            window.localStorage.setItem(PENDING_KEY, JSON.stringify({ sessionId: sessionId, at: Date.now() }))
+          } catch (_) { /* ignore */ }
+        }
+
+        /** @returns {{sessionId: string, at: number}|null} 120 秒内的待办删除。 */
+        function readPending() {
+          try {
+            var raw = window.localStorage.getItem(PENDING_KEY)
+            if (raw === null) return null
+            var value = JSON.parse(raw)
+            if (value === null || typeof value !== 'object' || typeof value.sessionId !== 'string') return null
+            if (Date.now() - Number(value.at) > 120000) {
+              window.localStorage.removeItem(PENDING_KEY)
+              return null
+            }
+            return value
+          } catch (_) {
+            return null
+          }
+        }
+
+        function clearPending() {
+          try { window.localStorage.removeItem(PENDING_KEY) } catch (_) { /* ignore */ }
+        }
         var pending = null
         var listeners = new Set()
         function setPending(next) {
@@ -291,6 +342,102 @@
         }
         function usePending() {
           return react.useSyncExternalStore(subscribe, function () { return pending })
+        }
+
+        /**
+         * One delete attempt; retries on a timeout with a fresh connection.
+         * @param {number} n - zero-based attempt index.
+         * @returns {Promise<object>} server payload.
+         */
+        function attemptDelete(sessionId, n) {
+          localTrace('attempt', { sessionId: sessionId, attempt: n })
+          return postDelete(sessionId)
+            .then(function (res) {
+              return res.json().catch(function () { return {} }).then(function (data) {
+                if (!res.ok || data.ok !== true) {
+                  // 404 = already gone (deleted earlier, or the engine restarted).
+                  if (res.status === 404) {
+                    trace('warn', 'session already gone; treating as deleted', { sessionId: sessionId })
+                    return { ok: true, sessionId: sessionId, alreadyGone: true }
+                  }
+                  throw new Error(data.message || data.error || ('HTTP ' + res.status))
+                }
+                return data
+              })
+            })
+            .catch(function (reason) {
+              var retryable = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
+              if (retryable && n + 1 < MAX_ATTEMPTS) {
+                localTrace('attempt-timeout', { sessionId: sessionId, attempt: n })
+                trace('warn', 'delete attempt timed out; retrying on a fresh connection', {
+                  sessionId: sessionId,
+                  attempt: n + 1,
+                })
+                reportTrace({ event: 'delete-retry', sessionId: sessionId, attempt: n + 1 })
+                return attemptDelete(sessionId, n + 1)
+              }
+              throw reason
+            })
+        }
+
+        /**
+         * Post-delete bookkeeping: hide the row, then leave the deleted conversation.
+         * @param {object} data - server payload.
+         */
+        function afterDeleted(sessionId, data) {
+          rememberHiddenId(sessionId)
+          refreshHiddenStyles()
+          var mounted = mountedSessionId()
+          var report = { sessionId: sessionId, mountedBefore: mounted, url: window.location.href }
+          if (mounted !== sessionId) {
+            report.decision = 'reload-not-mounted'
+            reportTrace(report)
+            window.location.reload()
+            return
+          }
+          report.clearedMain = clearMainView()
+          setTimeout(function () {
+            var afterClear = mountedSessionId()
+            report.mountedAfterClearMain = afterClear
+            if (afterClear !== sessionId) {
+              report.decision = 'cleared-main'
+              reportTrace(report)
+              return
+            }
+            report.newSessionControl = goToNewSession()
+            setTimeout(function () {
+              var afterNew = mountedSessionId()
+              report.mountedAfterNewSession = afterNew
+              if (afterNew !== sessionId) {
+                report.decision = 'switched-to-new-session'
+                reportTrace(report)
+                return
+              }
+              // 最后兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
+              var row = document.querySelector('[data-row-key^="session:"]')
+              report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
+              if (row !== null) row.click()
+              setTimeout(function () {
+                report.mountedAfterRowClick = mountedSessionId()
+                report.decision = report.mountedAfterRowClick === sessionId ? 'still-mounted-reloading' : 'switched-by-row'
+                reportTrace(report)
+                if (report.mountedAfterRowClick === sessionId) window.location.reload()
+              }, 600)
+            }, 600)
+          }, 300)
+        }
+
+        /**
+         * Run the delete for one session and finish the UI transition.
+         * @param {string} sessionId - target session.
+         * @returns {Promise<void>} resolves after the post-delete transition started.
+         */
+        function runDelete(sessionId) {
+          return attemptDelete(sessionId, 0).then(function (data) {
+            localTrace('deleted', { sessionId: sessionId, alreadyGone: data.alreadyGone === true })
+            clearPending()
+            afterDeleted(sessionId, data)
+          })
         }
 
         /**
@@ -335,97 +482,29 @@
             setPending(null)
           }
 
-          /**
-           * One delete attempt; retries on a timeout with a fresh connection.
-           * @param {number} n - zero-based attempt index.
-           * @returns {Promise<object>} server payload.
-           */
-          function attemptDelete(n) {
-            return postDelete(target.sessionId)
-              .then(function (res) {
-                return res.json().catch(function () { return {} }).then(function (data) {
-                  if (!res.ok || data.ok !== true) {
-                    // 404 = already gone (deleted earlier, or the engine restarted).
-                    if (res.status === 404) {
-                      trace('warn', 'session already gone; treating as deleted', { sessionId: target.sessionId })
-                      return { ok: true, sessionId: target.sessionId, alreadyGone: true }
-                    }
-                    throw new Error(data.message || data.error || ('HTTP ' + res.status))
-                  }
-                  return data
-                })
-              })
-              .catch(function (reason) {
-                var retryable = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
-                if (retryable && n + 1 < MAX_ATTEMPTS) {
-                  trace('warn', 'delete attempt timed out; retrying on a fresh connection', {
-                    sessionId: target.sessionId,
-                    attempt: n + 1,
-                  })
-                  reportTrace({ event: 'delete-retry', sessionId: target.sessionId, attempt: n + 1 })
-                  return attemptDelete(n + 1)
-                }
-                throw reason
-              })
-          }
-
-          /**
-           * Post-delete bookkeeping: hide the row, then leave the deleted conversation.
-           * @param {object} data - server payload.
-           */
-          function afterDeleted(data) {
-            rememberHiddenId(target.sessionId)
-            refreshHiddenStyles()
-            var mounted = mountedSessionId()
-            var report = { sessionId: target.sessionId, mountedBefore: mounted, url: window.location.href }
-            if (mounted !== target.sessionId) {
-              report.decision = 'reload-not-mounted'
-              reportTrace(report)
-              window.location.reload()
-              return
-            }
-            report.clearedMain = clearMainView()
-            setTimeout(function () {
-              var afterClear = mountedSessionId()
-              report.mountedAfterClearMain = afterClear
-              if (afterClear !== target.sessionId) {
-                report.decision = 'cleared-main'
-                reportTrace(report)
-                return
-              }
-              report.newSessionControl = goToNewSession()
-              setTimeout(function () {
-                var afterNew = mountedSessionId()
-                report.mountedAfterNewSession = afterNew
-                if (afterNew !== target.sessionId) {
-                  report.decision = 'switched-to-new-session'
-                  reportTrace(report)
-                  return
-                }
-                // 最后兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
-                var row = document.querySelector('[data-row-key^="session:"]')
-                report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
-                if (row !== null) row.click()
-                setTimeout(function () {
-                  report.mountedAfterRowClick = mountedSessionId()
-                  report.decision = report.mountedAfterRowClick === target.sessionId ? 'still-mounted-reloading' : 'switched-by-row'
-                  reportTrace(report)
-                  if (report.mountedAfterRowClick === target.sessionId) window.location.reload()
-                }, 600)
-              }, 600)
-            }, 300)
-          }
-
           function confirmDelete() {
-            trace('info', 'confirm accepted, sending request', { sessionId: target.sessionId })
+            var sessionId = target.sessionId
+            trace('info', 'confirm accepted, sending request', { sessionId: sessionId })
+            localTrace('confirm', { sessionId: sessionId })
             setBusy(true)
             setError(null)
-            attemptDelete(0)
-              .then(afterDeleted)
+            // 请求卡死时不再让弹窗无限转：落待办 + 看门狗，超时就重载页面，
+            // 重载后插件自动续做这条删除（幂等：404 视为已删）。
+            savePending(sessionId)
+            var watchdog = setTimeout(function () {
+              localTrace('watchdog-reload', { sessionId: sessionId })
+              reportTrace({ event: 'watchdog-reload', sessionId: sessionId })
+              window.location.reload()
+            }, WATCHDOG_MS)
+            runDelete(sessionId)
+              .then(function () { clearTimeout(watchdog) })
               .catch(function (reason) {
+                clearTimeout(watchdog)
+                clearPending()
                 var message = String(reason && reason.message ? reason.message : reason)
-                trace('error', 'delete failed', { sessionId: target.sessionId, message: message })
-                reportTrace({ event: 'delete-failed', sessionId: target.sessionId, message: message })
+                localTrace('failed', { sessionId: sessionId, message: message })
+                trace('error', 'delete failed', { sessionId: sessionId, message: message })
+                reportTrace({ event: 'delete-failed', sessionId: sessionId, message: message })
                 setError(message)
                 setBusy(false)
               })
@@ -456,6 +535,16 @@
             reportTrace({ event: 'plugin-loaded', url: window.location.href, hasAbort: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' })
           }, 1200)
           ctx.effect(function () { return ctx.locale.register(NS, { zh: zh, en: en }) }, 'session-delete: dictionaries')
+          // 重载后续做上次卡住的删除（用户在确认框里已经同意过，不再二次确认）。
+          var pendingDelete = readPending()
+          if (pendingDelete !== null) {
+            localTrace('resume', { sessionId: pendingDelete.sessionId })
+            setTimeout(function () {
+              runDelete(pendingDelete.sessionId).catch(function (reason) {
+                localTrace('resume-failed', { sessionId: pendingDelete.sessionId, message: String(reason && reason.message ? reason.message : reason) })
+              })
+            }, 600)
+          }
           ctx.effect(function () {
             refreshHiddenStyles()
             return function () {
