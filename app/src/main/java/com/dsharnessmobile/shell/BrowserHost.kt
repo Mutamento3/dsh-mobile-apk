@@ -196,6 +196,7 @@ internal class BrowserHost(
         tab.title = event.optString("title", tab.title)
         tab.pageWidth = event.optInt("pageWidth", tab.pageWidth)
         tab.pageHeight = event.optInt("pageHeight", tab.pageHeight)
+        if (event.has("pageDevicePixelRatio")) tab.pageDevicePixelRatio = event.optDouble("pageDevicePixelRatio", tab.pageDevicePixelRatio)
         tab.remoteCanGoBack = event.optBoolean("canGoBack", tab.remoteCanGoBack)
         tab.remoteCanGoForward = event.optBoolean("canGoForward", tab.remoteCanGoForward)
       }

@@ -423,11 +423,30 @@ class BrowserProcessService : Service() {
           if (finishedUrl.startsWith("data:")) return
           url = finishedUrl
           if (loadState == "loading") loadState = "loaded"
-          emit(id, JSONObject().put("type", "pageFinished")
-            .put("url", finishedUrl).put("title", title).put("generation", generation.get())
-            .put("pageWidth", view.width).put("pageHeight", view.height)
-            .put("canGoBack", view.canGoBack()).put("canGoForward", view.canGoForward()))
+          // pageWidth/pageHeight 契约 = 页面 CSS 视口（与主进程 measurePage 的 innerWidth/innerHeight
+          // 同口径），不是宿主视图的物理像素——分辨率预设下两者相差 factor 倍，宿主侧 status 与
+          // verify 脚本的「host 报的必须等于页面实测」断言据此判定。
+          view.evaluateJavascript(
+            "(function(){return JSON.stringify({w:window.innerWidth||0,h:window.innerHeight||0,dpr:window.devicePixelRatio||0})})()",
+          ) { raw ->
+            if (this@RemoteTab.view !== view) return@evaluateJavascript
+            val measured = decodeJsonString(raw)
+            emit(id, JSONObject().put("type", "pageFinished")
+              .put("url", finishedUrl).put("title", title).put("generation", generation.get())
+              .put("pageWidth", measured?.optInt("w") ?: view.width)
+              .put("pageHeight", measured?.optInt("h") ?: view.height)
+              .put("pageDevicePixelRatio", measured?.optDouble("dpr") ?: 0.0)
+              .put("canGoBack", view.canGoBack()).put("canGoForward", view.canGoForward()))
+          }
         }
+
+        /** evaluateJavascript 回执是 JSON 编码字符串（带引号转义）；解出对象，失败给 null。 */
+        private fun decodeJsonString(raw: String?): JSONObject? = try {
+          val text = raw?.trim()?.takeIf { it.startsWith("\"") }?.let {
+            it.removePrefix("\"").removeSuffix("\"").replace("\\\"", "\"").replace("\\\\", "\\")
+          } ?: raw?.trim()
+          if (text.isNullOrEmpty()) null else JSONObject(text)
+        } catch (_: Throwable) { null }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
           if (this@RemoteTab.view !== view || !request.isForMainFrame) return
