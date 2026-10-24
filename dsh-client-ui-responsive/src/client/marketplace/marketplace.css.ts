@@ -1,6 +1,12 @@
 /**
  * 插件市场（设置 → 内置插件 → 插件市场）的行规对齐。
  *
+ * 对标上游：dshmarketplace-plugin 0.1.7（MARKETPLACE_UPSTREAM_VERSION）。
+ * 这里的每条覆盖都依赖它当前的 DOM 结构与类名（dshm-*）；上游换主题或改结构时，
+ * 这些规则会**静默失效**（界面悄悄回到纸色主题）。因此版本写进常量并由
+ * tests/marketplace-css-anchor.spec.ts 比对 vendor/dshmarketplace-plugin/package.json，
+ * 版本一涨就判红，提醒重新核对本表。
+ *
  * 这一页由第三方插件 `dshmarketplace-plugin` 自己渲染（`dshm-*` 类），自带一套
  * 「纸色 + 铜色」主题：`--paper/#f7f4ed`、`--ink`、`--copper`，等宽字体做标题，
  * 1px 直角描边、38px 搜索框、32px 直角按钮。它和设置页里上游那套
@@ -15,6 +21,9 @@
  *     `corner-shape: round`）。点按行为完全不变，仍是原生 checkbox。
  *  2. `.dshm-list` 自带 `border-top`，与 `.dshm-head` 的下边线会叠成双线，故去掉。
  */
+/** 本表对标的上游插件版本（机器可核对的锚，见文件头说明）。 */
+export const MARKETPLACE_UPSTREAM_VERSION = '0.1.7'
+
 export const MARKETPLACE_CSS: string = `
 /* 根容器：去掉纸色主题，改走页面底色与主文字色。 */
 .dshm {
