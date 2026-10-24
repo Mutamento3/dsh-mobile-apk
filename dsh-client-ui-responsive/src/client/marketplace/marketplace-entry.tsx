@@ -15,7 +15,9 @@
  * （`dsh-client-ui-settings-shell` 的客户端面里没有 navigate/openSection）。
  * 本包对设置导航本来就走 DOM 层（见 `mobile/settings-nav.ts`），这里沿用同一套做法。
  */
+import type { ReactNode } from 'react'
 import { IconBrowseOutlineRegular, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { tr } from '../i18n.ts'
 
 /** 市场分区的导航标签：取自市场插件的 locale（zh = 插件市场，en = Plugin store）。 */
@@ -130,4 +132,34 @@ export function registerMarketplaceAction(slots: unknown, ctx?: unknown): () => 
     order: 30,
     inject: () => ({ ctx }),
   }, MarketplaceMenuItem))
+}
+
+/**
+ * 插件市场的**独立页面**：本分区渲染市场插件注册的 `settings.plugins.tab` 面板
+ * （`only: 'dshmarketplace'`），因此内容与它原来的 Tab 完全一致，但落点是设置分区整页。
+ *
+ * 为什么不让市场插件自己注册分区：它注册 `settings.section` 时依赖自己的 locale 作用域，
+ * 真机上导航行没有出现（点击只能走兜底弹窗）。改由本包注册分区、渲染它的面板，
+ * 导航行的存在与文案都由本包掌握，不再依赖第三方插件的注册时机。
+ */
+/**
+ * 分区组件 props。市场面板所在的 `settings.plugins.tab` 不是本分区的子槽
+ * （它属于「插件」页那个分区），因此 renderSlot 按运行时形状取，不写进类型。
+ */
+export type MarketplaceSectionProps = PropsRuntime<'settings.section'>
+
+export function MarketplaceSection(props: MarketplaceSectionProps) {
+  const renderSlot = (props as unknown as {
+    renderSlot?: (name: string, payload: Record<string, unknown>, options?: { only?: string }) => unknown
+  }).renderSlot
+  const panel = renderSlot?.('settings.plugins.tab', {}, { only: 'dshmarketplace' }) as ReactNode
+  return (
+    <div data-plugin="dev-marketplace">
+      {panel ?? (
+        <p className="dsh-market-empty">
+          {tr('插件市场不可用（市场插件未加载）。', 'Plugin store is unavailable (the marketplace plugin is not loaded).')}
+        </p>
+      )}
+    </div>
+  )
 }

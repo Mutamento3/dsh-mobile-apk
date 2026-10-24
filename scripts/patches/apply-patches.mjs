@@ -485,25 +485,6 @@ const IMPLS = {
     },
   },
 
-  // ── marketplace H：去掉「插件」页里的市场 Tab（入口改到「添加插件」下拉）──
-  // 0.15.0 用户定例：市场入口挪进 插件 → 添加插件，原来的 settings.plugins.tab 入口舍去。
-  // 新入口由 dsh-client-ui-responsive 注册 plugins.add.actions，点选后发 store 命令回执，
-  // 市场仍走它自己的 command/executed → dialogController 打开（未新增导航通道）。
-  'market-H-no-tab': {
-    file: 'dshmarketplace-plugin/lib/client.js',
-    check: (s) => !s.includes('settings.plugins.tab'),
-    apply: (s) => {
-      const TAB = ',e.slots.inject("settings.plugins.tab",()=>e.slots.register({name:"settings.plugins.tab",id:"dshmarketplace",order:20,label:()=>r("settings.tab"),locale:u,inject:()=>({t:r,localeService:e.locale})},P))'
-      // Tab → 独立设置分区：同一个面板组件 P，改注册到 settings.section（整页而不是页内 Tab）。
-      const SECTION = ',e.slots.inject("settings.section",()=>e.slots.register({name:"settings.section",id:"android-marketplace",order:60,label:()=>r("settings.tab"),locale:u,inject:()=>({t:r,localeService:e.locale})},P))'
-      if (!s.includes(TAB)) throw new Error('market-H 锚点未命中——市场 Tab 注册段已变')
-      s = s.replace(TAB, SECTION)
-      if (s.includes('settings.plugins.tab')) throw new Error('market-H 复核失败——Tab 注册仍在')
-      if (!s.includes('id:"android-marketplace"')) throw new Error('market-H 复核失败——分区注册未写入')
-      return s
-    },
-  },
-
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用

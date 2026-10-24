@@ -413,4 +413,18 @@ export const MARKETPLACE_CSS: string = `
   font-size: 12px;
   line-height: 18px;
 }
+
+/* 「插件」页里的市场 Tab 按钮隐藏：入口只保留「添加插件」下拉里的那一项。
+   Tab 按钮的 id 以 -tab-dshmarketplace 结尾，用后缀选择器即可命中。 */
+[id$='-tab-dshmarketplace'] {
+  display: none;
+}
+
+.dsh-market-empty {
+  margin: 0;
+  padding: 24px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
 `

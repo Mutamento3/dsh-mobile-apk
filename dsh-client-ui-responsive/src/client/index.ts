@@ -52,7 +52,7 @@ import { NotifySettingsSection } from './dev-section/notify-settings.tsx'
 import { ApkUpdateSection } from './dev-section/apk-update.tsx'
 import { DEV_SECTION_CSS } from './dev-section/dev-section.css.ts'
 import { MARKETPLACE_CSS } from './marketplace/marketplace.css.ts'
-import { hideMarketplaceNavRow, registerMarketplaceAction } from './marketplace/marketplace-entry.tsx'
+import { hideMarketplaceNavRow, MarketplaceSection, registerMarketplaceAction } from './marketplace/marketplace-entry.tsx'
 import { GeneralSettings } from './general-settings/GeneralSettings.tsx'
 import { GENERAL_SETTINGS_CSS } from './general-settings/general-settings.css.ts'
 import { tr } from './i18n.ts'
@@ -364,6 +364,15 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => registerMarketplaceAction(ctx.slots, ctx), 'ui-responsive: marketplace menu entry')
   // 市场分区在导航里的行隐藏：入口只保留「添加插件」下拉里的那一项。
   ctx.effect(() => hideMarketplaceNavRow(), 'ui-responsive: hide marketplace nav row')
+
+  // 插件市场独立分区（0.15.0 用户定例）：内容渲染市场插件自己的面板，落点是整页；
+  // 它的导航行由 hideMarketplaceNavRow 隐藏，入口只保留「添加插件」下拉里的那一项。
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'android-marketplace',
+    order: 60,
+    label: () => tr('插件市场', 'Plugin store'),
+  }, MarketplaceSection))
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'android-general',
