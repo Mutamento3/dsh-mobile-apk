@@ -362,8 +362,9 @@ export function apply(ctx: ClientContext): void {
   // 插件市场入口：挪进「插件」页的「添加插件」下拉（原来的 settings.plugins.tab 入口
   // 由 market-H-no-tab 补丁去掉）。点选后发 `store` 命令回执，市场插件据此打开对话框。
   ctx.effect(() => registerMarketplaceAction(ctx.slots, ctx), 'ui-responsive: marketplace menu entry')
-  // 市场分区在导航里的行隐藏：入口只保留「添加插件」下拉里的那一项。
-  ctx.effect(() => hideMarketplaceNavRow(), 'ui-responsive: hide marketplace nav row')
+  // 临时诊断（0.15.0 排查中）：先不隐藏导航行，让「设置 → 插件市场」可直接点开，
+  // 用来分辨是「分区没渲染」还是「菜单项跳不过去」。定位后恢复隐藏。
+  // ctx.effect(() => hideMarketplaceNavRow(), 'ui-responsive: hide marketplace nav row')
 
   // 插件市场独立分区（0.15.0 用户定例）：内容渲染市场插件自己的面板，落点是整页；
   // 它的导航行由 hideMarketplaceNavRow 隐藏，入口只保留「添加插件」下拉里的那一项。

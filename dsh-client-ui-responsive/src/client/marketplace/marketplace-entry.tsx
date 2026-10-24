@@ -201,9 +201,20 @@ export function MarketplaceSection(props: MarketplaceSectionProps) {
   const renderSlot = (props as unknown as {
     renderSlot?: (name: string, payload: Record<string, unknown>, options?: { only?: string }) => unknown
   }).renderSlot
-  const panel = renderSlot?.('settings.plugins.tab', {}, { only: 'dshmarketplace' }) as ReactNode
+  // 市场面板由 market-I-panel-global 补丁挂在 window 上（它自带 t / localeService）；
+  // 跨分区 renderSlot 取不到对方子槽，故这里直接渲染那个组件。
+  const Panel = (window as unknown as { __dshMarketplacePanel?: React.ComponentType }).__dshMarketplacePanel
+  const panel = Panel !== undefined ? <Panel /> : (renderSlot?.('settings.plugins.tab', {}, { only: 'dshmarketplace' }) as ReactNode)
   return (
     <div data-plugin="dev-marketplace">
+      {/* 临时诊断行：确认面板来源，定位后删除。 */}
+      <p className="dsh-market-diag" data-panel={Panel !== undefined ? 'global' : panel ? 'slot' : 'empty'}>
+        {Panel !== undefined
+          ? tr('面板：全局组件', 'panel: global component')
+          : panel
+            ? tr('面板：插槽', 'panel: slot')
+            : tr('面板：空（市场插件未加载）', 'panel: empty')}
+      </p>
       {panel ?? (
         <p className="dsh-market-empty">
           {tr('插件市场不可用（市场插件未加载）。', 'Plugin store is unavailable (the marketplace plugin is not loaded).')}

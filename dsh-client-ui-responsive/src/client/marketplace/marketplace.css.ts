@@ -427,4 +427,15 @@ export const MARKETPLACE_CSS: string = `
   font-size: 12px;
   line-height: 18px;
 }
+
+/* 临时诊断行（排查中）：定位后随组件里的同名段落一起删除。 */
+.dsh-market-diag {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
 `

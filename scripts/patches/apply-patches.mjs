@@ -485,6 +485,24 @@ const IMPLS = {
     },
   },
 
+  // ── marketplace I：把面板组件挂到全局，供本包的分区直接渲染 ──
+  // 用户定例（0.15.0）：市场要作为设置里的独立整页。市场自己注册 settings.section 时
+  // 导航行不出现、跨分区 renderSlot 又取不到它的 tab 槽（真机实测「面板：空」），
+  // 因此改为把它的面板组件连同自己的 t / localeService 一起挂到 window 上，
+  // 由 dsh-client-ui-responsive 的 android-marketplace 分区直接渲染。
+  'market-I-panel-global': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => s.includes('__dshMarketplacePanel'),
+    apply: (s) => {
+      const TAB = ',e.slots.inject("settings.plugins.tab"'
+      if (!s.includes(TAB)) throw new Error('market-I 锚点未命中——tab 注册段已变')
+      const GLOBAL = ',window.__dshMarketplacePanel=function(){return s.default.createElement(P,{t:r,localeService:e.locale})}'
+      s = s.replace(TAB, GLOBAL + TAB, 1)
+      if (!s.includes('__dshMarketplacePanel')) throw new Error('market-I 复核失败——不写回')
+      return s
+    },
+  },
+
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用
