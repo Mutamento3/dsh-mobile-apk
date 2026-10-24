@@ -15,11 +15,11 @@
  * （`dsh-client-ui-settings-shell` 的客户端面里没有 navigate/openSection）。
  * 本包对设置导航本来就走 DOM 层（见 `mobile/settings-nav.ts`），这里沿用同一套做法。
  */
-import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBrowseOutlineRegular, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { tr } from '../i18n.ts'
 
-/** 市场分区的导航标签（市场插件 `settings.tab` 文案，中英各一）。 */
-const MARKET_LABELS = ['插件市场', 'Plugin marketplace']
+/** 市场分区的导航标签：取自市场插件的 locale（zh = 插件市场，en = Plugin store）。 */
+const MARKET_LABELS = ['插件市场', 'Plugin store']
 /** 隐藏标记：避免 MutationObserver 反复处理同一行。 */
 const HIDDEN_ATTR = 'data-dsh-market-nav-hidden'
 
@@ -28,12 +28,47 @@ function findMarketNavButton(): HTMLButtonElement | undefined {
   return buttons.find((button) => MARKET_LABELS.includes((button.textContent ?? '').trim()))
 }
 
-/** 切到插件市场分区（整页）。找不到导航行时返回 false。 */
+/**
+ * 切到插件市场分区（整页）。找不到导航行时返回 false。
+ *
+ * 走 mousedown → mouseup → click 的完整序列：上游与手机端容器都按指针事件判断
+ * 「用户点了一级行」，只发 click 在部分路径上不会切换（与本包 `settings-nav.ts`
+ * 里驱动返回/进入的写法一致）。
+ */
 export function openMarketplacePage(): boolean {
   const button = findMarketNavButton()
   if (button === undefined) return false
-  button.click()
+  for (const type of ['mousedown', 'mouseup', 'click'] as const) {
+    button.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
+  }
   return true
+}
+
+/**
+ * 市场分区是异步注册的：短时间内重试几次，避免菜单项先于导航行出现。
+ * 全部重试都失败时退回市场自己的命令通道（弹窗），保证点击一定有可见结果，
+ * 并在控制台留下诊断行，便于区分「分区没注册」与「导航行没渲染」。
+ */
+export function openMarketplacePageWithRetry(attempt = 0, ctx?: unknown): void {
+  if (openMarketplacePage()) return
+  if (attempt < 6) {
+    window.setTimeout(() => { openMarketplacePageWithRetry(attempt + 1, ctx) }, 120)
+    return
+  }
+  console.info('[dsh-marketplace] 未找到市场分区的导航行，退回市场自己的命令通道（弹窗）')
+  openMarketplaceDialog(ctx)
+}
+
+/** 兜底：发 `store` 命令回执让市场插件打开它自己的对话框（与 `/store` 命令同一条路）。 */
+export function openMarketplaceDialog(ctx: unknown): boolean {
+  const emit = (ctx as { emit?: (...args: unknown[]) => void } | undefined)?.emit
+  if (typeof emit !== 'function') return false
+  try {
+    emit.call(ctx, 'command/executed', null, 'store', { kind: 'success', query: '' })
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 隐藏市场分区的导航行；返回清理函数。 */
@@ -55,14 +90,16 @@ export function hideMarketplaceNavRow(): () => void {
 export interface MarketplaceMenuItemProps {
   /** 菜单项渲染时由插件管理器传入，点选后先收起菜单。 */
   onDismiss?: () => void
+  ctx?: unknown
 }
 
-export function MarketplaceMenuItem({ onDismiss }: MarketplaceMenuItemProps) {
+export function MarketplaceMenuItem({ onDismiss, ctx }: MarketplaceMenuItemProps) {
   return (
     <MenuItemButton
+      icon={<IconBrowseOutlineRegular size={16} />}
       onSelect={() => {
         onDismiss?.()
-        openMarketplacePage()
+        openMarketplacePageWithRetry(0, ctx)
       }}
     >
       <span className="dsh-market-item">
@@ -82,7 +119,7 @@ export function MarketplaceMenuItem({ onDismiss }: MarketplaceMenuItemProps) {
  * （它的 `renderSlot("plugins.add.actions", { onDismiss })`），但本包依赖的
  * slots 类型版本尚未收录该名字，故这里按运行时形状断言一次，不引入 any。
  */
-export function registerMarketplaceAction(slots: unknown): () => void {
+export function registerMarketplaceAction(slots: unknown, ctx?: unknown): () => void {
   const registry = slots as {
     inject: (name: string, factory: () => unknown) => () => void
     register: (definition: Record<string, unknown>, component: unknown) => unknown
@@ -91,5 +128,6 @@ export function registerMarketplaceAction(slots: unknown): () => void {
     name: 'plugins.add.actions',
     id: 'android-marketplace',
     order: 30,
+    inject: () => ({ ctx }),
   }, MarketplaceMenuItem))
 }

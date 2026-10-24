@@ -27,8 +27,8 @@ describe('插件市场入口', () => {
     expect(clicked).toHaveBeenCalledOnce()
   })
 
-  it('英文标签同样可识别', () => {
-    const { button } = mountNav('Plugin marketplace')
+  it('英文标签同样可识别（市场 locale 用 Plugin store）', () => {
+    const { button } = mountNav('Plugin store')
     const clicked = vi.fn()
     button.addEventListener('click', clicked)
     expect(openMarketplacePage()).toBe(true)

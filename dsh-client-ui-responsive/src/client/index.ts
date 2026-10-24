@@ -361,7 +361,7 @@ export function apply(ctx: ClientContext): void {
 
   // 插件市场入口：挪进「插件」页的「添加插件」下拉（原来的 settings.plugins.tab 入口
   // 由 market-H-no-tab 补丁去掉）。点选后发 `store` 命令回执，市场插件据此打开对话框。
-  ctx.effect(() => registerMarketplaceAction(ctx.slots), 'ui-responsive: marketplace menu entry')
+  ctx.effect(() => registerMarketplaceAction(ctx.slots, ctx), 'ui-responsive: marketplace menu entry')
   // 市场分区在导航里的行隐藏：入口只保留「添加插件」下拉里的那一项。
   ctx.effect(() => hideMarketplaceNavRow(), 'ui-responsive: hide marketplace nav row')
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
