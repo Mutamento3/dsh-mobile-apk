@@ -38,6 +38,21 @@ internal object EngineEndpoint {
   @Synchronized fun invalidate() { state = state.copy(binding = true, generation = 0) }
   @Synchronized fun markGeneration(atMs: Long) { state = state.copy(generation = atMs) }
 
+  /**
+   * 浏览器渲染进程（:browser）采用主进程已确认的端点：仅内存态，不落盘、不越权发布。
+   * 主进程在 start(config) 里携带 EngineEndpoint.port（未确认时为 0，采用方保持拒绝一切
+   * 引擎端口）；引擎重启换代时主进程重新绑定并重发。磁盘文件的主责始终在主进程。
+   */
+  @Synchronized fun adoptConfirmedPort(port: Int): Boolean {
+    if (port == 0) {
+      state = State(preferred = state.preferred, binding = true, generation = 0)
+      return true
+    }
+    if (port !in 1024..65535) return false
+    state = State(port, generation = 1)
+    return true
+  }
+
   /** Called only after EngineAuth has verified the current-generation, non-rotated log. */
   @Synchronized fun publishReportedPort(port: Int, generation: Long): Boolean {
     val before = state
