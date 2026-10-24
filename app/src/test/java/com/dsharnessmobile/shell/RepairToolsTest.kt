@@ -178,6 +178,33 @@ class RepairToolsTest {
     assertEquals(null, RepairToolsGuard.refusal("ls usr/bin | head"))
   }
 
+  /** #512：引号拆词与字面量中断是字面正则的系统性盲区——归一化判据补上（原样命令仍交执行）。 */
+  @Test
+  fun commandGuardNormalizesQuotesBeforeMatching() {
+    assertEquals("引号拆词后必须命中 kill 家族", true,
+      RepairToolsGuard.refusal("ki\"ll\" -9 1") != null)
+    assertEquals("字面量中断的凭据路径必须命中", true,
+      RepairToolsGuard.refusal("cat ~/'.cred'entials.yaml") != null)
+    assertEquals("字面量中断的凭据路径（双引号变体）必须命中", true,
+      RepairToolsGuard.refusal("cat ~/.credenti\"al\"s.yaml") != null)
+  }
+
+  /** #512：变量间接让「路径字面量出现在 rm 之前」的黑名单失明——同段 $VAR 引用一律拒绝。 */
+  @Test
+  fun commandGuardRefusesVariableIndirectionForDestructiveFamilies() {
+    assertEquals("路径经变量中转的删除必须拒绝", true,
+      RepairToolsGuard.refusal("D=/data/app; rm -rf \$D") != null)
+    assertEquals("rm 参数里的变量引用必须拒绝", true,
+      RepairToolsGuard.refusal("rm -rf \$TARGET_DIR") != null)
+    assertEquals("cp 目标变量引用必须拒绝", true,
+      RepairToolsGuard.refusal("cp a \$OUT") != null)
+    // 误伤面锚定：读类命令的变量不受影响（修复场景常见形态，不得因本规则全灭）。
+    assertEquals("读命令带变量不应误拒", null,
+      RepairToolsGuard.refusal("cat \$HOME/status.log"))
+    assertEquals("普通删除无变量仍走既有黑名单口径", null,
+      RepairToolsGuard.refusal("rm usr/tmp/cache.log"))
+  }
+
   @Test
   fun toolDefinitionsHaveStrictArgumentsAndARealStatusProbe() {
     val defs = RepairToolSchemas.definitions()
