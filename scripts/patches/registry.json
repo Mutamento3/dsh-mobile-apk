@@ -82,6 +82,13 @@
       "marker": "dshm-list\"},(l!==\"ready\""
     },
     {
+      "id": "market-H-no-tab",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "去掉「插件」页里的市场 Tab，入口改到「添加插件」下拉",
+      "provenance": "0.15.0 用户定例：入口挪到侧边栏-插件-添加插件下，原入口舍去",
+      "marker": "settings.plugins.tab"
+    },
+    {
       "id": "undo-E1",
       "target": "dsh-undo-savepoint/lib/client.js",
       "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",

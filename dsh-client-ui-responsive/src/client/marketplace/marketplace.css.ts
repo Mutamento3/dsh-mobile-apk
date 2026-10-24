@@ -398,4 +398,19 @@ export const MARKETPLACE_CSS: string = `
   font-size: 12px;
   line-height: 18px;
 }
+
+/* 「添加插件」下拉里的「插件市场」项：与相邻的「安装第三方插件」同为两行结构
+   （标题 + 说明），说明用次要色、12/18。 */
+.dsh-market-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dsh-market-item-desc {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
 `
