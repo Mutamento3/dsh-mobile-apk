@@ -12,6 +12,71 @@ export const DEV_SECTION_CSS: string = `
   padding: 4px 0 12px;
 }
 
+/* 上游行骨架（2026-10-24）：通知 / 手机控制 / 开发者选项三个分区与「通用设置」同规——
+   左标题 14/20 + 说明 12/18 + 右侧控件，上下 16px、行间 0.5px 分隔线，控件一律取上游
+   ui-primitives（Switch / Button）。此前这三页是自绘的 36px 描边按钮 + 16px 原生勾选框，
+   与同页上游行并排就是用户反馈的「有些 UI 很突兀」。 */
+[data-plugin='dev-section'],
+[data-plugin='dev-notify-settings'],
+[data-plugin='dev-phone-control'] {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-plugin='dev-section'] > .dsh-gs-row,
+[data-plugin='dev-notify-settings'] > .dsh-gs-row,
+[data-plugin='dev-phone-control'] > .dsh-gs-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* 动作按钮多的行（运行时 / 配置文件）：文字整行在上、按钮组在下。
+   横排时右侧四个按钮会把左侧说明挤成一条窄柱（真机 360dp 实测），
+   与上游 AppearanceRow「标题在上、控件在下」同规。 */
+.dsh-gs-row.dsh-gs-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+.dsh-gs-stacked > .dsh-gs-control {
+  justify-content: flex-start;
+}
+
+/* 长路径（Documents/dshdata/...）没有空格，不设断行点会顶穿文字列、压到按钮上。 */
+[data-plugin='dev-section'] .dsh-gs-desc,
+[data-plugin='dev-notify-settings'] .dsh-gs-desc,
+[data-plugin='dev-phone-control'] .dsh-gs-desc {
+  overflow-wrap: anywhere;
+}
+
+/* 一行放多个动作按钮（通知页的三个按钮）：等分宽度、不换行。 */
+.dsh-dev-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.dsh-dev-actions > button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 破坏性动作：沿用上游 Button 的形状，只把文字/描边染成错误语义色。 */
+.dsh-gs-control .dsh-danger,
+.dsh-dev-modal-actions .dsh-danger {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* 行内按钮组：多个动作同排时留 8px 间距，不换行。 */
+.dsh-gs-control.dsh-gs-actions {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
 .dsh-dev-note {
   margin: 0;
   font-size: 13px;
@@ -57,21 +122,32 @@ export const DEV_SECTION_CSS: string = `
   cursor: pointer;
 }
 
+/* 原生按钮对齐上游 Button(.sm/.outline)：28px 高、12/18 字号、0.5px 描边、透明底。
+   没有逐个换成 <Button> 的，是手机控制页里带 data-* / 三连点确认的那些按钮——
+   行为不变，只把外观拉到与上游同一条线上。 */
 .dsh-dev-btn {
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 8px;
-  background: var(--dsw-alias-button-elevated-fill);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
 }
 
+.dsh-dev-btn:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .dsh-dev-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .dsh-dev-danger {
@@ -135,9 +211,13 @@ export const DEV_SECTION_CSS: string = `
 }
 
 .dsh-screen-scope-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 10px 0;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 .dsh-screen-scope-row > span {
   display: grid;
@@ -145,6 +225,10 @@ export const DEV_SECTION_CSS: string = `
   min-width: 0;
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
+  line-height: 20px;
+}
+.dsh-screen-scope-row > span strong {
+  font-weight: 400;
 }
 .dsh-screen-scope-row small {
   color: var(--dsw-alias-label-secondary);
@@ -152,14 +236,15 @@ export const DEV_SECTION_CSS: string = `
   line-height: 18px;
 }
 .dsh-screen-scope-row select {
-  min-height: 34px;
+  min-height: 32px;
   max-width: min(100%, 190px);
-  padding: 0 28px 0 10px;
-  border: 1px solid var(--dsw-alias-border-l4);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-2);
+  padding: 0 26px 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
+  font-size: 13px;
 }
 
 .dsh-screen-control-card {
