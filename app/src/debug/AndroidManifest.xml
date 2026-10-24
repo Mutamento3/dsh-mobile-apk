@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <application>
+    <!-- 兼容架构 spike（PR1）：独立进程宿主 + 主进程投影宿主，仅 debug 构建存在。 -->
+    <service
+      android:name=".BrowserSpikeService"
+      android:exported="false"
+      android:process=":browser_spike" />
+
+    <activity
+      android:name=".BrowserSpikeActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Material.NoActionBar" />
+  </application>
+
+</manifest>
