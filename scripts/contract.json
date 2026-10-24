@@ -125,6 +125,11 @@
       "id": "android-vdisplay",
       "pkg": "@dsh-android/dsh-android-vdisplay",
       "repo": "plugins/dsh-android-vdisplay"
+    },
+    {
+      "id": "session-delete",
+      "pkg": "@dsh-android/dsh-session-delete",
+      "repo": "plugins/dsh-session-delete"
     }
   ],
   "symbols": [

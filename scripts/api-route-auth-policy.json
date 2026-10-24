@@ -41,6 +41,10 @@
     {
       "source": "dsh-host-web-compat/lib/index.js",
       "expected": 3
+    },
+    {
+      "source": "plugins/dsh-session-delete/src/index.js",
+      "expected": 1
     }
   ],
   "dynamicPathExpressions": [
@@ -403,6 +407,17 @@
       "access": "protected",
       "authMarker": "authorizeMobileRoute(req, authOptions())",
       "authCallMarker": "authorizeMobileRoute(req, authOptions())"
+    },
+    {
+      "id": "session-delete",
+      "path": "/api/session-delete",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-session-delete/src/index.js",
+      "registration": "path: '/api/session-delete',",
+      "endpointSource": "plugins/dsh-session-delete/src/index.js",
+      "access": "protected",
+      "authMarker": "authorize(req, res, ctx)",
+      "authCallMarker": "authorize(req, res, ctx)"
     }
   ],
   "upstreamRoutes": [

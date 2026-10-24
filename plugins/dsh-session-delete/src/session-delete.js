@@ -1,0 +1,131 @@
+/**
+ * Stored-session deletion: resolve the session directory, refuse unsafe states,
+ * then remove it in two steps (rename out of the way, then delete).
+ *
+ * The engine has no `session/delete` RPC (see issue #493), so this module owns
+ * the on-disk half: sessions live under `<DSH_HOME>/sessions/<cwd-key>/<id>/`
+ * with `session.lock` and `session.v4.jsonl.zstd`. Indexes reconcile from the
+ * persistence listing, so a directory that disappears stops being listed.
+ *
+ * Safety rules:
+ * - only `session-<uuid>` ids are accepted (no paths, no globs);
+ * - a live session (open in the engine) is refused — deleting under a writer
+ *   would corrupt its log;
+ * - the id must resolve to exactly one directory (two matches are ambiguous and
+ *   nothing is deleted);
+ * - the directory is renamed first so a concurrent scan cannot observe a
+ *   half-deleted session, then removed recursively.
+ */
+import { readdir, rename, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+
+/** Session ids are the storage unit name; anything else is a path-injection attempt. */
+export const SESSION_ID_PATTERN = /^session-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Structured failure carrying a stable code for the HTTP layer and tests. */
+export class SessionDeleteError extends Error {
+  /**
+   * @param {string} code - stable machine code (`invalid-id` / `not-found` / `ambiguous` / `session-active` / `delete-failed`).
+   * @param {string} message - human-readable reason.
+   * @param {object} [details] - extra fields for diagnostics.
+   */
+  constructor(code, message, details) {
+    super(message)
+    this.name = 'SessionDeleteError'
+    this.code = code
+    this.details = details
+  }
+}
+
+/**
+ * Validate a session id.
+ * @param {unknown} sessionId - caller-supplied id.
+ * @returns {string} the id.
+ * @throws {SessionDeleteError} `invalid-id` when the shape is wrong.
+ */
+export function assertSessionId(sessionId) {
+  if (typeof sessionId !== 'string' || !SESSION_ID_PATTERN.test(sessionId)) {
+    throw new SessionDeleteError('invalid-id', 'session id must be session-<uuid>')
+  }
+  return sessionId
+}
+
+/**
+ * Sessions root for a DSH home.
+ * @param {string} home - absolute `DSH_HOME`.
+ * @returns {string} `<home>/sessions`.
+ */
+export function sessionsRoot(home) {
+  return join(home, 'sessions')
+}
+
+/**
+ * Locate the one stored directory for a session.
+ * @param {string} root - sessions root.
+ * @param {string} sessionId - validated id.
+ * @returns {Promise<string>} absolute session directory.
+ * @throws {SessionDeleteError} `not-found` / `ambiguous`.
+ */
+export async function findSessionDir(root, sessionId) {
+  let entries
+  try {
+    entries = await readdir(root, { withFileTypes: true })
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new SessionDeleteError('not-found', 'no sessions directory', { sessionId })
+    throw error
+  }
+  const hits = []
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const candidate = join(root, entry.name, sessionId)
+    try {
+      if ((await stat(candidate)).isDirectory()) hits.push(candidate)
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+  }
+  if (hits.length === 0) throw new SessionDeleteError('not-found', 'session not found', { sessionId })
+  if (hits.length > 1) throw new SessionDeleteError('ambiguous', 'session id appears in more than one workspace directory', { sessionId, paths: hits })
+  return hits[0]
+}
+
+/**
+ * Delete one stored session.
+ * @param {object} options - deletion inputs.
+ * @param {string} options.home - absolute `DSH_HOME`.
+ * @param {string} options.sessionId - session to delete.
+ * @param {boolean} options.isActive - whether any provider reports running work for the session.
+ * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.beforeRemove] - bookkeeping hook (unarchive/unpin).
+ * @param {(level: 'info'|'warn'|'error', message: string, extra?: object) => void} [options.logger] - step logger.
+ * @returns {Promise<{ ok: true, sessionId: string, dir: string }>} outcome.
+ * @throws {SessionDeleteError} on every refused state.
+ */
+export async function deleteStoredSession({ home, sessionId, isActive, beforeRemove, logger }) {
+  const log = typeof logger === 'function' ? logger : () => {}
+  assertSessionId(sessionId)
+  log('info', 'delete requested', { sessionId, isActive: isActive === true })
+  if (isActive === true) {
+    throw new SessionDeleteError('session-active', 'the conversation is running; stop it before deleting', { sessionId })
+  }
+  if (typeof home !== 'string' || home === '') throw new SessionDeleteError('delete-failed', 'DSH_HOME is not available')
+  const root = sessionsRoot(home)
+  const dir = await findSessionDir(root, sessionId)
+  log('info', 'resolved session directory', { sessionId, dir })
+  if (typeof beforeRemove === 'function') {
+    log('info', 'clearing archive/pin membership', { sessionId })
+    await beforeRemove({ sessionId, dir })
+    log('info', 'archive/pin membership cleared', { sessionId })
+  }
+  const graveyard = `${dir}.deleting-${Date.now().toString(36)}`
+  try {
+    log('info', 'moving session directory out of the scan path', { sessionId, from: dir, to: graveyard })
+    await rename(dir, graveyard)
+    log('info', 'removing session directory', { sessionId, dir: graveyard })
+    await rm(graveyard, { recursive: true, force: true })
+    log('info', 'session deleted', { sessionId })
+  } catch (error) {
+    log('error', 'session deletion failed', { sessionId, dir, error: String(error?.message ?? error) })
+    throw new SessionDeleteError('delete-failed', `could not delete the session directory: ${String(error?.message ?? error)}`, { sessionId, dir })
+  }
+  return { ok: true, sessionId, dir }
+}
