@@ -47,11 +47,42 @@ export const DEV_SECTION_CSS: string = `
   justify-content: flex-start;
 }
 
-/* 长路径（Documents/dshdata/...）没有空格，不设断行点会顶穿文字列、压到按钮上。 */
+/* 行内文字列与控件的样式自带一份，不依赖「通用设置」那张表。
+   为什么必须自带：这三页的行用的是通用设置的 .dsh-gs-* 类，而那张表属于
+   general-settings.css.ts——在只有本包、没有该表的构建里（例如 0.14.9 基线），
+   .dsh-gs-title / .dsh-gs-desc 会完全没有样式，标题与灰色说明会长得一模一样。
+   作用域限死在本页三个根下，不会污染其它分区。 */
+[data-plugin='dev-section'] .dsh-gs-text,
+[data-plugin='dev-notify-settings'] .dsh-gs-text,
+[data-plugin='dev-phone-control'] .dsh-gs-text {
+  min-width: 0;
+}
+
+[data-plugin='dev-section'] .dsh-gs-title,
+[data-plugin='dev-notify-settings'] .dsh-gs-title,
+[data-plugin='dev-phone-control'] .dsh-gs-title {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
 [data-plugin='dev-section'] .dsh-gs-desc,
 [data-plugin='dev-notify-settings'] .dsh-gs-desc,
 [data-plugin='dev-phone-control'] .dsh-gs-desc {
+  margin-top: 4px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  /* 长路径（Documents/dshdata/...）没有空格，不设断行点会顶穿文字列、压到按钮上。 */
   overflow-wrap: anywhere;
+}
+
+[data-plugin='dev-section'] .dsh-gs-control,
+[data-plugin='dev-notify-settings'] .dsh-gs-control,
+[data-plugin='dev-phone-control'] .dsh-gs-control {
+  display: flex;
+  flex: none;
+  align-items: center;
 }
 
 /* 一行放多个动作按钮（通知页的三个按钮）：等分宽度、不换行。 */
