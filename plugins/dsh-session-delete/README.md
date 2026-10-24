@@ -43,12 +43,12 @@
 
 ## 验证
 
-- `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**20 项全过**
+- `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**21 项全过**
   （非法 id / 不存在 / 运行中拒绝 / live 先卸载再删 / detach 抛错报 unload-failed 且文件不动 /
   无卸载能力同样报错且文件不动 / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
   host 编排拒绝 / 归档置顶清理顺序 / 每步日志 / 探测抛错与非数组拒绝 / 无瀑布拒绝 /
-  目录中途消失→not-found / post-rename 钩子失败不残留 / 接口契约：不出现 flush、liveEntryFor、
-  clearMain、shortcuts.find）。
+  目录中途消失→not-found / post-rename 钩子失败不残留 / 接口契约：不调用 `flush(`、
+  `clearMain`、`shortcuts.find`）。
 - `node scripts/check-api-route-auth.mjs`：三道路由均登记为 protected。
 - `node scripts/check-code-map.mjs`：新增文件已进覆盖账本。
 
