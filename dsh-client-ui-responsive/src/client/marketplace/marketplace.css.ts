@@ -129,8 +129,23 @@ export const MARKETPLACE_CSS: string = `
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
+/* 行首三列（包名 / 作者 / star）：包名可折行占满剩余宽度，作者与 star 不折行。
+   不这样约束时，「★ 8,594」会被压成两行——star 数是整行最不该断的内容。 */
+.dshm-row-head {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.dshm-stars {
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 /* 包名不再用等宽字体：上游列表项是正文字体 + 中等字重。 */
 .dshm-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: inherit;
   font-weight: 500;
   font-size: 14px;
