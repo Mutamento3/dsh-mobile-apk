@@ -20,7 +20,8 @@
     - **探测状态未知**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）→ `activity-unknown`，
       绝不把「不知道」当「空闲」；
   - **加载中的会话照常可删**：先让会话离开 Host live 集合，再删磁盘目录。
-    卸载走引擎自己的 teardown 边 `entry.detach()`：移除 store 条目并派发 `session/disposed`，
+    卸载走引擎自己的 teardown 边 `entry.detach()`（**维护者在 PR #496 里接受了插件内驱动这条边，
+    不额外加引擎补丁**；上游若改名或改语义，插件会以 `unload-failed` 明确失败、文件不动）：移除 store 条目并派发 `session/disposed`，
     agent loop 据此释放 Agent、jsonl 持久化清理写入状态、api-session controller 广播
     `api-session/removed`——侧栏/搜索/历史因此自然消失，不需要 CSS 隐藏、也不需要重启应用；
   - **卸载失败 = 请求失败**（`unload-failed` → 409），磁盘文件保持原状（可恢复），
