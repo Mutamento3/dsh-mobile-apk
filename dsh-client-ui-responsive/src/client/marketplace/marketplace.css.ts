@@ -460,7 +460,9 @@ export const MARKETPLACE_CSS: string = `
   align-items: center;
   gap: 8px;
   min-height: 52px;
-  padding: 6px 8px;
+  /* 顶到屏幕最上沿的是整页浮层：必须让开系统状态栏/安全区，否则页头（返回）被状态栏盖住。
+     --dsh-mobile-top-inset 是本包在 :root 上定义的「安全区与系统状态栏取大」变量。 */
+  padding: calc(6px + var(--dsh-mobile-top-inset, env(safe-area-inset-top, 0px))) 8px 6px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   /* 页头永远在最上层、且自带底色：内容滚动时不会被盖住，也不会「看不见」。 */
   position: sticky;
@@ -511,6 +513,8 @@ export const MARKETPLACE_CSS: string = `
   min-height: 0;
   overflow: auto;
   padding: 12px;
+  /* 底部同样让开手势条/安全区，最后一条结果不被遮。 */
+  padding-bottom: calc(12px + max(env(safe-area-inset-bottom, 0px), var(--dsh-android-system-bottom, 0px)));
 }
 
 /* 列向 flex 容器默认允许子项收缩：标题区、搜索框、勾选行、分页条都要保持自身高度，
