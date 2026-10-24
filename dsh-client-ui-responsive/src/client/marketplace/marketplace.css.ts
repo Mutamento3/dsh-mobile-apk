@@ -472,23 +472,23 @@ export const MARKETPLACE_CSS: string = `
 }
 
 /* 返回：明确的「‹ 返回」文字按钮，44px 高（可点面积够大，不再是一个小箭头）。 */
+/* 返回：与上游设置二级页同款——只有一个「‹」箭头，透明底，40px 可点面积。 */
 .dshm-back {
   box-sizing: border-box;
   display: inline-flex;
   flex: none;
   align-items: center;
+  justify-content: center;
+  width: 40px;
   height: 40px;
-  padding: 0 14px 0 10px;
-  /* 实心胶囊：不依赖「透明底 + 文字色」这类可能被主题吞掉的组合。 */
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--dsw-alias-interactive-bg-hover);
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
   color: var(--dsw-alias-label-primary);
   font: inherit;
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 22px;
+  font-size: 24px;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -515,6 +515,12 @@ export const MARKETPLACE_CSS: string = `
   padding: 12px;
   /* 底部同样让开手势条/安全区，最后一条结果不被遮。 */
   padding-bottom: calc(12px + max(env(safe-area-inset-bottom, 0px), var(--dsh-android-system-bottom, 0px)));
+}
+
+/* 市场自带的标题块（DSH Marketplace + 副标题）删掉：页头已经写了「插件市场」，
+   同一屏里出现两层标题是冗余（用户定例）。 */
+.dshm-panel > .dshm > .dshm-head {
+  display: none;
 }
 
 /* 列向 flex 容器默认允许子项收缩：标题区、搜索框、勾选行、分页条都要保持自身高度，

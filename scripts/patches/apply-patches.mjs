@@ -512,9 +512,10 @@ const IMPLS = {
     check: (s) => s.includes('dshm-pagebar'),
     apply: (s) => {
       const OLD = 's.default.createElement("div",{className:"dshm-panel",onClick:l=>l.stopPropagation()},s.default.createElement(T,{t:r,localeService:t,initialQuery:m}))'
+      // 返回只留上游同款「‹」箭头（不套胶囊、不带文字），标题由页头右侧承担。
       const BAR = 's.default.createElement("div",{className:"dshm-pagebar"},'
         + 's.default.createElement("button",{type:"button",className:"dshm-back","aria-label":"\\u8FD4\\u56DE",onClick:()=>e.close()},'
-        + '"\\u2039 ","\\u8FD4\\u56DE"),'
+        + '"\\u2039"),'
         + 's.default.createElement("span",{className:"dshm-pagetitle"},"\\u63D2\\u4EF6\\u5E02\\u573A"))'
       const NEW = 's.default.createElement("div",{className:"dshm-panel",onClick:l=>l.stopPropagation()},'
         + BAR + ',s.default.createElement(T,{t:r,localeService:t,initialQuery:m}))'
