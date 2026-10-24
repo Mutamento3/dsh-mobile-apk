@@ -96,12 +96,15 @@ class BrowserProcessService : Service() {
     } else {
       suffixError = "api-" + Build.VERSION.SDK_INT + "-below-28"
     }
-    try {
-      WebView.setWebContentsDebuggingEnabled(true)
-    } catch (_: Throwable) {
-      // 主进程只在 debuggable 时开调试；浏览器进程单独开：远端页签有独立 devtools socket
-      // （spike 实锤 webview_devtools_remote_<pid>），CDP 验收面依赖它。发布构建此调用
-      // 亦被系统按 non-debuggable 拒绝（静默），不构成安全面放松。
+    // 主进程同口径：仅 debuggable 才开远程调试（release 调用 setWebContentsDebuggingEnabled
+    // 同样生效——该 API 不看构建类型，此前"发布构建会被系统拒绝"的注释是错误声明）。
+    // debug 构建的 CDP 验收面不受影响（verify 脚本都在 debug 包上跑）。
+    val debuggable = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    if (debuggable) {
+      try {
+        WebView.setWebContentsDebuggingEnabled(true)
+      } catch (_: Throwable) {
+      }
     }
   }
 
