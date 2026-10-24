@@ -616,13 +616,27 @@ internal object RepairToolsGuard {
 
   fun refusal(command: String): String? {
     if (command.isBlank()) return "命令为空"
+    // 引号归一化后再过一遍黑名单：shell 的引号拆词（ki"ll"）与字面量中断（'.cred'entials.yaml）
+    // 是字面正则的系统性盲区（#512 实测形态）；归一化只用于判据，命令原样交执行。
+    val normalized = normalizedForGuard(command)
     for (rule in forbidden) {
-      if (rule.containsMatchIn(command)) {
+      if (rule.containsMatchIn(command) || rule.containsMatchIn(normalized)) {
         return "命令涉及进程、APK、系统分区或凭据访问，修复工具拒绝执行"
       }
     }
+    // 变量间接：rm/mv/cp 家族在同段引用 $VAR 时无法静态核对目标——宁可误拒（#512）。
+    if (VAR_INDIRECT_RISK.containsMatchIn(normalized)) {
+      return "删除/移动/改权命令引用了变量（无法静态核对目标），修复工具拒绝执行"
+    }
     return null
   }
+
+  /** 判据用归一化：剔除成对引号字符，让 ki"ll" → kill、'.cred'entials.yaml → .credentials.yaml。 */
+  internal fun normalizedForGuard(command: String): String = command.replace("""['"]""".toRegex(), "")
+
+  /** rm/mv/cp 家族同段引用 $VAR（如 `D=/data/app; rm -rf $D`）——路径字面量与 rm 的位置关系被变量打断。 */
+  private val VAR_INDIRECT_RISK =
+    Regex("""(?i)\b(?:rm|mv|cp|dd|chmod|chown|truncate)\b[^|;&\n]*\$[A-Za-z_]\w*""")
 
   private val credentialKey = Regex(
     "(?i)[\"']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|client[_-]?secret|" +
