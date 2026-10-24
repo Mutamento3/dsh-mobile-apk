@@ -44,7 +44,7 @@
     },
     {
       "source": "plugins/dsh-session-delete/src/index.js",
-      "expected": 2
+      "expected": 3
     }
   ],
   "dynamicPathExpressions": [
@@ -425,6 +425,17 @@
       "kind": "exact",
       "registrationSource": "plugins/dsh-session-delete/src/index.js",
       "registration": "path: '/api/session-delete-trace',",
+      "endpointSource": "plugins/dsh-session-delete/src/index.js",
+      "access": "protected",
+      "authMarker": "authorize(req, res, ctx)",
+      "authCallMarker": "authorize(req, res, ctx)"
+    },
+    {
+      "id": "session-delete-version",
+      "path": "/api/session-delete-version",
+      "kind": "exact",
+      "registrationSource": "plugins/dsh-session-delete/src/index.js",
+      "registration": "path: '/api/session-delete-version',",
       "endpointSource": "plugins/dsh-session-delete/src/index.js",
       "access": "protected",
       "authMarker": "authorize(req, res, ctx)",

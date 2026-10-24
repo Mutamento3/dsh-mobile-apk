@@ -31,6 +31,8 @@
         var HIDDEN_LIMIT = 200
         /** Same tag as the host half so device logs can be grepped by one string. */
         var TAG = '[dsh-session-delete]'
+        /** 构建戳：build.mjs 用源码哈希替换；与宿主 /api/session-delete-version 比对。 */
+        var BUILD_STAMP = '__BUILD_STAMP__'
 
         /**
          * Read the locally deleted session ids.
@@ -603,6 +605,27 @@
           setTimeout(function () {
             reportTrace({ event: 'plugin-loaded', url: window.location.href, hasAbort: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' })
           }, 1200)
+          // 页面可能比引擎活得久：只重启引擎不会重载 WebView，页面里的 JS 一直是旧的。
+          // 与宿主比对构建戳，不一致就重载一次（sessionStorage 防循环）。
+          try {
+            var updateInit = { method: 'GET' }
+            if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+              updateInit.signal = AbortSignal.timeout(2000)
+            }
+            fetch('/api/session-delete-version', updateInit)
+              .then(function (res) { return res.ok ? res.json() : null })
+              .then(function (data) {
+                if (data === null || typeof data.stamp !== 'string') return
+                if (data.stamp === BUILD_STAMP) return
+                if (window.sessionStorage.getItem('dsh.session-delete.reloaded') === '1') return
+                window.sessionStorage.setItem('dsh.session-delete.reloaded', '1')
+                localTrace('self-update-reload', { page: BUILD_STAMP, host: data.stamp })
+                window.location.reload()
+              })
+              .catch(function () { /* 版本探测失败不影响删除功能 */ })
+          } catch (_) {
+            /* 老 WebView 没有 AbortSignal.timeout 时同样不影响主流程 */
+          }
           ctx.effect(function () { return ctx.locale.register(NS, { zh: zh, en: en }) }, 'session-delete: dictionaries')
           // 重载后续做上次卡住的删除（用户在确认框里已经同意过，不再二次确认）。
           var pendingDelete = readPending()

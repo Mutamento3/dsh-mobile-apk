@@ -11,8 +11,10 @@
  * The client half (session row menu) is the only caller; the route is not a
  * general file-deletion primitive.
  */
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { SessionDeleteError, deleteStoredSession } from './session-delete.js'
 
 /** Log tag shared with the client half so device logs can be grepped by one string. */
@@ -47,6 +49,21 @@ function log(ctx, level, message, extra) {
 export const ROUTE = '/api/session-delete'
 /** Request bodies are a single id; anything larger is refused before parsing. */
 const MAX_BODY_BYTES = 4096
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Build stamp baked by build.mjs; the client compares it with its own constant
+ * and reloads once when they differ (a page can outlive an engine restart).
+ * @returns {string} stamp or `unknown`.
+ */
+function buildStamp() {
+  try {
+    return JSON.parse(readFileSync(join(HERE, 'build.json'), 'utf8')).stamp ?? 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
 
 export const name = 'dsh-session-delete'
 export const inject = ['webServer']
@@ -194,6 +211,14 @@ export function apply(ctx) {
   log(ctx, 'info', 'registering route', { path: ROUTE })
   // 客户端决策回传：删除后界面为什么没切换，只有浏览器侧知道；把它的选择写进
   // engine.log（[dsh-session-delete] client trace …），现场问题不必再靠猜。
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/api/session-delete-version',
+    handler: async (req, res) => {
+      if (!authorize(req, res, ctx)) return
+      sendJson(res, 200, { ok: true, stamp: buildStamp() })
+    },
+  })
   ctx.webServer.register({
     kind: 'exact',
     path: '/api/session-delete-trace',
