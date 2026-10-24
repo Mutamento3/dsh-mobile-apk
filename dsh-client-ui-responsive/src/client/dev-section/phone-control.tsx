@@ -851,6 +851,7 @@ export function PhoneControlSection(_props: PropsRuntime<'settings.section'>) {
   return (
     <section
       className="dsh-screen-control-card"
+      data-plugin="dev-phone-control"
       aria-labelledby="dsh-phone-control-title"
       {...(vdisplay.displayId === undefined ? {} : { 'data-display-id': String(vdisplay.displayId) })}
     >

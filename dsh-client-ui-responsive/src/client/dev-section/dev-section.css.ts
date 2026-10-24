@@ -23,9 +23,9 @@ export const DEV_SECTION_CSS: string = `
   flex-direction: column;
 }
 
-[data-plugin='dev-section'] > .dsh-gs-row,
-[data-plugin='dev-notify-settings'] > .dsh-gs-row,
-[data-plugin='dev-phone-control'] > .dsh-gs-row {
+[data-plugin='dev-section'] .dsh-gs-row,
+[data-plugin='dev-notify-settings'] .dsh-gs-row,
+[data-plugin='dev-phone-control'] .dsh-gs-row {
   box-sizing: border-box;
   display: flex;
   align-items: center;
