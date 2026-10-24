@@ -118,6 +118,42 @@ export const MARKETPLACE_CSS: string = `
   background: var(--dsw-alias-label-primary-foreground);
 }
 
+/* 仓库行（一行一仓）+ 展开后的子包列表。
+   仓库行本身不带安装按钮：安装只发生在具体子包上，避免「这一行到底装哪个」的歧义。 */
+.dshm-row.dshm-repo {
+  align-items: flex-start;
+}
+
+.dshm-kids-toggle {
+  box-sizing: border-box;
+  margin-top: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.dshm-kids-toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dshm-kids {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 12px;
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.dshm-kids > .dshm-row {
+  padding-left: 8px;
+}
+
 /* 列表：去掉与 head 叠成双线的上边线。 */
 .dshm-list {
   border-top: 0;
