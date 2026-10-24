@@ -6,13 +6,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
 /**
  * M.1（apk issue #272）的两条语义判据（纯 JVM，无 Robolectric）。
  *
  * 缺陷面：
- *  (a) 「3080 有东西在听」被当成「我们的引擎可用」⇒ EngineManager 静默 return true，
+ *  (a) 「4145 有东西在听」被当成「我们的引擎可用」⇒ EngineManager 静默 return true，
  *      不启动、不报错（用户永久进不去且界面无可辨提示）；
  *  (b) `check()` 把 401 与 200/303 一律算 running=true。无 cookie 时 GET / **本来就回 401**，
  *      于是「需要重新认证」被当成「健康」，壳侧自愈链永不触发。
@@ -20,6 +22,17 @@ import org.junit.Test
  * 判据全部抽成 [EngineProbe] 内的纯函数，故本测试不依赖设备/网络。
  */
 class EngineProbeTest {
+  @Before
+  fun publishProtectedPort() {
+    EngineEndpoint.beginBinding()
+    EngineEndpoint.markGeneration(1)
+    EngineEndpoint.publishReportedPort(4145, 1)
+  }
+
+  @After
+  fun resetEndpoint() {
+    EngineEndpoint.invalidate()
+  }
 
   @Test
   fun `Soft完整健康要求Hard fibers preset fibers session和modelCatalog`() {
@@ -42,6 +55,9 @@ class EngineProbeTest {
       .put("routableProviders", JSONArray().put("local")).put("groups", JSONArray()).put("failures", JSONArray())))
 
     assertTrue(EngineProbe.completeSoftHealthEvidence(inventory, sessions, catalog, hard))
+    val prefixedInventory = JSONObject(inventory.toString().replace("\"entryId\":\"factory\"", "\"entryId\":\"include:factory\""))
+    assertTrue("Loader `include:` ids must match the bare manifest row id",
+      EngineProbe.completeSoftHealthEvidence(prefixedInventory, sessions, catalog, hard))
     assertFalse("preset pending fiber must keep digest Candidate", EngineProbe.completeSoftHealthEvidence(
       JSONObject(inventory.toString().replace("active", "pending")), sessions, catalog, hard,
     ))
@@ -66,7 +82,7 @@ class EngineProbeTest {
     val state = EngineProbe.classifyEngineAvailability(
       httpCode = -1, managedAlive = false, logHasTokenLine = false, portReachable = true,
     )
-    assertEquals("别的东西占着 3080 时必须报 PORT_FOREIGN", EngineProbe.EngineAvailability.PORT_FOREIGN, state)
+    assertEquals("别的东西占着 4145 时必须报 PORT_FOREIGN", EngineProbe.EngineAvailability.PORT_FOREIGN, state)
     assertFalse("PORT_FOREIGN 不得被当成我们自己的引擎", state == EngineProbe.EngineAvailability.OUR_PROCESS)
     assertFalse("PORT_FOREIGN 不得被当成我们自己的引擎", state == EngineProbe.EngineAvailability.OUR_HTTP)
   }
@@ -156,22 +172,22 @@ class EngineProbeTest {
   @Test
   fun `auth recovery requires owned main frame exact origin and 401`() {
     val owned = EngineProbe.EngineAvailability.OUR_PROCESS
-    assertTrue(EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:3080/", owned))
-    assertTrue(EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:3080/?x=1", EngineProbe.EngineAvailability.OUR_HTTP))
-    assertFalse("403 never refreshes auth", EngineProbe.shouldAutoRecoverAuth(403, true, "http://127.0.0.1:3080/", owned))
-    assertFalse("subresources never refresh auth", EngineProbe.shouldAutoRecoverAuth(401, false, "http://127.0.0.1:3080/", owned))
-    assertFalse("foreign listener never refreshes auth", EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:3080/", EngineProbe.EngineAvailability.PORT_FOREIGN))
+    assertTrue(EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:4145/", owned))
+    assertTrue(EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:4145/?x=1", EngineProbe.EngineAvailability.OUR_HTTP))
+    assertFalse("403 never refreshes auth", EngineProbe.shouldAutoRecoverAuth(403, true, "http://127.0.0.1:4145/", owned))
+    assertFalse("subresources never refresh auth", EngineProbe.shouldAutoRecoverAuth(401, false, "http://127.0.0.1:4145/", owned))
+    assertFalse("foreign listener never refreshes auth", EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:4145/", EngineProbe.EngineAvailability.PORT_FOREIGN))
     assertFalse("unrelated origin never refreshes auth", EngineProbe.shouldAutoRecoverAuth(401, true, "http://127.0.0.1:3081/", owned))
   }
 
   @Test
   fun `origin helper rejects port host scheme and userinfo tricks`() {
-    assertTrue(EngineProbe.isEngineOrigin("http://127.0.0.1:3080/path"))
-    assertFalse(EngineProbe.isEngineOrigin("https://127.0.0.1:3080/"))
-    assertFalse(EngineProbe.isEngineOrigin("http://127.0.0.1:30800/"))
-    assertFalse(EngineProbe.isEngineOrigin("http://127.0.0.2:3080/"))
-    assertFalse(EngineProbe.isEngineOrigin("http://127.0.0.1:3080.evil.example/"))
-    assertFalse(EngineProbe.isEngineOrigin("http://attacker@127.0.0.1:3080/"))
+    assertTrue(EngineProbe.isEngineOrigin("http://127.0.0.1:4145/path"))
+    assertFalse(EngineProbe.isEngineOrigin("https://127.0.0.1:4145/"))
+    assertFalse(EngineProbe.isEngineOrigin("http://127.0.0.1:41450/"))
+    assertFalse(EngineProbe.isEngineOrigin("http://127.0.0.2:4145/"))
+    assertFalse(EngineProbe.isEngineOrigin("http://127.0.0.1:4145.evil.example/"))
+    assertFalse(EngineProbe.isEngineOrigin("http://attacker@127.0.0.1:4145/"))
   }
 
   @Test

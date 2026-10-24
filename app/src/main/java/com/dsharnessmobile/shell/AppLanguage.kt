@@ -86,18 +86,31 @@ internal object AppLanguage {
   fun isForced(context: Context): Boolean = mode(context) != MODE_SYSTEM
 
   /**
-   * Mirror the preference into the profile patch dsh actually reads.
+   * Mirror the resolved locale into the profile patch dsh actually reads.
    *
    * dsh 0.2.x stores this namespace in `profiles/web/cordis.patch.yml`; the
-   * old `settings.yaml` section is only imported once and no longer read. A
-   * forced mode writes `- id: locale` with `config.preference`; following the
-   * system removes that preference so dsh falls back to the system languages
-   * supplied by the WebView bridge.
-   * @return true when the patch now matches the preference.
+   * old `settings.yaml` section is only imported once and no longer read.
+   *
+   * 2026-10-24: 「跟随系统」不再是设置页里的一个选项——壳侧在启动时把系统语言解析成
+   * 具体 locale 写进 `- id: locale`（`dshLocale`：非中文一律 `en`，`zh`/`zh-CN`/
+   * `zh-HK`/`zh-TW` 等 `zh-*` 都算中文）。因此这里始终写具体值；用户在上游语言行里
+   * 显式选择后会走 `setMode`，下次启动不再被系统语言覆盖。
+   * @return true when the patch now matches the resolved locale.
    */
-  fun syncDshLocale(context: Context): Boolean {
+  fun syncDshLocale(context: Context): Boolean = syncDshLocale(context, dshLocale(context))
+
+  /**
+   * Write one concrete dsh locale into the profile patch.
+   *
+   * Kept separate so startup can resolve the system language once and write it
+   * without touching the stored shell mode: a profile that still says "system"
+   * keeps following the device on every launch, while an explicit choice from
+   * the upstream language row stores `zh`/`en` and wins from then on.
+   * @param locale - `zh` or `en`.
+   * @return true when the patch now matches the locale.
+   */
+  fun syncDshLocale(context: Context, locale: String): Boolean {
     val file = profilePatchFile(context) ?: return false
-    val locale = if (mode(context) == MODE_SYSTEM) null else dshLocale(context)
     return try {
       val original = if (file.exists()) file.readText() else ""
       val updated = withDshLocalePreference(original, locale)
@@ -213,6 +226,33 @@ internal object AppLanguage {
     line.startsWith("- id: locale") && line.substring("- id: locale".length).trim().isEmpty()
 
   /**
+   * Locale that the current mode already displays.
+   *
+   * The bootstrap mirrors user choices back into the shell preference, so a
+   * write first has to know whether the current mode would show that language
+   * anyway. A locale the mode already produces (the forced language, or the
+   * device language when following the system) is not a new preference; storing
+   * it would pin "follow system" to one language.
+   *
+   * The system branch resolves the way dsh resolves its own bootstrap: the first
+   * device tag naming a shipped locale id wins, exact before primary subtag, and
+   * the shipped fallback locale answers when nothing matches.
+   * @param mode - stored preference (`system`, `zh`, `en`).
+   * @param languages - device language tags in preference order.
+   * @returns `zh` or `en`.
+   */
+  internal fun expectedLocale(mode: String, languages: List<String>): String {
+    if (mode == MODE_ZH || mode == MODE_EN) return mode
+    for (tag in languages.filter { it.isNotBlank() }.distinct()) {
+      val requested = tag.lowercase(Locale.ROOT)
+      if (requested == MODE_ZH || requested == MODE_EN) return requested
+      val primary = requested.substringBefore('-')
+      if (primary == MODE_ZH || primary == MODE_EN) return primary
+    }
+    return MODE_EN
+  }
+
+  /**
    * Document-start script that gives dsh its native locale bootstrap.
    *
    * dsh only reads a language preference through `__DSH_LOCALE__` inside the
@@ -220,7 +260,22 @@ internal object AppLanguage {
    * settings page would show a language that the shell never applies. The
    * bridge reads the shell preference on every page load, so a reload after a
    * switch is enough to converge.
-   * @param mode - stored preference (`system`, `zh`, `en`).
+   *
+   * `onChange` is the only engine-to-shell channel, and dsh publishes on it for
+   * its own reasons while a page loads: once with the locale it activated with,
+   * and again whenever the durable settings scope pushes a value into the
+   * running runtime — which a reload does while racing the shell's own profile
+   * rewrite. Those automatic publishes carry no user intent, and ignoring only
+   * the first one leaves the rest to be written back; that is what pinned
+   * "follow system" to a fixed language (issue #487).
+   *
+   * A write therefore needs a real interaction in the page, and it must change
+   * the language the shell currently displays. The displayed language is read
+   * from the bridge at call time rather than baked in here: this script is
+   * installed once per activity, while the mode changes underneath it on every
+   * switch, so a captured value would judge the second switch against the first.
+   * @param mode - stored preference (`system`, `zh`, `en`); the fallback answer
+   *   when the bridge cannot be read.
    * @param languages - device language tags in preference order.
    * @returns a classic script safe to run before the engine bundle.
    */
@@ -228,15 +283,32 @@ internal object AppLanguage {
     val preference = if (mode == MODE_SYSTEM) "null" else jsQuote(mode)
     val ordered = languages.filter { it.isNotBlank() }.distinct()
     val tags = (ordered.ifEmpty { listOf(MODE_ZH) }).joinToString(",") { jsQuote(it) }
-    // onChange 的第一次调用是 dsh 发布「它自己解析出的当前语言」，不是用户选择：
-    // 把它写回壳偏好会把「跟随系统」变成固定语言。之后的选择才是用户在设置页
-    // 显式切换，交回壳侧存 ui_language 并同步 profile（壳侧据偏好重建原生界面）。
+    val baked = jsQuote(expectedLocale(mode, languages))
     return "(function(){try{" +
-      "var tags=[$tags];var first=true;" +
-      "globalThis.__DSH_LOCALE__={read:function(){return Promise.resolve({languages:tags,preference:$preference})}," +
-      "onChange:function(locale){if(first){first=false;return}" +
+      "var tags=[$tags];var baked=$baked;var armed=false;" +
+      "function arm(){armed=true;setTimeout(function(){armed=false},0)}" +
+      "function shown(){" +
+      "var mode=null;" +
       "try{var b=window.androidBridge;" +
-      "if(b&&typeof b.setUiLanguage==='function')b.setUiLanguage(String(locale))" +
+      "if(b&&typeof b.getUiLanguage==='function')mode=String(b.getUiLanguage())}catch(e){}" +
+      "if(mode==='zh'||mode==='en')return mode;" +
+      "if(mode==='system'){for(var i=0;i<tags.length;i++){" +
+      "var t=String(tags[i]).toLowerCase();" +
+      "if(t==='zh'||t==='en')return t;" +
+      "var p=t.split('-')[0];if(p==='zh'||p==='en')return p}" +
+      "return 'en'}" +
+      "return baked}" +
+      "try{document.addEventListener('click',arm,true);" +
+      "document.addEventListener('keydown',arm,true);" +
+      "document.addEventListener('touchend',arm,true)}catch(e){}" +
+      "globalThis.__DSH_LOCALE__={read:function(){return Promise.resolve({languages:tags,preference:$preference})}," +
+      "onChange:function(locale){if(!armed)return;armed=false;" +
+      "var next=String(locale);" +
+      // 桥只认三档；语言包 id 不在这里静默降级成「跟随系统」。
+      "if(next!=='zh'&&next!=='en')return;" +
+      "if(next===shown())return;" +
+      "try{var b=window.androidBridge;" +
+      "if(b&&typeof b.setUiLanguage==='function')b.setUiLanguage(next)" +
       "}catch(e){}}};" +
       "}catch(e){}})();"
   }

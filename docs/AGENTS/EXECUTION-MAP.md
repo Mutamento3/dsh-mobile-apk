@@ -28,6 +28,9 @@
 - 多任务验收：`scripts/verify-mobile-workspaces.mjs`，独立编排真实 CDP/ADB 场景；未运行或证据不足的项不得写 PASS。
 - 构建期 B2：`scripts/patches/data/sidebar-keep-wide-B2.mjs` 让手机形态收起态仍挂载宽内容（`wide` 恒真）并取消收起态内联宽度冻结，把抽屉内容的 React 挂载从手势 touchmove 帧上移走；两条锚点必须同打，单独打 `wide` 会因 `lastWideWidth` 的 56px 初值露出压扁抽屉。真值表、幂等、三向负控与 runner 集成由 `scripts/patches/tests/sidebar-keep-wide-B2.test.mjs` 执行。
 - 构建期 472：`scripts/patches/data/inspector-worker-expose-internals-472.mjs` 把 `dsh-experimental-inspector` 的 `spawnWorker()` 从 `execArgv: []` 改为 `["--expose-internals"]`，否则 Worker 丢掉壳侧启动参数，android-arm64 上 `internal/modules/esm/loader` 必失败；锚点唯一性、幂等、三向拒绝与 runner 集成由 `scripts/patches/tests/inspector-worker-expose-internals-472.test.mjs` 执行。
+- K01 / K02：`MainActivity.retryEngineExplicitly()` 只在用户明确重试时清除 `RepairState` 的 `native-repair/required` 与重试计数；普通启动和回前台保留故障页，不再要求先进入助手。故障页同时提供重试与助手入口。`RepairActivity` 分开处理模型读取和诊断导出失败，提供重新读配置、控制台和返回重试。`PluginMounts.ensureHardBundlesSelected()` 仅自动补入精确身份匹配的工厂 bundle；身份漂移记录期望/实际摘要，不覆盖外部修复，也不否决普通启动。Safe Mode 与可信恢复判据不变。回归：`RepairGateTest.kt`、`PluginMountsTest.kt`。
+- 构建期 PL1：`scripts/patches/data/profile-link-skip-PL1.mjs` 仅在 profile 链接扫描链上跳过权限、目标缺失或非目录错误并告警；系统错误继续抛出。回归 `scripts/patches/tests/profile-link-skip-PL1.test.mjs`。
+- K02 端点：`EngineEndpoint.kt` 持有内存端点与 `.engine-endpoint.json`；默认 4145，文件中的旧端口只是下次启动偏好，当前世代确认前有效端口恒为 0，所有请求拒绝发送；仅当前 spawn 世代的 token 日志可发布真实地址。子进程停止、死亡或启动失败时立即 `invalidate()`，旧端口不会继续接收 WebView/Cookie 请求。构建期 `scripts/patches/data/managed-port-bind-EP1.mjs` 在本壳标记且 IPv4 回环绑定遇 `EADDRINUSE` 时回退一次到 `listen(0)`，并更新进程内 `DSH_ENGINE_PORT`。探活、Cookie、WebView、Mux 与路由鉴权读取同一端点；热路径没有磁盘读或端口扫描。回归 `EngineEndpointTest.kt` 与 `scripts/patches/tests/managed-port-bind-EP1.test.mjs`。
 - 验收入口：`scripts/verify-sidebar-bubbles.mjs` 在真实 WebView 上读取业务语义，ADB 执行点击、滑动、长按、取消与返回并保存截图。宽屏使用 `--wide`；`--owner` 可选择专用验收会话。详见 `docs/maintenance/sidebar-bubbles-2026-10-17.md`。
 
 ## 0.14.5-fx-1 实施补充（2026-10-09）
@@ -132,7 +135,7 @@ sequenceDiagram
 | K05 | 无障碍控制面 | 按需取语义树并对设备执行点击输入滚动截屏 | 控制队列取活 + 无障碍服务回调 | 稳态控制 | K04 控制协议、K06 特权执行 | ControlCarrier 控制队列取活、onServiceConnected、ADB 键盘广播 | DeviceControlService.kt,GlobalActionCatalog.kt,AdbKeyboardService.kt,AdbKeyboardReceiver.kt | 高 |
 | K06 | 特权执行、屏幕范围与本地文件面 | Shizuku 特权 shell 通道、屏幕范围门与本地文件出入口 | 引擎 sh* op / 设置页范围写面 / 外部分享与打开 intent | 稳态控制 | 控制队列承载、引擎 bridge 插件、虚拟屏注册表、无障碍控制面 | 引擎 androidPrivilege 服务面与页面桥 | ShellOps.kt,ScreenScope.kt,ShizukuTransport.kt,ShizukuBindState.kt,ShizukuUserService.kt,ShizukuProbe.kt,ShizukuSupport.kt,ProcIo.kt,FileIncoming.kt,PathOpen.kt,ExternalLinks.kt,ConfigTransfer.kt,RootGrant.kt,RootAccess.kt,OwnershipRepairCore.kt,OwnershipRepair.kt,RootRepairMain.kt,RootExecutionFence.kt,RootMaintenanceLease.kt,RootOwnershipJobs.kt,LeaseClearProbe.kt | 高 |
 | K07 | 虚拟屏宿主 | Shizuku 建屏与 viewer Surface 交接的生命周期编排 | 模型 vd 工具 / 侧栏桥面 / Activity 生命周期 | 交互面 | Shizuku 特权通道、K05 无障碍控制面、K08 浏览器宿主 | MainActivity、DeviceControlService 与 ControlCarrier、侧栏面板 | VdisplayController.kt,VdisplayHost.kt,VdisplayOps.kt,VdisplayLetterbox.kt | 高 |
-| K08 | 浏览器宿主 | 隔离浏览器：无桥 WebView、准入过滤、几何与保活 | 模型 browser* op（控制队列）/ 面板 browserHost* 桥 | 交互面 | S01,P03,控制队列 | MainActivity 构造，op 与面板下推拉起 | BrowserHost.kt,BrowserHostNavigationPolicy.kt,BrowserOverlayPolicy.kt,BrowserHostProfile.kt | 高 |
+| K08 | 浏览器宿主 | 隔离浏览器：无桥 WebView、准入过滤、几何与保活 | 模型 browser* op（控制队列）/ 面板 browserHost* 桥 | 交互面 | S01,P03,控制队列 | MainActivity 构造，op 与面板下推拉起 | BrowserHost.kt,BrowserHostNavigationPolicy.kt,BrowserOverlayPolicy.kt,BrowserHostProfile.kt,BrowserSpikeService.kt,BrowserSpikeActivity.kt,BrowserCompatSpikeTest.kt | 高 |
 | K09 | 悬浮球与面板 | 悬浮球三窗口与展开面板：状态、待答、应答、完成态 | 设置页开关或 onResume 补启；点球展开；WS 帧与 live 文件事件 | 交互面 | K01,K10,引擎网关 | K01 宿主 Activity 与桥开关；EngineService 划掉后台时停它 | OverlayService.kt,OverlayPanel.kt | 高 |
 | K10 | 通知中心 | 引擎事件到通知栏应答的投递-应答闭环；延后日志同步提交、恢复与结算 | 引擎 .notify.ndjson / WS waterfall / 通知动作广播 | 交互面 | P01 通知投影、K09 面板 pending | EngineService.onCreate、动作广播冷启动 | NotifyCenter.kt,NotifyBridge.kt,NotifyStore.kt,NotifySuppressQueue.kt,NotifyDecisionQueue.kt | 高 |
 | K11 | Kotlin 单测面 | JVM策略/core/settlement/wiring与instrumentation覆盖；在场不是已执行。0.14.8 P1 增补：刷新窗口内启动请求的有界等待（跨进程真源 = 真 journal 文件；收口即停 / 超预算必返 / 换代立刻收手 / 无事务不等）与接线契约（裸 `flowOwnership.begin() ?: return` 不得回归、推迟必须进 boot-fail），见 `app/src/test/java/com/dsharnessmobile/shell/DeferredEngineStartTest.kt` | 外部Gradle/结果基线门禁 | 测试与门禁 | 横切 | 实际XML/日志与外部三层证据 | app/src/test/java/com/dsharnessmobile/shell,scripts/check-kotlin-test-count.mjs,scripts/kotlin-test-baseline.json,app/build.gradle.kts | 中 |
@@ -1559,7 +1562,7 @@ Touch reorder: `sidebar-reorder.ts` flushes each synthetic React drag phase. On 
   - 页面事件：客户端插件 `apply()` 装载后，全部由 click/keydown/touchstart-move-end-cancel/MutationObserver/ResizeObserver/定时器驱动；壳侧回呼 `window.__dshBack`、`window.__dshOpenPath`、`window.__dshBridge.onDirectoryPicked`。
 - **运行顺序**：
   1. 引擎启动、WebUI 被打开：`host-web-compat.apply()` 先做 `assertInjectionsParse`（`dsh-host-web-compat/lib/index.js:770`），失败即抛 → 插件树装载失败、引擎起不来；通过则注册两次 `tapIndex`（`:783` 主体注入、`:791` 静态失败占位）与三条端点 `/api/android/dir-pick/poll`、`/dir-pick/result`、`/open-path`（`:803-878`）。页面先跑注入脚本（主题桥同步取 `getSystemDark`、picker poll 每 500ms、看门狗 40s 判据 + `readyWatch` 500ms 报就绪），再跑上游 boot 与客户端插件。
-  2. 客户端插件装载：`index.ts:125` 的 `apply()` 按固定顺序注入样式表（mobile-form → mobile-settings → composer-row → composer-insets → composer-menu → attachment-picker-menu → trajectory-details → dev-section），再挂各 marker/守卫（`form-marker` `:135`、`composer-popup-guard` `:163`、`trajectory-panels-observer` `:182`、`enter-guard` `:198`、`keyboard-boundary` `:209`、`theme-bridge` `:218`）、注册槽位（`settings.section` ×2、`settings.general.item`、`shell.overlay` ×2、`sidebar.right.pane.tab` ×2）。`conversation.session.header.utilities` 的「在文件中打开」注册已在 0.14.2 P5 按用户反馈退役（`dsh-client-ui-responsive/src/client/index.ts:352-356`）；open-with tab 类型仍保留，另注册 AI 浏览器 tab。0.14.5 #335 增加 `mobile/sidebar-gestures.ts`：只在 `html[data-dsh-mobile-form]` 手机形态下，对触屏内容区起手判向（左右各 32 CSS px 留给系统手势），左、右开关分别读写 `localStorage` 的 `dsh.android.sidebarSwipe.left/right`；右滑打开左栏，左滑在左栏已开/主面板选中时回会话；左滑打开右栏，右滑在右栏已开时关闭当前栏。动作仅按水平 64px 阈值提交，横向意图出现时由显式 `passive:false` 的 `touchmove` 监听器及时阻止浏览器横向接管；垂直位移不调用 `preventDefault`，输入控件/标签/按钮/链接、已选中文本、水平滚动容器及非 settings 模态不认领，settings 弹层仍可用手势返回。定向回归为 `dsh-client-ui-responsive/tests/sidebar-gestures.spec.ts` 与 `general-settings.spec.tsx`。随后启动 browser auto-place 轮询（1s）与来件草稿轮询（4s）。
+  2. 客户端插件装载：`index.ts:125` 的 `apply()` 按固定顺序注入样式表（mobile-form → mobile-settings → appearance-row → composer-row → composer-insets → composer-menu → attachment-picker-menu → trajectory-details → dev-section → general-settings），再挂各 marker/守卫（`form-marker` `:135`、`composer-popup-guard` `:163`、`trajectory-panels-observer` `:182`、`enter-guard` `:198`、`keyboard-boundary` `:209`、`theme-bridge` `:218`）、注册槽位（`settings.section` ×2、`settings.general.item`、`shell.overlay` ×2、`sidebar.right.pane.tab` ×2）。`conversation.session.header.utilities` 的「在文件中打开」注册已在 0.14.2 P5 按用户反馈退役（`dsh-client-ui-responsive/src/client/index.ts:352-356`）；open-with tab 类型仍保留，另注册 AI 浏览器 tab。0.14.5 #335 增加 `mobile/sidebar-gestures.ts`：只在 `html[data-dsh-mobile-form]` 手机形态下，对触屏内容区起手判向（左右各 32 CSS px 留给系统手势），左、右开关分别读写 `localStorage` 的 `dsh.android.sidebarSwipe.left/right`；右滑打开左栏，左滑在左栏已开/主面板选中时回会话；左滑打开右栏，右滑在右栏已开时关闭当前栏。动作仅按水平 64px 阈值提交，横向意图出现时由显式 `passive:false` 的 `touchmove` 监听器及时阻止浏览器横向接管；垂直位移不调用 `preventDefault`，输入控件/标签/按钮/链接、已选中文本、水平滚动容器及非 settings 模态不认领，settings 弹层仍可用手势返回。定向回归为 `dsh-client-ui-responsive/tests/sidebar-gestures.spec.ts` 与 `general-settings.spec.tsx`。随后启动 browser auto-place 轮询（1s）与来件草稿轮询（4s）。
   3. 交给谁：标记与桥交给壳侧（K04：`dshBackBridge.setAvailable`、`__dshExportResult`、`__dshThemeBridge`、`browserHost*`），控件交给上游 frame 渲染；此后每次返回键/点击/可见性变化回到本块的入口函数。
   - `shell-termux` 与页面无关：引擎启动时以 `ctx.shell` provider 身份装载，模型每次 bash 调用走 `resolve()`（盖 Termux env）→ `run()/start()`；`probe()` 的工具链表被 `plugins/dsh-android-linux-env` 与 `android_toolchain_status` 复用。
 - **嵌套与线程**：调用链最多 3 层，全部书写于页面主线程（JS 单线程），跨语言处才换线程：
@@ -2087,6 +2090,15 @@ app/src/test/java/com/dsharnessmobile/shell/NotifyCenterPoisonEventTest.kt
 app/src/test/java/com/dsharnessmobile/shell/NotifyPermissionRetryTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/NotifyDeferredRecoveryTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/IncomingRetentionTest.kt
+app/src/debug/java/com/dsharnessmobile/shell/BrowserSpikeService.kt
+app/src/debug/java/com/dsharnessmobile/shell/BrowserSpikeActivity.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/BrowserCompatSpikeTest.kt
+app/src/main/java/com/dsharnessmobile/shell/BrowserIsolationTier.kt
+app/src/main/java/com/dsharnessmobile/shell/BrowserProcessService.kt
+app/src/main/java/com/dsharnessmobile/shell/BrowserTabResources.kt
+app/src/main/java/com/dsharnessmobile/shell/RemoteRendererHost.kt
+app/src/debug/java/com/dsharnessmobile/shell/BrowserRendererHostActivity.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/BrowserRendererServiceTest.kt
 -->
 
 设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
@@ -2096,6 +2108,8 @@ dsh-client-ui-responsive/src/client/mobile/incoming-runtime.ts
 dsh-client-ui-responsive/tests/incoming-runtime.spec.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.ts
 dsh-client-ui-responsive/src/client/mobile/mobile-workspaces.css.ts
+dsh-client-ui-responsive/src/client/mobile/drawer-overlay-dismiss.ts
+dsh-client-ui-responsive/tests/drawer-overlay-dismiss.spec.ts
 scripts/verify-mobile-workspaces.mjs
 dsh-client-ui-responsive/src/client/mobile/sidebar-bubbles.ts
 dsh-client-ui-responsive/src/client/mobile/sidebar-bubbles.css.ts
@@ -2106,6 +2120,8 @@ scripts/patches/tests/sidebar-bubble-reorder.test.mjs
 scripts/patches/data/sidebar-keep-wide-B2.mjs
 scripts/patches/tests/sidebar-keep-wide-B2.test.mjs
 scripts/patches/data/inspector-worker-expose-internals-472.mjs
+scripts/patches/data/profile-link-skip-PL1.mjs
+scripts/patches/data/managed-port-bind-EP1.mjs
 scripts/patches/tests/inspector-worker-expose-internals-472.test.mjs
 glob:scripts/patches/tests/fixtures/dsh-experimental-inspector-0.2.1-rc.2/**
 glob:scripts/patches/tests/fixtures/dsh-client-ui-sidebar-0.2.1-rc.2/**
@@ -2147,6 +2163,7 @@ app/src/main/java/com/dsharnessmobile/shell/RepairActivity.kt
 app/src/main/java/com/dsharnessmobile/shell/RepairConversationStore.kt
 app/src/main/java/com/dsharnessmobile/shell/RepairModelClient.kt
 app/src/main/java/com/dsharnessmobile/shell/RepairModelConfig.kt
+app/src/main/java/com/dsharnessmobile/shell/EngineEndpoint.kt
 app/src/main/java/com/dsharnessmobile/shell/RepairState.kt
 app/src/main/java/com/dsharnessmobile/shell/RepairToolCallParser.kt
 app/src/main/java/com/dsharnessmobile/shell/RepairTools.kt
@@ -2313,6 +2330,8 @@ glob:plugins/dsh-linux-bootstrap/src/*.js
 glob:plugins/dsh-linux-bootstrap/client/*.js
 glob:plugins/dsh-android-file-open/test/*.mjs
 glob:plugins/dsh-android-linux-env/test/*.mjs
+glob:plugins/dsh-session-delete/src/*.js
+glob:plugins/dsh-session-delete/test/*.mjs
 glob:plugins/dsh-android-model-capability/test/*.mjs
 glob:plugins/dsh-model-capability/test/*.mjs
 dsh-client-ui-responsive/src/index.ts
@@ -2326,7 +2345,7 @@ glob:dsh-client-ui-responsive/src/client/*.module.css
 glob:dsh-client-ui-responsive/src/client/mobile/*
 glob:dsh-client-ui-responsive/src/client/dev-section/*
 dsh-client-ui-responsive/src/client/general-settings/GeneralSettings.tsx
-dsh-client-ui-responsive/src/client/general-settings/ui-language.ts
+dsh-client-ui-responsive/src/client/general-settings/general-settings.css.ts
 dsh-host-web-compat/lib/index.js
 glob:dsh-host-web-compat/scripts/*
 dsh-shell-termux/src/index.ts

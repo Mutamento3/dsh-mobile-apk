@@ -18,8 +18,18 @@
  *
  * ST-09: the read goes through useShellState (mount + visible/foreground
  * re-read + write-then-read-back), never a one-shot bridge read.
+ *
+ * 2026-10-23 UI: 这一块此前复用了「开发者选项」的 `dsh-dev-*` 样式（描边按钮 + 原生
+ * 16px 勾选框 + 13px 提示），与通用设置里上游行（左标题/说明、右侧控件、0.5px 分隔线）
+ * 并列时是两套行规——用户反馈「设置里有些 UI 很突兀」。现改为上游行骨架
+ * （general-settings.css.ts）+ 上游控件（ui-primitives 的 Switch）。
+ *
+ * 2026-10-24 语言行退役：设置页里曾有两行「语言」（上游 `dsh-client-locale` 的 locale 行 +
+ * 本页的三分段）。现在只保留上游那一行——壳侧在引擎启动时按系统语言写好具体 locale
+ * （`AppLanguage.syncDshLocale`，非中文一律英文），「跟随系统」不再是可见选项，本页不再渲染语言行。
  */
 import { useCallback, useState } from 'react'
+import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useShellState } from '../mobile/use-shell-state.ts'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls in the settings.section owner share (erased at build time, types only).
@@ -27,20 +37,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Single source of truth for the bridge types (incl. the Window.androidBridge global).
 import type {} from '../android-bridge.ts'
 import { sidebarSwipeEnabled, setSidebarSwipeEnabled } from '../mobile/sidebar-gestures.ts'
-import { type UiLanguageMode, UI_LANGUAGE_MODES, readUiLanguage } from './ui-language.ts'
 import { tr } from '../i18n.ts'
 
 /** Full section props: the settings shell supplies only `close`. */
 export type GeneralSettingsProps = PropsRuntime<'settings.general.item'>
 
 const IMMERSIVE_KEY = 'dsh.android.immersive'
-
-/** "Follow system" and "Chinese" are themselves localized. */
-function languageLabel(mode: UiLanguageMode): string {
-  if (mode === 'en') return 'English'
-  if (mode === 'system') return tr('跟随系统', 'Follow system')
-  return tr('中文', 'Chinese')
-}
 
 /**
  * Immersive initial value (ST-10): the shell bridge is the sole truth source
@@ -74,35 +76,6 @@ export function GeneralSettings(_props: GeneralSettingsProps) {
   const [notice, setNotice] = useState<string | null>(null)
   const [leftSwipe, setLeftSwipe] = useState(() => sidebarSwipeEnabled('left'))
   const [rightSwipe, setRightSwipe] = useState(() => sidebarSwipeEnabled('right'))
-  const [language, setLanguage] = useState<UiLanguageMode>(readUiLanguage)
-
-  const chooseLanguage = useCallback((next: UiLanguageMode) => {
-    setNotice(null)
-    const api = window.androidBridge
-    if (api?.setUiLanguage === undefined) {
-      setNotice(tr('需在安卓应用内切换。', 'Switch this in the Android app.'))
-      setLanguage(readUiLanguage())
-      return
-    }
-    let applied: UiLanguageMode = next
-    try {
-      // Keep the bridge as the receiver: detaching the method (const f = api.setUiLanguage)
-      // drops the Java object and every call throws "non-injected object".
-      applied = (api.setUiLanguage(next) as UiLanguageMode | undefined) ?? next
-    } catch {
-      setNotice(tr('没有保存，请重开应用再试。', 'Not saved. Reopen the app and try again.'))
-      setLanguage(readUiLanguage())
-      return
-    }
-    setLanguage(applied)
-    // Reload so shell and engine rebuild with the new language.
-    try {
-      window.androidBridge?.reloadWebUI?.()
-    } catch {
-      // The preference is already saved; the next launch picks it up.
-    }
-  }, [])
-
   const toggleSidebarSwipe = useCallback((side: 'left' | 'right', enabled: boolean) => {
     if (!setSidebarSwipeEnabled(side, enabled)) {
       setNotice(tr('没有保存，浏览器存储不可用。',
@@ -150,51 +123,52 @@ export function GeneralSettings(_props: GeneralSettingsProps) {
 
   return (
     <div data-plugin="android-general">
-      <label className="dsh-dev-row" data-dsh-ui-language="">
-        <span>{tr('语言', 'Language')}</span>
-        {/* Segmented buttons instead of a select: the native dropdown cannot be
-            driven from the page (or from accessibility automation), and each mode
-            is a one-tap choice anyway. */}
-        <span className="dsh-dev-lang-choices" role="group" aria-label={tr('界面语言', 'Interface language')}>
-          {UI_LANGUAGE_MODES.map(mode => (<button
-            key={mode}
-            type="button"
-            className={language === mode ? 'dsh-dev-btn dsh-dev-btn-active' : 'dsh-dev-btn'}
-            data-ui-language-mode={mode}
-            aria-pressed={language === mode}
-            onClick={() => chooseLanguage(mode)}
-          >{languageLabel(mode)}</button>))}
-        </span>
-      </label>
-      <p className="dsh-dev-hint">
-        {tr('跟随系统时使用手机语言。', 'Follow system uses the phone language.')}
-      </p>
-      <label className="dsh-dev-row dsh-dev-switch">
-        <input
-          type="checkbox"
+      <div className="dsh-gs-row" data-dsh-immersive="">
+        <div className="dsh-gs-text">
+          <div className="dsh-gs-title">{tr('沉浸式状态栏', 'Immersive status bar')}</div>
+          <div className="dsh-gs-desc">
+            {tr('隐藏状态栏，边缘滑动可临时呼出。',
+              'Hides the status bar; swipe from the edge to show it.')}
+          </div>
+        </div>
+        <Switch
           checked={immersive}
-          onChange={(e) => toggleImmersive(e.target.checked)}
+          label={tr('沉浸式状态栏', 'Immersive status bar')}
+          onChange={toggleImmersive}
         />
-        <span>{tr('沉浸式状态栏', 'Immersive status bar')}</span>
-      </label>
-      <p className="dsh-dev-hint">
-        {tr('隐藏状态栏，边缘滑动可临时呼出。',
-          'Hides the status bar; swipe from the edge to show it.')}
-      </p>
-      <label className="dsh-dev-row dsh-dev-switch" data-dsh-sidebar-swipe="left">
-        <input type="checkbox" checked={leftSwipe} onChange={(e) => toggleSidebarSwipe('left', e.target.checked)} />
-        <span>{tr('左侧栏滑动', 'Swipe from the left edge')}</span>
-      </label>
-      <label className="dsh-dev-row dsh-dev-switch" data-dsh-sidebar-swipe="right">
-        <input type="checkbox" checked={rightSwipe} onChange={(e) => toggleSidebarSwipe('right', e.target.checked)} />
-        <span>{tr('右侧栏滑动', 'Swipe from the right edge')}</span>
-      </label>
-      {/* 两侧栏各一行说明会把「屏幕外侧窄边保留给系统手势」逐字重复两遍；合成一行说清同一件事。 */}
-      <p className="dsh-dev-hint">
-        {tr('内容区左右滑动开合侧栏。',
-          'Swipe the content area to open a sidebar.')}
-      </p>
-      {notice !== null && <p className="dsh-dev-warn">{notice}</p>}
+      </div>
+
+      <div className="dsh-gs-row" data-dsh-sidebar-swipe="left">
+        <div className="dsh-gs-text">
+          <div className="dsh-gs-title">{tr('左侧栏滑动', 'Swipe for the left sidebar')}</div>
+          <div className="dsh-gs-desc">
+            {tr('内容区滑动开合左侧栏。',
+              'Swipe the content area to open or close the left sidebar.')}
+          </div>
+        </div>
+        <Switch
+          checked={leftSwipe}
+          label={tr('左侧栏滑动', 'Swipe for the left sidebar')}
+          onChange={(next) => toggleSidebarSwipe('left', next)}
+        />
+      </div>
+
+      <div className="dsh-gs-row" data-dsh-sidebar-swipe="right">
+        <div className="dsh-gs-text">
+          <div className="dsh-gs-title">{tr('右侧栏滑动', 'Swipe for the right sidebar')}</div>
+          <div className="dsh-gs-desc">
+            {tr('内容区滑动开合右侧栏。',
+              'Swipe the content area to open or close the right sidebar.')}
+          </div>
+        </div>
+        <Switch
+          checked={rightSwipe}
+          label={tr('右侧栏滑动', 'Swipe for the right sidebar')}
+          onChange={(next) => toggleSidebarSwipe('right', next)}
+        />
+      </div>
+
+      {notice !== null && <p className="dsh-gs-alert" role="alert">{notice}</p>}
     </div>
   )
 }
