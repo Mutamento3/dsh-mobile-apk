@@ -10,8 +10,8 @@
   - `shell.overlay`：确认框本体（自绘 Modal，不用 `window.confirm`——壳侧会自动批准 JS 弹窗）。
     确认后 `POST /api/session-delete`，成功 `location.reload()` 让列表/索引/搜索重读。
   - **幂等**：host 返回 404（会话已删/引擎已重启）时按成功处理，不再弹「session not found」。
-  - **删的是当前打开的会话**：不重载（重载会恢复到那条已删的会话），改为点应用自己的
-    「新会话」控件切到新对话；找不到控件时回退为重载。
+  - **删的是当前打开的会话**：走**公开**的 `session.new` 快捷键动作（`shortcuts.find('session.new').run()`）
+    切到新对话——不用上游声明为 private 的 `clearMain()`，也不点 DOM；动作不可用才回退为重载。
   - **隐藏已删行**：引擎把加载过的会话留在内存里直到下次启动，所以删掉的行还会出现一会儿。
     client 把已删 id 记进 `localStorage['dsh.session-delete.hidden']`（上限 200），
     下次加载注入 `[data-row-key="session:<id>"]{display:none}`；引擎重启后列表本就干净，条目无副作用。
@@ -21,7 +21,11 @@
   - 只接受 `session-<uuid>`；请求体上限 4 KB；
   - 拦截判据是「正在运行」而不是「加载过」：引擎把打开过的会话都留在内存里，所以用
     `workspace/session-activity` 瀑布（与上游归档同一判据）判断，有活动才 **409**；
-    加载但空闲的会话允许删除（删后到下次引擎启动才从 live 列表消失）；
+  - **探测状态未知一律拒绝**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）：
+    返回 `activity-unknown`（409），绝不把「不知道」当「空闲」；
+  - 删除前**卸载内存里的会话**：`sessions.liveEntryFor(session).detach()`（服务公开方法）
+    移除 live 记录并派发 `session/disposed`，再 `sessions.flush()` 落盘——否则只删磁盘，
+    会话仍留在 `sessions.list()` 里参与搜索；
   - 删除前 best-effort 调用 `workspaceRegistry.unarchiveSession/unpinSession`，清掉归档/置顶成员关系。
 - **src/session-delete.js**：可单测的删除核心——定位 `<DSH_HOME>/sessions/<cwd-key>/<id>/`，
   命中 0 个报 `not-found`、命中 2 个报 `ambiguous`（一个都不删），先 `rename` 成 `.deleting-<t>` 再递归删除，

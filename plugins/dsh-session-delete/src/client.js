@@ -199,49 +199,38 @@
         }
 
         /**
-         * Leave the deleted conversation through the upstream workspace store.
+         * Leave the deleted conversation through the public shortcut action.
          *
-         * Upstream's own archive path does exactly this when the archived session is
-         * the main view: `if (this.mainReference?.sessionId === sessionId) this.clearMain()`.
-         * Reusing the service beats guessing at DOM buttons.
-         * @returns {boolean} true when the store cleared the main view.
+         * `session.new` is the catalog entry the keyboard shortcut uses: its resolver
+         * returns `{ status: 'handled', run }`, and `run()` drives workspace
+         * navigation. That is a public surface — unlike the store's `clearMain()`
+         * (declared private upstream) and unlike clicking DOM buttons (breaks when
+         * the markup moves).
+         * @returns {boolean} true when the action ran.
          */
-        function clearMainView() {
+        function openNewConversation() {
           try {
-            var workspace = pluginCtx === null || typeof pluginCtx.get !== 'function'
+            var shortcuts = pluginCtx === null || typeof pluginCtx.get !== 'function'
               ? undefined
-              : pluginCtx.get('uiWorkspace')
-            if (workspace !== undefined && workspace !== null && typeof workspace.clearMain === 'function') {
-              workspace.clearMain()
-              trace('info', 'cleared the main view via uiWorkspace.clearMain()')
-              return true
+              : pluginCtx.get('shortcuts')
+            if (shortcuts === undefined || shortcuts === null || typeof shortcuts.find !== 'function') {
+              trace('warn', 'shortcuts service unavailable; cannot navigate through session.new')
+              return false
             }
-            trace('warn', 'uiWorkspace.clearMain is not available; falling back to DOM controls')
+            var hit = shortcuts.find('session.new')
+            if (hit === null || hit === undefined || hit.status !== 'handled' || typeof hit.run !== 'function') {
+              trace('warn', 'session.new is not available right now', {
+                status: hit === undefined || hit === null ? 'missing' : String(hit.status),
+              })
+              return false
+            }
+            hit.run()
+            trace('info', 'ran the public session.new action')
+            return true
           } catch (error) {
-            trace('warn', 'uiWorkspace.clearMain threw', { message: String(error && error.message ? error.message : error) })
+            trace('warn', 'session.new threw', { message: String(error && error.message ? error.message : error) })
+            return false
           }
-          return false
-        }
-
-        function goToNewSession() {
-          var buttons = Array.prototype.slice.call(document.querySelectorAll('button'))
-          var match = buttons.find(function (button) {
-            // Upstream marks the control with css.newSession (CSS Modules keep the
-            // name). The visible label is「在“X”中新建会话」/“New session in X”, which
-            // does NOT contain the substring「新会话」— matching text alone missed it
-            // and fell back to a reload that restored the deleted page.
-            var className = button.className
-            if (typeof className === 'string' && className.indexOf('newSession') !== -1) return true
-            var label = (button.getAttribute('aria-label') || '') + ' ' + (button.textContent || '')
-            return /新会话|新建会话|New session/i.test(label)
-          })
-          if (match === undefined) return false
-          trace('info', 'clicking the new-session control', {
-            className: String(match.className || ''),
-            label: match.getAttribute('aria-label') || '',
-          })
-          match.click()
-          return true
         }
 
         /**
@@ -451,36 +440,20 @@
             reportTrace(report)
             return
           }
-          report.clearedMain = clearMainView()
+          report.newConversationAction = openNewConversation()
           setTimeout(function () {
-            var afterClear = mountedSessionId()
-            report.mountedAfterClearMain = afterClear
-            if (afterClear !== sessionId) {
-              report.decision = 'cleared-main'
+            var afterAction = mountedSessionId()
+            report.mountedAfterNewConversation = afterAction
+            if (afterAction !== sessionId) {
+              report.decision = 'opened-new-conversation'
               reportTrace(report)
               return
             }
-            report.newSessionControl = goToNewSession()
-            setTimeout(function () {
-              var afterNew = mountedSessionId()
-              report.mountedAfterNewSession = afterNew
-              if (afterNew !== sessionId) {
-                report.decision = 'switched-to-new-session'
-                reportTrace(report)
-                return
-              }
-              // 最后兜底：点侧栏里另一条会话，把主视图从已删会话上移开。
-              var row = document.querySelector('[data-row-key^="session:"]')
-              report.fallbackRow = row === null ? null : row.getAttribute('data-row-key')
-              if (row !== null) row.click()
-              setTimeout(function () {
-                report.mountedAfterRowClick = mountedSessionId()
-                report.decision = report.mountedAfterRowClick === sessionId ? 'still-mounted-reloading' : 'switched-by-row'
-                reportTrace(report)
-                if (report.mountedAfterRowClick === sessionId) window.location.reload()
-              }, 600)
-            }, 600)
-          }, 300)
+            // 公开动作没生效（或上游改了行为）：重载一次让列表重读，不再点 DOM。
+            report.decision = 'reload-after-failed-navigation'
+            reportTrace(report)
+            window.location.reload()
+          }, 400)
         }
 
         /**

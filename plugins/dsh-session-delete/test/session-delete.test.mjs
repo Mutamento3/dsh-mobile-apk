@@ -85,15 +85,25 @@ test('findSessionDir resolves the single matching directory', async () => {
 // ── host 侧编排：removeSession 用注入的 ctx 读活会话/工作区登记，再走同一个核心 ──
 import { removeSession } from '../src/index.js'
 
-function fakeCtx({ live = false, activity = [], registry = {} } = {}) {
-  return {
+function fakeCtx({ live = false, activity = [], registry = {}, detach = null, waterfall = null } = {}) {
+  const calls = []
+  const ctx = {
+    calls,
     get(name) {
-      if (name === 'sessions') return { get: (id) => (live ? { header: { id } } : undefined) }
+      if (name === 'sessions') {
+        return {
+          get: (id) => (live ? { id, header: { id } } : undefined),
+          liveEntryFor: (session) => ({ detach: () => { calls.push('detach:' + session.id); if (detach) detach() } }),
+          flush: async () => { calls.push('flush') },
+        }
+      }
       if (name === 'workspaceRegistry') return registry
       return undefined
     },
-    waterfall: async () => activity,
   }
+  if (waterfall !== null) ctx.waterfall = waterfall
+  else ctx.waterfall = async () => activity
+  return ctx
 }
 
 test('removeSession refuses a running session before touching the disk', async () => {
@@ -164,21 +174,21 @@ test('logs every deletion step through the injected logger', async () => {
   ])
 })
 
-test('removeSession without the activity waterfall refuses a loaded session (conservative)', async () => {
+test('removeSession without the activity waterfall refuses (state unknown, never guess)', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
+    // 故意不提供 waterfall：老引擎形态 ⇒ 状态未知 ⇒ 拒绝
     const ctx = {
       get(name) {
         if (name === 'sessions') return { get: () => ({ header: { id: ID } }) }
         return undefined
       },
-      // 故意不提供 waterfall：老引擎形态
     }
     await assert.rejects(
       removeSession(ctx, ID),
-      (error) => error instanceof SessionDeleteError && error.code === 'session-active',
+      (error) => error instanceof SessionDeleteError && error.code === 'activity-unknown',
     )
     assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
   } finally {
@@ -187,13 +197,16 @@ test('removeSession without the activity waterfall refuses a loaded session (con
   }
 })
 
-test('removeSession without the waterfall still deletes a session that is not loaded', async () => {
+test('removeSession refuses even an unloaded session when the probe is unavailable', async () => {
   const home = await homeWith([ID])
   const previous = process.env.DSH_HOME
   process.env.DSH_HOME = home
   try {
-    const result = await removeSession({ get: () => undefined }, ID)
-    assert.equal(result.ok, true)
+    await assert.rejects(
+      removeSession({ get: () => undefined }, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'activity-unknown',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
   } finally {
     if (previous === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previous
@@ -211,4 +224,54 @@ test('a directory that vanishes mid-delete reports not-found, not a hard failure
     }),
     (error) => error instanceof SessionDeleteError && error.code === 'not-found',
   )
+})
+
+test('a throwing activity probe refuses instead of guessing idle', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = fakeCtx({ waterfall: async () => { throw new Error('provider exploded') } })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'activity-unknown',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})
+
+test('a non-array activity probe result refuses instead of guessing idle', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = fakeCtx({ waterfall: async () => 'not-an-array' })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'activity-unknown',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})
+
+test('a live session is detached and flushed before its files are removed', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = fakeCtx({ live: true, activity: [] })
+    const result = await removeSession(ctx, ID)
+    assert.equal(result.ok, true)
+    assert.deepEqual(ctx.calls, ['detach:' + ID, 'flush'])
+    assert.deepEqual(await readdir(join(sessionsRoot(home), '--workspace--')), [])
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
 })

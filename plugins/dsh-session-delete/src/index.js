@@ -138,10 +138,15 @@ async function sessionActivity(ctx, sessionId) {
   if (typeof ctx.waterfall !== 'function') return null
   try {
     const reported = await ctx.waterfall('workspace/session-activity', { sessionId }, () => Promise.resolve([]))
-    return Array.isArray(reported) ? reported : []
+    if (!Array.isArray(reported)) {
+      log(ctx, 'warn', 'activity probe returned a non-array; refusing to guess', { sessionId, type: typeof reported })
+      return null
+    }
+    return reported
   } catch (error) {
-    log(ctx, 'warn', 'activity probe failed; treating the session as idle', { sessionId, error: String(error?.message ?? error) })
-    return []
+    // 探测失败 ≠ 空闲：宁可拒绝，也不能把可能正在运行的会话删掉。
+    log(ctx, 'warn', 'activity probe failed; refusing to delete', { sessionId, error: String(error?.message ?? error) })
+    return null
   }
 }
 
@@ -158,7 +163,10 @@ export async function removeSession(ctx, sessionId) {
   // 归档路径用的同一判据，这里复用，避免把「看过的对话」也判成不可删。
   const live = sessions?.get?.(sessionId) !== undefined
   const activity = await sessionActivity(ctx, sessionId)
-  const active = activity === null ? live : activity.length > 0
+  if (activity === null) {
+    throw new SessionDeleteError('activity-unknown', 'cannot verify whether the conversation is idle; refusing to delete', { sessionId })
+  }
+  const active = activity.length > 0
   const registry = ctx.get('workspaceRegistry')
   log(ctx, 'info', 'host delete start', {
     sessionId,
@@ -167,8 +175,28 @@ export async function removeSession(ctx, sessionId) {
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     hasRegistry: registry !== undefined,
   })
-  if (live && active === false) {
-    log(ctx, 'warn', 'session is loaded but idle; deleting its files (it leaves the live list on the next engine start)', { sessionId })
+  // 先卸载内存里的会话：只删磁盘会让它继续留在 sessions.list() 里参与搜索。
+  // sessions.liveEntryFor(session) 是服务上的公开方法，entry.detach() 会移除 live
+  // 记录并派发 session/disposed（上游搜索与侧栏据此更新）。
+  if (live) {
+    try {
+      const session = sessions?.get?.(sessionId)
+      const entry = session === undefined ? undefined : sessions?.liveEntryFor?.(session)
+      if (entry !== undefined && typeof entry.detach === 'function') {
+        entry.detach()
+        log(ctx, 'info', 'detached the live session', { sessionId })
+      } else {
+        log(ctx, 'warn', 'live session has no detach capability; it may stay in the live list', { sessionId })
+      }
+    } catch (error) {
+      log(ctx, 'warn', 'session detach failed', { sessionId, error: String(error?.message ?? error) })
+    }
+    try {
+      await sessions?.flush?.()
+      log(ctx, 'info', 'flushed session persistence after detach', { sessionId })
+    } catch (error) {
+      log(ctx, 'warn', 'flush after detach failed', { sessionId, error: String(error?.message ?? error) })
+    }
   }
   return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
