@@ -164,18 +164,21 @@ object VdisplayController {
    * 正确做法 = 按**内容宽高比**在舞台内等比放大并居中（letterbox 反向：能填满就填满，
    * 不拉伸变形）。
    */
-  fun contentSizeForAlias(alias: String?): Pair<Int, Int>? = synchronized(lock) {
+  fun contentSizeForAlias(alias: String?): Pair<Int, Int>? {
+    // 锁内只做 record 选择（Display 活值查询可能触碰 binder，绝不放 controller 锁内）。
     // 兜底顺序（0.14.0 设备实锤修正）：`alias` 来自**页面**上报的 `snap.selected`，在面板刚打开、
     // 状态还没拉到、或该屏刚被销毁时会为空/失效。此前直接返回 null，宿主侧 `applyStageBounds()`
     // 便退回「按舞台宽高比」拉伸 → 用户看到的「自适应缩放不对 / 黑边」。
     //
     // 内容宽高比与「谁被选中」无关，只与「哪块屏存在」有关，所以这里按
     // 指定别名 → 当前选中 → 唯一活跃屏 依次退化；只要本机还有虚拟屏，就能给出正确的宽高比。
-    val record = (alias?.let { records[it] })
-      ?: records[selectedAlias]
-      ?: records.values.firstOrNull()
-      ?: return null
-    record.width to record.height
+    val record = synchronized(lock) {
+      (alias?.let { records[it] })
+        ?: records[selectedAlias]
+        ?: records.values.firstOrNull()
+        ?: return null
+    }
+    return liveOrSnapshotSize(record)
   }
 
   private fun selectedRecord(): Record? = synchronized(lock) { records[selectedAlias] }
@@ -804,9 +807,30 @@ object VdisplayController {
   }
 
   /** 当前选中（或第一块）虚拟屏的分辨率；无屏返回 null（浮窗按此保持宽高比）。 */
-  internal fun activeSize(): Pair<Int, Int>? = synchronized(lock) {
-    val record = records[selectedAlias] ?: records.values.firstOrNull() ?: return null
-    record.width to record.height
+  internal fun activeSize(): Pair<Int, Int>? {
+    // 锁内只做 record 选择，活值查询放锁外（与 contentSizeForAlias 同一纪律）。
+    val record = synchronized(lock) { records[selectedAlias] ?: records.values.firstOrNull() }
+      ?: return null
+    return liveOrSnapshotSize(record)
+  }
+
+  /**
+   * 活值优先的内容尺寸：Display 活值 → 建屏快照兜底，经 [VdisplayLetterbox.chooseLiveOrSnapshot] 决策。
+   *
+   * 为什么必须活值（0.14.10 issue ① 设备锤定）：虚拟屏带 FLAG_ROTATES_WITH_CONTENT，建屏后
+   * 方向可随内容翻转（dumpsys 实测 mCurrentLayerStackRect 由 675x1200 翻成 1200x675），而
+   * Record.width/height 是建屏瞬间的快照、全仓无任何回写路径——按快照算的 frame 与活内容
+   * 渲染方向相反时画面整体拉伸。读取与 screens() 同一模式（Display 缓存读 +
+   * @Suppress(DEPRECATION)）；查询异常/非法时回退快照。
+   */
+  private fun liveOrSnapshotSize(record: Record): Pair<Int, Int> {
+    val metrics = DisplayMetrics()
+    val live: Pair<Int, Int>? = runCatching {
+      @Suppress("DEPRECATION")
+      record.display.display.getRealMetrics(metrics)
+      metrics.widthPixels to metrics.heightPixels
+    }.getOrNull()
+    return VdisplayLetterbox.chooseLiveOrSnapshot(live?.first, live?.second, record.width, record.height)
   }
 
   /** 设置页「强制销毁」：无视会话归属销毁全部虚拟屏（用户三连点确认后调用）。 */
