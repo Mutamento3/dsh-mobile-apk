@@ -114,6 +114,31 @@
           return document.documentElement.getAttribute('data-dsh-session-id')
         }
 
+        /** Per-attempt timeout: a dead keep-alive socket after an engine restart must not hang the dialog. */
+        var REQUEST_TIMEOUT_MS = 15000
+
+        /**
+         * POST the delete request with a hard timeout.
+         *
+         * The WebView can hold a keep-alive connection to an engine process that
+         * just restarted; the request then never reaches the new process and the
+         * dialog would sit on「正在删除…」forever (measured: zero route hits in
+         * engine.log while curl answered in 13 ms).
+         * @param {string} sessionId - session to delete.
+         * @returns {Promise<Response>} the fetch response.
+         */
+        function postDelete(sessionId) {
+          var init = {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionId }),
+          }
+          if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+            init.signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+          }
+          return fetch('/api/session-delete', init)
+        }
+
         /**
          * Report the post-delete navigation decision to the host log.
          * @param {object} payload - decision details.
@@ -274,11 +299,7 @@
             trace('info', 'confirm accepted, sending request', { sessionId: target.sessionId })
             setBusy(true)
             setError(null)
-            fetch('/api/session-delete', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ sessionId: target.sessionId }),
-            })
+            postDelete(target.sessionId)
               .then(function (res) {
                 return res.json().catch(function () { return {} }).then(function (data) {
                   if (!res.ok || data.ok !== true) {
@@ -327,6 +348,25 @@
                 }, 700)
               })
               .catch(function (reason) {
+                var timedOut = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
+                if (timedOut) {
+                  trace('warn', 'delete request timed out; retrying once', { sessionId: target.sessionId })
+                  // A dead keep-alive socket fails once; the retry opens a fresh connection.
+                  return postDelete(target.sessionId)
+                    .then(function (res) { return res.json().catch(function () { return {} }).then(function (data) {
+                      if (!res.ok || data.ok !== true) throw new Error(data.message || data.error || ('HTTP ' + res.status))
+                      rememberHiddenId(target.sessionId)
+                      refreshHiddenStyles()
+                      trace('info', 'delete succeeded on retry, reloading', { sessionId: target.sessionId })
+                      window.location.reload()
+                    }) })
+                    .catch(function (again) {
+                      var message = String(again && again.message ? again.message : again)
+                      trace('error', 'delete failed after retry', { sessionId: target.sessionId, message: message })
+                      setError(message)
+                      setBusy(false)
+                    })
+                }
                 var message = String(reason && reason.message ? reason.message : reason)
                 trace('error', 'delete failed', { sessionId: target.sessionId, message: message })
                 setError(message)
