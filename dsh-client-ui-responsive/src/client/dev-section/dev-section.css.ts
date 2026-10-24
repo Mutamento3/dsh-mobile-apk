@@ -31,7 +31,10 @@ export const DEV_SECTION_CSS: string = `
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 8px 0;
+  /* 与通用设置同一行规：padding 16 0 / gap 24 / 0.5px 分隔线。
+     此前这里是 8px，同一套 .dsh-gs-row 在两处密度不同（通用设置更松、这三页更挤），
+     与「对齐上游」的目标相反；tests/row-skeleton-parity.spec.ts 盯着这条不再漂。 */
+  padding: 16px 0;
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 

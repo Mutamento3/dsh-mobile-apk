@@ -425,8 +425,10 @@ export const MARKETPLACE_CSS: string = `
 }
 
 /* 「插件」页里的市场 Tab 按钮隐藏：入口只保留「添加插件」下拉里的那一项。
-   Tab 按钮的 id 以 -tab-dshmarketplace 结尾，用后缀选择器即可命中。 */
-[id$='-tab-dshmarketplace'] {
+   运行时（dsh-client-ui-plugin-manager）的 tab 按钮 id 形如 tabsId-item.id，
+   面板 id 是同前缀再加 -panel——所以后缀匹配 -dshmarketplace 只命中按钮，不命中面板。
+   注意：不要写成 -tab-dshmarketplace，运行时里没有 -tab- 这一段（真机实测不命中）。 */
+[id$='-dshmarketplace']:not([id$='-panel']) {
   display: none;
 }
 
