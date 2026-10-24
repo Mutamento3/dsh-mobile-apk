@@ -25,5 +25,13 @@
     "src/",
     "test/",
     "README.md"
-  ]
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.3"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  }
 }

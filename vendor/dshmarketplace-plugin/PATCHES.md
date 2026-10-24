@@ -26,8 +26,9 @@ vendored 的原因有两类：一是上游未修而我们已止血的缺陷，�
 | D（0.13.2 W1；**2026-10-24 按 apk issue #507 改判据**） | `lib/index.js` + `lib/client.js` | 必须保留，已重锚 | **移动兼容性徽章 + 独立 `mobile=1` 过滤**。server 侧 0.1.7 的搜索 handler 已改用 `c(...installCheck:"passed")` + `p(a)`，插入锚点由 `function qt(` 改为 `function Dt(`（apply 函数）；client 侧锚点（helpers / 徽章 / 搜索框 / 取数 hook / 状态 / 空态）在 0.1.7 逐字未变，原位命中。#507 修正两处：① 判据由 `compat !== "desktop"` 改为只放行 `compat === "ok"`（旧判据因白名单未命中默认 `unknown` 而等于几乎不过滤）；② 过滤状态从搜索词拆到独立参数 `mobile=1`，搜索框不再出现 `mobile: ` 前缀、也不再吞掉以此开头的真实关键字 |
 | U2（0.14.0） | `lib/index.js` | 必须保留，已重锚 | `/api/dshmarketplace/{search,install}` 是 exact 路由，handler 首行复用 `connection.requestRejection()`（browser-session-only 面）；403 空体、401 JSON、成功响应均 `no-store`。0.1.7 重新 minify 后标识符变为 `I()/et/rt/N()`，锚点按新字节重写并保留 0.1.5 旧形态兜底 |
 
-其余文件（`package.json`、`cordis.patch.yml`、`skills/dsh-plugin-store/SKILL.md`、
-README/LICENSE）与 0.1.7 上游逐字节一致。
+其余文件（`cordis.patch.yml`、`skills/dsh-plugin-store/SKILL.md`、README/LICENSE）
+与 0.1.7 上游逐字节一致。`package.json` 有一处本地差异：两个 dsh peer 的钉由
+`0.2.1-rc.2` 抬到 `0.2.1-rc.3`（随 0.2.1-rc.3 追版），包名、版本与其余字段原样。
 
 ## 0.1.7 上游新增能力（我们不改，随追版一并获得）
 

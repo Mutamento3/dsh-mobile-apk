@@ -16,12 +16,12 @@
 
 ## 2. 文件逐项登记
 
-目标根为快照内usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai；下表尺寸/hash 为 2026-10-17 实测值（0.2.1-rc.2 夹具经对应补丁链复算，并与 `assets/patched/` 现产物逐字节对账）；历史批次数字保留在 §7.4/7.5/7.7。注册入口现在为applyRuntimePatches，旧注册行号不再作为当前锚点。
+目标根为快照内usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai；下表尺寸/hash 已于 2026-10-24 与 0.2.1-rc.3 快照逐字节复核；SPJ 当前资产为 149,673 B，历史批次保留在后文；历史批次数字保留在 §7.4/7.5/7.7。注册入口现在为applyRuntimePatches，旧注册行号不再作为当前锚点。
 
 | asset 文件（字节） | 目标快照路径（注册行） | 状态 | 作用 / 来源线索 |
 |---|---|---|---|
 | attachment-local-index.js（**47,937**；sha256 `7ffe07dc8bed38a858f85c7f6df1fa41214cc16c634afbd989e07bf60cb31dbd`；2026-09-24 按 0.1.7-rc.1 快照重建；2026-10-17 实测 0.2.1-rc.2 夹具经 `attach-durable-F2` 复算与该资产逐字节一致） | dsh-attachment-local/lib/index.js（applyRuntimePatches） | 生效 | 0.13.7 重出（引擎 0.1.5-rc.1）+ 0.14.2 随引擎 0.1.7-rc.1 换代重建（§7.4）+ 0.14.0 review C1：**与构建期 `attach-durable-F2` 逐字节同源**（F2 已扩为三件套：祖先 fsync 守卫 + 两处 link(2)→rename 回退 + unlink ENOENT 容忍）；内含图片归一化 2048 降采样上限（`DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION = 2048`）。补丁判定走内容指纹而非内嵌标记 |
-| session-persistence-jsonl-index.js（**145,247**；sha256 `3a0844c1d3b2025c580da7dbd30353fac319c551187b0bfa03f25182abe57355`；2026-09-24 按 0.1.7-rc.1 快照重建。**2026-10-17 实测：现资产仍是上一代产物**——0.1.7-rc.2 与 0.2.0-rc.2 夹具经 F5+F7 产出同一字节；0.2.1-rc.2 夹具复算为 **149,673 B / sha256 `b9ac5744c96a35c881ccc0d1b70850b012245dc54f07f2e543ad3632784a0981`**，新快照出炉后必须重出，详见 §7.7） | dsh-session-persistence-jsonl/lib/index.js（applyRuntimePatches） | 生效 | 0.13.7 重出 + 0.13.8-b 追加 F5/F7（与构建期同源）+ 0.14.2 随引擎 0.1.7-rc.1 换代重建（§7.4）：两处 link(2) 站点带 EACCES/EPERM/ENOTSUP → rename 回退，发布独占语义由模块级 `dshMobileClaimExclusive/ReleaseClaim` 恢复（O_EXCL 占位 + 失败回收）。**0.14.0 review C1 实锤**：v0.14.0-preview 资产曾是「内联占位 + helper 占位」双占位坏版本（恒 EEXIST 恒 false，旧会话迁移永久失败并留 0 字节毒文件）——修复 = F7 补丁增加 v1→v2 收敛分支 + 本资产从快照重出 + 门禁升级为逐字节比对。行为回归 `scripts/patches/tests/{spj-migration-link-f5,publish-exclusive-reclaim}.test.mjs`（后者支持 `--asset` 直测资产本体） |
+| session-persistence-jsonl-index.js（**149,673**；sha256 `b9ac5744c96a35c881ccc0d1b70850b012245dc54f07f2e543ad3632784a0981`；2026-10-24 与 `0.2.1-rc.3` 快照逐字节同源，F5/F7 行为回归通过） | dsh-session-persistence-jsonl/lib/index.js（applyRuntimePatches） | 生效 | 0.13.7 重出 + 0.13.8-b 追加 F5/F7（与构建期同源）+ 0.14.2 随引擎 0.1.7-rc.1 换代重建（§7.4）：两处 link(2) 站点带 EACCES/EPERM/ENOTSUP → rename 回退，发布独占语义由模块级 `dshMobileClaimExclusive/ReleaseClaim` 恢复（O_EXCL 占位 + 失败回收）。**0.14.0 review C1 实锤**：v0.14.0-preview 资产曾是「内联占位 + helper 占位」双占位坏版本（恒 EEXIST 恒 false，旧会话迁移永久失败并留 0 字节毒文件）——修复 = F7 补丁增加 v1→v2 收敛分支 + 本资产从快照重出 + 门禁升级为逐字节比对。行为回归 `scripts/patches/tests/{spj-migration-link-f5,publish-exclusive-reclaim}.test.mjs`（后者支持 `--asset` 直测资产本体） |
 | fs-local-index.js（**47,826**；sha256 `4b1daab4763d47c0936886e23767f485a5aee54cc66ecbcf0588f047de6f5408`；2026-09-26 由出厂态 fixture 经补丁链重建：F8 + B。0.14.2 批记录为 47,793 B，当前补丁实现（F8 的 ENOSYS 分支 + B）产出 47,826 B；2026-10-17 实测 0.2.1-rc.2 夹具复算与该资产逐字节一致） | dsh-fs-local/lib/index.js（applyRuntimePatches） | 生效 | **0.14.1 重新入册**（apk issue #246）：`writeFileAtomic` 的 `createIfAbsent` 发布站点是全包唯一的 `link(2)` 调用，且该分支失败即抛、无任何回退 → Android 应用域恒拒 hardlink ⇒ 真机上 `write` 工具建不了任何新文件（覆盖已存在文件走 `rename`，正常）。与构建期 `fs-local-link-F8` 逐字节同源。**本资产是 0.13.3 退役资产的重新入册**——当年退役理由「上游 0.1.2-rc.1 已原生覆盖 rename 回退」对 `createIfAbsent` 站点不成立（0.1.5-rc.1 实测：全文仅此一处 `link` 调用，`EACCES`/`EPERM`/`ENOTSUP` 无任何处理）。补丁判定走内容指纹而非内嵌标记。行为回归 `scripts/patches/tests/fs-local-link-f8.test.mjs`（支持 `--asset` 直测资产本体） | **0.14.2 追加 `fs-local-digest-guard-B`**（版本守卫摘要 CAS 兜底）：资产必须同时含 F8+B 两个 marker，否则引擎启动时会把 B 覆盖回「只有 F8」的旧字节 ⇒ 真机上 B 等于没修（实测踩到：旧资产 43,405 B 与当时快照逐字节一致，门禁因快照陈旧而不响）。重建方式 = 取出厂态 fixture 按 registry 顺序施加该文件全部 engine 补丁（0.14.2 批产物 47,793 B；当前实现产出 47,826 B），**禁止手改**；门禁见 §7.5 |
 
 已退役资产（不在 `assets/patched/`，`applyAssetPatch` 注册行同步移除，勿再引用）：`primitives-index.js`、`fs-local-index.js`（0.13.3 批退役，d377abc——link(2) 回退族改由构建期补丁承担；**0.14.1 已重新入册，见 §2 的 fs-local-index.js 行与 §7.1 的 `fs-local-link-F8`**——退役时该回退并未真正落到构建期补丁，`createIfAbsent` 站点成了覆盖空洞）；`web-frontend-index.html`（0.13.7fx-1 退役，§8）；`llm-deepseek-index.js`（rc.2 起遗留死资产，随重出批删除）。
@@ -137,6 +137,8 @@
 （fixture = 0.1.5-rc.1 产物；`.deploy-tmp/` 下的临时预检脚本不入库，勿再引用）。
 
 ### 7.1 构建期引擎补丁历史与实现说明（活动状态见 §6.1）
+
+2026-10-24 追版 `0.2.1-rc.3`：PTC A1 与 MiMo 056 的精确版本守卫同步为 rc.3，未知版本继续拒绝；28 条引擎补丁在 rc.3 原始发布包上全部命中。历史 rc.2 夹具保留为 superseded，新夹具记录官方提交 `1f81c047` 与真实字节哈希。完整验证见协调仓 `docs/UPSTREAM-0.2.1-RC3-2026-10-24.md`。
 
 2026-10-23 新增：`profile-link-skip-PL1` 仅在 profile 链接扫描中跳过权限/缺失/非目录错误，不写用户文件；`managed-port-bind-EP1` 仅在本壳 IPv4 回环监听发生 `EADDRINUSE` 时回退一次到 OS 分配端口，监听完成后发布真实端口。实现位于 `scripts/patches/data/`，真实发布夹具与负控位于同名测试文件。壳侧消费与信任边界见 `EXECUTION-MAP.md` 的 K02 端点补充。
 
