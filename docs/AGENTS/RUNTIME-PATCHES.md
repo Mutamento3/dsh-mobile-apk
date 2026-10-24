@@ -74,6 +74,11 @@
 | `market-D-server` | undefined | `dshmarketplace-plugin/lib/index.js` |
 | `market-route-auth-U2` | undefined | `dshmarketplace-plugin/lib/index.js` |
 | `market-D-client` | undefined | `dshmarketplace-plugin/lib/client.js` |
+| `market-E-collapse` | undefined | `dshmarketplace-plugin/lib/client.js` |
+| `market-F-pages` | undefined | `dshmarketplace-plugin/lib/index.js` |
+| `market-F-client` | undefined | `dshmarketplace-plugin/lib/client.js` |
+| `market-G-state` | undefined | `dshmarketplace-plugin/lib/client.js` |
+| `market-J-fullpage` | undefined | `dshmarketplace-plugin/lib/client.js` |
 | `undo-E1` | undefined | `dsh-undo-savepoint/lib/client.js` |
 | `undo-E2` | undefined | `dsh-undo-savepoint/lib/client.js` |
 | `undo-E3` | undefined | `dsh-undo-savepoint/lib/client.js` |
