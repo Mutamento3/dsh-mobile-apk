@@ -186,14 +186,33 @@ export const MARKETPLACE_CSS: string = `
   cursor: pointer;
 }
 
-.dshm-page-btn:hover {
+/* hover 只作用于非当前页：当前页是实心填充，再叠一层 hovering 底色就成了
+   「黑底上盖一层白」——点过之后鼠标/手指停在那颗按钮上就会看到。 */
+.dshm-page-btn:hover:not(.dshm-page-cur) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dshm-page-btn:active:not(.dshm-page-cur) {
+  background: var(--dsw-alias-interactive-bg-active);
 }
 
 .dshm-page-cur {
   border-color: var(--dsw-alias-button-primary-fill);
   background: var(--dsw-alias-button-primary-fill);
   color: var(--dsw-alias-label-primary-foreground);
+}
+
+/* 当前页自己的 hover/active：只走 primary 系列的悬停色，保持实心外观。 */
+.dshm-page-cur:hover,
+.dshm-page-cur:active {
+  background: var(--dsw-alias-button-primary-hover);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+/* 键盘焦点用描边环表示，不用底色（避免第二次出现「盖一层」）。 */
+.dshm-page-btn:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
 }
 
 .dshm-page-gap {
