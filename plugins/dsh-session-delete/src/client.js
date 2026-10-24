@@ -490,6 +490,8 @@
           return attemptDelete(sessionId, 0).then(function (data) {
             localTrace('deleted', { sessionId: sessionId, alreadyGone: data.alreadyGone === true })
             clearPending()
+            // 成功必须先收掉确认框：否则删除已经完成，弹窗还停在「正在删除…」。
+            setPending(null)
             afterDeleted(sessionId, data)
           })
         }
