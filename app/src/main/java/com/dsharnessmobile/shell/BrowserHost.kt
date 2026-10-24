@@ -197,6 +197,7 @@ internal class BrowserHost(
         tab.pageWidth = event.optInt("pageWidth", tab.pageWidth)
         tab.pageHeight = event.optInt("pageHeight", tab.pageHeight)
         if (event.has("pageDevicePixelRatio")) tab.pageDevicePixelRatio = event.optDouble("pageDevicePixelRatio", tab.pageDevicePixelRatio)
+        measureRemotePage(tab)
         tab.remoteCanGoBack = event.optBoolean("canGoBack", tab.remoteCanGoBack)
         tab.remoteCanGoForward = event.optBoolean("canGoForward", tab.remoteCanGoForward)
       }
@@ -1238,6 +1239,7 @@ internal class BrowserHost(
         val rid = remoteTabId(tab.owner, tab)
         rh.setProjectionSize(rid, width, height)
         runCatching { rh.renderer?.relayout(rid, width, height) }
+        measureRemotePage(tab)
       }
     }
     stageVisible = true
@@ -1245,6 +1247,23 @@ internal class BrowserHost(
     // A repeated live lease can be the only signal after a renderer/surface stops drawing.
     // Invalidate the visible native surface without forcing a layout pass on every renewal.
     if (stageVisible) view?.invalidate()
+  }
+
+  /**
+   * tier-2 页面视口实测：与 [measurePage] 同口径（innerWidth/innerHeight/dpr），经远端
+   * evaluateJs 回执。远端 onPageFinished 事件里那次实测可能与视口脚本的重排竞争（读到
+   * 旧布局，2026-10-24 实测 1043x420 vs 390x845），故事件落账后再补测一次；relayout 后
+   * 同样补测。只回填仍登记在册的同一个 tab，重建/关闭后的迟到回执作废。
+   */
+  private fun measureRemotePage(tab: Tab) {
+    if (tab.view != null) return
+    evaluateOnTab(tab, "(function(){return JSON.stringify({w:window.innerWidth||0,h:window.innerHeight||0,dpr:window.devicePixelRatio||0})})()") { raw ->
+      if (tabOrNull(tab.id) !== tab) return@evaluateOnTab
+      val value = decodeJsObject(raw) ?: return@evaluateOnTab
+      tab.pageWidth = value.optInt("w", tab.pageWidth)
+      tab.pageHeight = value.optInt("h", tab.pageHeight)
+      tab.pageDevicePixelRatio = value.optDouble("dpr", tab.pageDevicePixelRatio)
+    }
   }
 
   /** 读取页面自报视口（诊断 + 设备断言）；失败保留上一次值。 */
