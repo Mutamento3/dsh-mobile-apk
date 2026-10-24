@@ -21,7 +21,9 @@ export const MARKETPLACE_CSS: string = `
   color: var(--dsw-alias-label-primary);
   background: transparent;
   font-size: 14px;
-  gap: 0;
+  /* 保留 12px 的纵向节奏：header / 搜索框 / 勾选框 / 列表之间靠它隔开。
+     上一版把它写成 0，导致勾选框与搜索框贴在一起。 */
+  gap: 12px;
   padding: 0;
 }
 
@@ -45,9 +47,9 @@ export const MARKETPLACE_CSS: string = `
   line-height: 18px;
 }
 
-/* 搜索框：与上游输入框同高同圆角（32px / radius-md / 0.5px 描边）。 */
+/* 搜索框：与上游输入框同高同圆角（32px / radius-md / 0.5px 描边）。
+   纵向间距由 .dshm 的 gap 提供，这里不再加 margin（否则叠成 24px）。 */
 .dshm-search {
-  margin-top: 12px;
   box-sizing: border-box;
   height: 32px;
   padding: 0 10px;
@@ -62,6 +64,17 @@ export const MARKETPLACE_CSS: string = `
 .dshm-search:focus {
   border-color: var(--dsw-alias-state-business-primary);
   outline: none;
+}
+
+/* 「仅移动端可用」这一行的容器：插件给它的是行内样式
+   marginLeft:10 / gap:4 / fontSize:13，行内样式只能靠 !important 覆盖。
+   改成与上游行一致：左对齐、8px 图标间距、12/18 次要文字。 */
+.dshm > label {
+  margin-left: 0 !important;
+  gap: 8px !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+  color: var(--dsw-alias-label-secondary) !important;
 }
 
 /* 「仅移动端可用」：原生 checkbox 画成上游 Switch（36x20 胶囊 + 16px 圆点）。 */
