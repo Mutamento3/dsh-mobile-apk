@@ -222,16 +222,17 @@ export async function removeSession(ctx, sessionId) {
     throw new SessionDeleteError('session-active', 'the conversation is running; stop it before deleting', { sessionId })
   }
 
-  // 先离开 live 集合，再删磁盘：反过来会留下「目录没了但内存里还在」的幽灵会话。
-  // 卸载失败直接报错并保持文件原状（可恢复），不再 best-effort。
-  const unloaded = unloadLiveSession(ctx, sessionId)
-  if (unloaded.wasLive) log(ctx, 'info', 'unloaded the live session', { sessionId })
-
   return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
     isActive: false,
     logger: (level, message, extra) => log(ctx, level, message, extra),
+    // 目录确认存在、归档/置顶清理完成之后才卸载：目录不存在或不唯一时不能先把会话
+    // 从内存里拿掉，否则用户会看到「报错却消失」，且文件其实还在。
+    afterResolve: async () => {
+      const unloaded = unloadLiveSession(ctx, sessionId)
+      if (unloaded.wasLive) log(ctx, 'info', 'unloaded the live session', { sessionId })
+    },
     beforeRemove: async () => {
       try {
         await registry?.unarchiveSession?.(sessionId)

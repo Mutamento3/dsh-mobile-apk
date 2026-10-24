@@ -364,3 +364,22 @@ test('client half never calls private navigation APIs (clearMain / shortcuts.fin
   assert.equal(/shortcuts\.find/.test(source), false, 'the Shortcuts service has no find()')
   assert.equal(/liveEntryFor/.test(source), false, 'liveEntryFor is private upstream')
 })
+
+test('a missing directory reports not-found and keeps the session live', async () => {
+  // 受控复现（维护者提出）：live 会话但磁盘上没有目录 → 必须 not-found，且会话仍在 live 集合。
+  const home = await homeWith([])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = fakeCtx({ live: true, activity: [] })
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'not-found',
+    )
+    assert.deepEqual(ctx.calls, [])
+    assert.notEqual(ctx.get('sessions').get(ID), undefined)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})

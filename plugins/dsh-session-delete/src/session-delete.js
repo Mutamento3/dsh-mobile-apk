@@ -97,12 +97,13 @@ export async function findSessionDir(root, sessionId) {
  * @param {string} options.sessionId - session to delete.
  * @param {boolean} options.isActive - whether any provider reports running work for the session.
  * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.beforeRemove] - bookkeeping hook (unarchive/unpin).
- * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.afterRename] - runs after the directory left the scan path (detach/flush).
+ * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.afterResolve] - runs once the directory is confirmed (unload the live session).
+ * @param {(info: { sessionId: string, dir: string }) => Promise<void>} [options.afterRename] - runs after the directory left the scan path.
  * @param {(level: 'info'|'warn'|'error', message: string, extra?: object) => void} [options.logger] - step logger.
  * @returns {Promise<{ ok: true, sessionId: string, dir: string }>} outcome.
  * @throws {SessionDeleteError} on every refused state.
  */
-export async function deleteStoredSession({ home, sessionId, isActive, beforeRemove, afterRename, logger }) {
+export async function deleteStoredSession({ home, sessionId, isActive, beforeRemove, afterResolve, afterRename, logger }) {
   const log = typeof logger === 'function' ? logger : () => {}
   assertSessionId(sessionId)
   log('info', 'delete requested', { sessionId, isActive: isActive === true })
@@ -118,6 +119,10 @@ export async function deleteStoredSession({ home, sessionId, isActive, beforeRem
     await beforeRemove({ sessionId, dir })
     log('info', 'archive/pin membership cleared', { sessionId })
   }
+  // 目录已确认存在（且归档/置顶清理完成）之后才卸载内存会话：目录不存在 / 不唯一 /
+  // 清理失败都发生在卸载之前，避免「报错但会话已经从内存消失、文件还在」。
+  // 这个钩子失败必须让整次删除失败（调用方据此返回 unload-failed，文件保持原状）。
+  if (typeof afterResolve === 'function') await afterResolve({ sessionId, dir })
   const graveyard = `${dir}.deleting-${Date.now().toString(36)}`
   try {
     log('info', 'moving session directory out of the scan path', { sessionId, from: dir, to: graveyard })

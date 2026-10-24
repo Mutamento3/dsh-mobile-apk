@@ -19,7 +19,9 @@
     - `workspace/session-activity` 瀑布报告有活动 → `session-active`；
     - **探测状态未知**（provider 抛错 / 返回非数组 / 老引擎没有瀑布）→ `activity-unknown`，
       绝不把「不知道」当「空闲」；
-  - **加载中的会话照常可删**：先让会话离开 Host live 集合，再删磁盘目录。
+  - **加载中的会话照常可删**：顺序是「定位目录 → 清归档/置顶 → 卸载内存会话 → 改名 → 删目录」。
+    卸载放在目录确认存在之后：目录不存在 / 不唯一 / 清理失败都发生在卸载之前，避免
+    「报错但会话已经从内存消失、文件还在」。
     卸载走引擎自己的 teardown 边 `entry.detach()`（**维护者在 PR #496 里接受了插件内驱动这条边，
     不额外加引擎补丁**；上游若改名或改语义，插件会以 `unload-failed` 明确失败、文件不动）：移除 store 条目并派发 `session/disposed`，
     agent loop 据此释放 Agent、jsonl 持久化清理写入状态、api-session controller 广播
@@ -44,9 +46,9 @@
 
 ## 验证
 
-- `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**21 项全过**
+- `node plugins/dsh-session-delete/test/session-delete.test.mjs`：**22 项全过**
   （非法 id / 不存在 / 运行中拒绝 / live 先卸载再删 / detach 抛错报 unload-failed 且文件不动 /
-  无卸载能力同样报错且文件不动 / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
+  无卸载能力同样报错且文件不动 / 目录不存在时报 not-found 且会话仍在 live / 正常删除 + 记账顺序 / 重复命中不删 / 目录定位 /
   host 编排拒绝 / 归档置顶清理顺序 / 每步日志 / 探测抛错与非数组拒绝 / 无瀑布拒绝 /
   目录中途消失→not-found / post-rename 钩子失败不残留 / 接口契约：不调用 `flush(`、
   `clearMain`、`shortcuts.find`）。
