@@ -41,14 +41,21 @@ internal object RepairState {
    * armedInThisProcess=true，自动路径不再越过；成功则由健康收敛 [reset] 清门。持久门
    * 防「无限自动重试循环」的原语义对本进程内完全保留。
    */
-  fun coldStartAutoAttempt(context: Context): Boolean = coldStartAutoAttempt(required(context))
+  fun coldStartAutoAttemptAvailable(context: Context): Boolean =
+    coldStartAutoAttemptAvailable(required(context))
 
-  /** 纯判据（JVM 单测）：required 由调用方给出，进程内一次性语义在此处保证。 */
-  internal fun coldStartAutoAttempt(required: Boolean): Boolean {
-    if (!required || armedInThisProcess || autoAttemptSpent) return false
-    autoAttemptSpent = true
-    return true
-  }
+  /**
+   * 纯判据（JVM 单测）：**查询不消耗**。启动链上有两道闸门
+   * （MainActivity.startEngineFlow 与 EngineStartFlow.start），查询各自通过；只有
+   * start() 真正放行、即将开跑时才 [spendColdStartAutoAttempt]——否则第二道闸门永远
+   * 查到「已花掉」而误判 BLOCKED（首版实现的实锤：两道闸门各消耗一次，18:23 现场
+   * retries-exhausted 由第二道闸门写出）。
+   */
+  internal fun coldStartAutoAttemptAvailable(required: Boolean): Boolean =
+    required && !armedInThisProcess && !autoAttemptSpent
+
+  /** 启动流放行后显式花掉本进程的一次冷启自动尝试；幂等。 */
+  fun spendColdStartAutoAttempt() { autoAttemptSpent = true }
 
   /** 仅供 JVM 单测复位进程内簿记；生产代码不得调用。 */
   internal fun resetProcessStateForTest() {

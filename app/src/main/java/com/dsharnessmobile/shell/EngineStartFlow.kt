@@ -551,8 +551,10 @@ internal class EngineStartFlow(private val activity: MainActivity) {
   fun start() {
     if (!canRunEngineWork()) return
     // 冷启自动尝试（0.14.10）：与 MainActivity.startEngineFlow 同一出口语义；RepairState 内部保证每进程一次。
-    if (startupEntryDecision(RepairState.required(activity), explicitUserRetry = RepairState.coldStartAutoAttempt(activity)) ==
+    if (startupEntryDecision(RepairState.required(activity), explicitUserRetry = RepairState.coldStartAutoAttemptAvailable(activity)) ==
       StartupEntryDecision.BLOCKED_FOR_REPAIR) { requireNativeRepair(); return }
+    // 放行即花掉本进程的一次冷启自动尝试（查询不消耗，两道闸门共用一次额度）。
+    RepairState.spendColdStartAutoAttempt()
     // EngineManager.ensurePrivateDshData() establishes the active profile and
     // migrates legacy DSH_HOME layouts. The handoff used to happen as a side
     // effect of starting the engine; selecting and validating a model happens
