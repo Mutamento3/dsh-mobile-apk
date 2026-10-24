@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readdir, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -162,4 +162,53 @@ test('logs every deletion step through the injected logger', async () => {
     'info:removing session directory',
     'info:session deleted',
   ])
+})
+
+test('removeSession without the activity waterfall refuses a loaded session (conservative)', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const ctx = {
+      get(name) {
+        if (name === 'sessions') return { get: () => ({ header: { id: ID } }) }
+        return undefined
+      },
+      // 故意不提供 waterfall：老引擎形态
+    }
+    await assert.rejects(
+      removeSession(ctx, ID),
+      (error) => error instanceof SessionDeleteError && error.code === 'session-active',
+    )
+    assert.equal((await stat(join(sessionsRoot(home), '--workspace--', ID))).isDirectory(), true)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})
+
+test('removeSession without the waterfall still deletes a session that is not loaded', async () => {
+  const home = await homeWith([ID])
+  const previous = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  try {
+    const result = await removeSession({ get: () => undefined }, ID)
+    assert.equal(result.ok, true)
+  } finally {
+    if (previous === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previous
+  }
+})
+
+test('a directory that vanishes mid-delete reports not-found, not a hard failure', async () => {
+  const home = await homeWith([ID])
+  const dir = join(sessionsRoot(home), '--workspace--', ID)
+  await assert.rejects(
+    deleteStoredSession({
+      home,
+      sessionId: ID,
+      beforeRemove: async () => { await rm(dir, { recursive: true, force: true }) },
+    }),
+    (error) => error instanceof SessionDeleteError && error.code === 'not-found',
+  )
 })

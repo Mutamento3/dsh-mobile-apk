@@ -133,6 +133,9 @@ async function readJsonBody(req) {
  * @returns {Promise<Array<{ kind?: string }>>} reported activity (empty when idle).
  */
 async function sessionActivity(ctx, sessionId) {
+  // 老引擎没有 waterfall：返回 null（未知），调用方按「加载过就算忙」保守处理，
+  // 绝不能在无法判断时把可能正在运行的会话删掉。
+  if (typeof ctx.waterfall !== 'function') return null
   try {
     const reported = await ctx.waterfall('workspace/session-activity', { sessionId }, () => Promise.resolve([]))
     return Array.isArray(reported) ? reported : []
@@ -155,21 +158,22 @@ export async function removeSession(ctx, sessionId) {
   // 归档路径用的同一判据，这里复用，避免把「看过的对话」也判成不可删。
   const live = sessions?.get?.(sessionId) !== undefined
   const activity = await sessionActivity(ctx, sessionId)
+  const active = activity === null ? live : activity.length > 0
   const registry = ctx.get('workspaceRegistry')
   log(ctx, 'info', 'host delete start', {
     sessionId,
     live,
-    activity: activity.map((entry) => entry?.kind ?? 'unknown'),
+    activity: activity === null ? 'unknown (no waterfall)' : activity.map((entry) => entry?.kind ?? 'unknown'),
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     hasRegistry: registry !== undefined,
   })
-  if (live && activity.length === 0) {
+  if (live && active === false) {
     log(ctx, 'warn', 'session is loaded but idle; deleting its files (it leaves the live list on the next engine start)', { sessionId })
   }
   return deleteStoredSession({
     home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
     sessionId,
-    isActive: activity.length > 0,
+    isActive: active,
     logger: (level, message, extra) => log(ctx, level, message, extra),
     beforeRemove: async () => {
       try {

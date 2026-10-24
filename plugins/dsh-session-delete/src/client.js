@@ -422,7 +422,7 @@
               })
             })
             .catch(function (reason) {
-              var retryable = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError')
+              var retryable = reason && (reason.name === 'TimeoutError' || reason.name === 'AbortError' || reason.name === 'NetworkError')
               if (retryable && n + 1 < MAX_ATTEMPTS) {
                 localTrace('attempt-timeout', { sessionId: sessionId, attempt: n })
                 trace('warn', 'delete attempt timed out; retrying on a fresh connection', {
@@ -446,9 +446,9 @@
           var mounted = mountedSessionId()
           var report = { sessionId: sessionId, mountedBefore: mounted, url: window.location.href }
           if (mounted !== sessionId) {
-            report.decision = 'reload-not-mounted'
+            // 删的不是当前会话：该行已被本地规则隐藏，不需要重载整页。
+            report.decision = 'hidden-row-only'
             reportTrace(report)
-            window.location.reload()
             return
           }
           report.clearedMain = clearMainView()
@@ -494,7 +494,11 @@
             clearPending()
             // 成功必须先收掉确认框：否则删除已经完成，弹窗还停在「正在删除…」。
             setPending(null)
-            afterDeleted(sessionId, data)
+            try {
+              afterDeleted(sessionId, data)
+            } catch (error) {
+              localTrace('after-failed', { sessionId: sessionId, message: String(error && error.message ? error.message : error) })
+            }
           })
         }
 
@@ -616,7 +620,10 @@
               .then(function (res) { return res.ok ? res.json() : null })
               .then(function (data) {
                 if (data === null || typeof data.stamp !== 'string') return
-                if (data.stamp === BUILD_STAMP) return
+                if (data.stamp === BUILD_STAMP) {
+                  window.sessionStorage.removeItem('dsh.session-delete.reloaded')
+                  return
+                }
                 if (window.sessionStorage.getItem('dsh.session-delete.reloaded') === '1') return
                 window.sessionStorage.setItem('dsh.session-delete.reloaded', '1')
                 localTrace('self-update-reload', { page: BUILD_STAMP, host: data.stamp })
@@ -634,6 +641,8 @@
             setTimeout(function () {
               runDelete(pendingDelete.sessionId).catch(function (reason) {
                 localTrace('resume-failed', { sessionId: pendingDelete.sessionId, message: String(reason && reason.message ? reason.message : reason) })
+                // 续做失败就放弃这条待办：否则每次页面加载都会重试同一条。
+                clearPending()
               })
             }, 600)
           }

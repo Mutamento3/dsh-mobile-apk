@@ -124,6 +124,11 @@ export async function deleteStoredSession({ home, sessionId, isActive, beforeRem
     await rm(graveyard, { recursive: true, force: true })
     log('info', 'session deleted', { sessionId })
   } catch (error) {
+    // 并发删除同一会话时目录会先被别人移走：按 not-found 处理，客户端当成功。
+    if (error?.code === 'ENOENT') {
+      log('warn', 'session directory disappeared before it could be removed', { sessionId, dir })
+      throw new SessionDeleteError('not-found', 'session disappeared while deleting', { sessionId, dir })
+    }
     log('error', 'session deletion failed', { sessionId, dir, error: String(error?.message ?? error) })
     throw new SessionDeleteError('delete-failed', `could not delete the session directory: ${String(error?.message ?? error)}`, { sessionId, dir })
   }
