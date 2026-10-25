@@ -100,6 +100,17 @@ internal class GuideManagementController(
     val buttonHeight = dimenPx(R.dimen.ds_btn_secondary_height)
     buttons.addView(chrome.updateButton, LinearLayout.LayoutParams(0, buttonHeight, 1f))
     buttons.addView(chrome.apkDownload, LinearLayout.LayoutParams(0, buttonHeight, 1f).apply { marginStart = dp(8) })
+    // 这两枚按钮是启动页造的（makeSecondary：胶囊圆角 999dp + hairline 描边 + 15sp 文字），
+    // 而管理中心里所有行都是 8dp 圆角的实心卡片、正文 16sp——搬进来后圆角与描边明显不是一套，
+    // 这就是「检查更新按钮风格和其他按钮不契合」。按面板口径就地重绘，不改启动页那份原型。
+    for (button in listOf(chrome.updateButton, chrome.apkDownload)) {
+      button.background = DsUi.ripple(
+        DsUi.roundRect(activity.getColor(R.color.ds_surface), dp(8).toFloat()),
+        activity.getColor(R.color.ds_accent_soft),
+      )
+      button.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+      button.setTextColor(activity.getColor(R.color.ds_text_primary))
+    }
     block.addView(buttons)
     return block
   }
