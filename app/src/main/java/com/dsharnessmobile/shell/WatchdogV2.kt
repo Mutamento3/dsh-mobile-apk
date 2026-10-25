@@ -291,6 +291,13 @@ object WatchdogV2 {
     /** 本拍的引擎日志签名（[assessProbe] 写、这里读；测试显式传，避免为测试在生产面留钩子）。 */
     logSignature: String? = lastLogSignature,
     /**
+     * 本拍的引擎日志**原文尾部**（[assessProbe] 写、这里读）。强证据门（#274 ②）必须喂原文：
+     * 签名只有 `"plugin-tree"`/`"uncaught"`/null 三态，EADDRINUSE 连签名都不产生——2026-10-25
+     * 审计实锤旧接线把签名喂给了 [strongEvidenceForDestructiveRecovery]，三个证据分支死了两个
+     * （仅 uncaught 因同名子串侥幸存活），单测直接喂原文的用例全绿掩盖了接线错误。
+     */
+    logTail: String = lastLogTail,
+    /**
      * 端口是否归本应用持有（issue #274 ①）。null = 未知（不否决）。
      * 生产面由 EngineService 从进程归属算出；JVM 测试直接传值。
      */
@@ -357,7 +364,8 @@ object WatchdogV2 {
     // 强证据（EADDRINUSE / 插件树装配失败 / uncaught）**解除**「慢」这条否决：
     // 它把「探活超时」从「可能只是在忙」变成「确知引擎坏了」。
     // 注意方向——证据是**放行**的理由，不是**前置条件**（后者会挡掉必需的第 6 拍，见上）。
-    val strongEvidence = strongEvidenceForDestructiveRecovery(logSignature)
+    // 必须喂 logTail 原文而非 logSignature（签名三态折叠会饿死 EADDRINUSE/插件树两个分支）。
+    val strongEvidence = strongEvidenceForDestructiveRecovery(logTail)
     // 两组条件作用面不同，故用「或」：
     //  · portForeign：监听者不是我们 ⇒ **任何**恢复动作都不解决问题（含子进程已死时盲目重启）；
     //  · slowProbe：探活只是超时，但**只有在我们确实托管着一个活进程时**才谈得上「别强杀它」；

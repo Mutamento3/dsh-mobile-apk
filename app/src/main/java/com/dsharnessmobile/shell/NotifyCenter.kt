@@ -1181,7 +1181,14 @@ object NotifyCenter {
       questionId?.let { putExtra(NotifyActionReceiver.EXTRA_QUESTION_ID, it) }
     }
 
-  /** 动作 PendingIntent requestCode 必须按 (eventId, action) 唯一：Intent 过滤等价不含 extras。 */
+  /**
+   * 动作 PendingIntent requestCode 必须按 (eventId, action, option, **questionId**) 唯一：
+   * Intent 过滤等价不含 extras。2026-10-25 审计实锤旧键漏了 questionId——同一 question 事件
+   * 携带 ≥2 个问题时，两问若有同名选项（如都是「是」），两次 getBroadcast 命中同一
+   * requestCode + FLAG_UPDATE_CURRENT，后者覆盖前者的 extras ⇒ 点第一问的「是」实际提交
+   * 第二问的 questionId，第一问永久无解（引擎侧提问无超时）。RemoteInput 回复仍绑定
+   * 第一问（系统通知只允许一个回复动作，平台约束，如实注明）。
+   */
   private fun actionPending(
     app: Context,
     entry: NotifyEntry,
@@ -1191,7 +1198,8 @@ object NotifyCenter {
     questionId: String? = null,
   ): PendingIntent {
     val flags = (if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE) or PendingIntent.FLAG_UPDATE_CURRENT
-    val key = "dsh.action:" + entry.eventId + ":" + action + (option?.let { ":" + it } ?: "")
+    val key = "dsh.action:" + entry.eventId + ":" + action +
+      (option?.let { ":" + it } ?: "") + (questionId?.let { ":" + it } ?: "")
     return PendingIntent.getBroadcast(app, stableId(key), actionIntent(app, entry, action, option, questionId), flags)
   }
 

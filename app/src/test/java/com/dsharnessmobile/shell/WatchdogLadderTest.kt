@@ -1,6 +1,7 @@
 package com.dsharnessmobile.shell
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -479,6 +480,72 @@ class WatchdogLadderTest {
     )
     assertFalse("连 undo 都不该问（undo 会回滚用户配置）", undoAsked)
     assertTrue("必须留可诊断叙述: " + plan.logs, plan.logs.any { it.contains("slow engine") })
+  }
+
+  /**
+   * 接线（F，2026-10-25 审计）：EADDRINUSE 强证据必须经**原文尾**喂入——
+   * 旧接线把 logSignature（三态折叠：plugin-tree/uncaught/null）喂给了
+   * strongEvidenceForDestructiveRecovery，EADDRINUSE 连签名都不产生，三个证据分支死了两个，
+   * 仅 uncaught 侥幸存活。纯函数用例（onlyStrongLogEvidenceJustifiesDestructiveRecovery）
+   * 直接喂原文全绿，掩盖了接线错误——本用例锁 planTick 层。
+   */
+  @Test
+  fun eaddrinuseTailReleasesTheSlowProbeHoldAtPlanTickLevel() {
+    repeat(WatchdogV2.DEGRADED_RESTART_CONFIRMATIONS) {
+      WatchdogV2.recordProbe(WatchdogV2.ProbeState.DEGRADED_HTTP)
+    }
+    val plan = WatchdogV2.planTick(
+      state = WatchdogV2.ProbeState.DEGRADED_HTTP,
+      now = 999_999L,
+      nextRestartAllowedAt = 0L,
+      engineReady = true,
+      engineProcessAlive = true,
+      bootAgeMs = 999_999L,
+      restartDeadConfirmations = 2,
+      slowProbe = true, // 与 merelySlowProbe 用例同前置：只是慢
+      portOwnedByApp = true,
+      logSignature = null, // EADDRINUSE 不产生签名——这正是旧接线饿死的形态
+      logTail = "Error: listen EADDRINUSE :::3080",
+      feedProbe = {},
+      consumeMarkers = {},
+      refreshWake = {},
+      undoReady = { true },
+    )
+    assertNotEquals(
+      "EADDRINUSE 原文在场时不得再 HOLD（强杀自己起不来的引擎正是唯一出路）",
+      WatchdogV2.TickAction.HOLD,
+      plan.action,
+    )
+  }
+
+  /** 接线（F，同上）：插件树装配失败的原文尾同样必须解除慢探活 HOLD。 */
+  @Test
+  fun pluginTreeTailReleasesTheSlowProbeHoldAtPlanTickLevel() {
+    repeat(WatchdogV2.DEGRADED_RESTART_CONFIRMATIONS) {
+      WatchdogV2.recordProbe(WatchdogV2.ProbeState.DEGRADED_HTTP)
+    }
+    val plan = WatchdogV2.planTick(
+      state = WatchdogV2.ProbeState.DEGRADED_HTTP,
+      now = 999_999L,
+      nextRestartAllowedAt = 0L,
+      engineReady = true,
+      engineProcessAlive = true,
+      bootAgeMs = 999_999L,
+      restartDeadConfirmations = 2,
+      slowProbe = true,
+      portOwnedByApp = true,
+      logSignature = "plugin-tree",
+      logTail = "Error: client plugin tree failed to load",
+      feedProbe = {},
+      consumeMarkers = {},
+      refreshWake = {},
+      undoReady = { true },
+    )
+    assertNotEquals(
+      "插件树失败原文在场时不得再 HOLD（引擎没起来且不会自愈）",
+      WatchdogV2.TickAction.HOLD,
+      plan.action,
+    )
   }
 
   /** 反证（F）：端口**由他进程持有**时必须 HOLD —— 重启我们不解决问题。 */

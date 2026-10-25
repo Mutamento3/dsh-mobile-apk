@@ -381,6 +381,18 @@ object NotifySuppressQueue {
   /** 主线程 Handler 惰性创建（JVM 单测只碰纯函数，不碰 Looper）。 */
   private val handler: Handler by lazy { Handler(Looper.getMainLooper()) }
 
+  /**
+   * flush 执行器：tick 由主线程 Handler **调度**，落盘（journal 大字符串的 prefs.commit）、
+   * 通知 binder 投递与逐条结果回写一律派到这里（2026-10-25 审计：旧实现整个 flush 跑在主
+   * Looper，队列非空期间每 30s 一轮成批磁盘 IO/binder——主线程 ANR 面。同仓先例见
+   * NotifyDecisionQueue.scheduleRetry 与 NotifyActionReceiver 的后台 flush 线程）。
+   */
+  private val flushExecutor by lazy {
+    java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+      Thread(r, "dsh-notify-suppress-flush").apply { isDaemon = true }
+    }
+  }
+
   fun pendingCount(): Int = queue.size
 
   /** A deferred event must remain queued until it is actually settled. */
@@ -502,7 +514,8 @@ object NotifySuppressQueue {
    */
   fun retryRetained(context: Context): Int = flush(context)
 
-  /** 队列非空期间的自续 tick：前台则继续等，后台则补投。队列一空即停（有界）。 */
+  /** 队列非空期间的自续 tick：前台则继续等，后台则补投。队列一空即停（有界）。
+   *  调度归主 Handler，**执行**（prefs 读 + flush 的落盘/通知投递）派 [flushExecutor]。 */
   private fun scheduleTick(context: Context) {
     val app = context.applicationContext
     if (tickScheduled) return
@@ -511,7 +524,13 @@ object NotifySuppressQueue {
       handler.postDelayed({
         tickScheduled = false
         if (pendingCount() == 0) return@postDelayed
-        if (NotifyStore.isForeground(app) && NotifyCenter.suppressForeground(app)) scheduleTick(app) else flush(app)
+        try {
+          flushExecutor.execute {
+            if (NotifyStore.isForeground(app) && NotifyCenter.suppressForeground(app)) scheduleTick(app) else flush(app)
+          }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+          // 进程关停竞态：本轮 tick 放弃，无副作用（队列仍在，下次 start/touch 会重新调度）。
+        }
       }, FLUSH_TICK_MS)
     } catch (t: Throwable) {
       tickScheduled = false
