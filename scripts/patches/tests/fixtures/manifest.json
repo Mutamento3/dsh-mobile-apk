@@ -1926,6 +1926,31 @@
       "patchIds": [
         "atomic-stale-lock-F4"
       ]
+    },
+    "dsh-client-ui-settings-account-0.2.1-rc.3": {
+      "source": "engine-tgz",
+      "engine": "0.2.1-rc.3",
+      "package": "@deepseek-ai/dsh-client-ui-settings-account@0.2.1-rc.3",
+      "provenance": {
+        "tarballFile": "deepseek-ai-dsh-client-ui-settings-account-0.2.1-rc.3.tgz",
+        "tarballSha256": "1b2d74ba8178742b315e1a0538b3a6bc724315a6d32ebafa89f184f16f9025d3",
+        "inputKind": "published-tarball"
+      },
+      "files": [
+        "lib/client.js",
+        "package.json"
+      ],
+      "fileSha256": {
+        "lib/client.js": "3968e491fafd298d836b3ccb9b68fa64d0384e488bfe251267aba949d6cdd67a",
+        "package.json": "f37bafbc4cb43b26aac69827fb282c46538d169be2dcb64d294501fc66375198"
+      },
+      "targets": {
+        "lib/client.js": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-account/lib/client.js",
+        "package.json": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-account/package.json"
+      },
+      "patchIds": [
+        "settings-account-feedback-entry"
+      ]
     }
   },
   "capture": {
@@ -1937,6 +1962,6 @@
       ]
     },
     "overlaySha256": "f7d349dae89bc831bdc28e64366c023b8eec4eb5540f43e912c6db7dd4ca0e11",
-    "registrySha256": "aa15ccd0ddcb2d186b1bac966fa6072f9b0c0599061a365e7ddf8a3d8ed7c67a"
+    "registrySha256": "85b65a4d7395af37917822400c32ee4035313b7a038ccc2404491443877c80d3"
   }
 }

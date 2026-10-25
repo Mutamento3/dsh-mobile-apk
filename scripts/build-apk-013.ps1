@@ -291,10 +291,17 @@ foreach ($abi in @('arm64', 'x86_64')) {
         $market = $externByName['dshmarketplace-plugin']
         if (-not (Test-Path (Join-Path $market "package.json"))) { Deny-Abi $abi "缺 marketplace 注入源 $market（vendor 固化副本）"; continue }
         # 统一补丁门禁（Phase 2a）：marketplace A-D + undo E1-E7 幂等施加与校验，
-        # 登记表 scripts/patches/registry.json。默认 ensure 语义（缺席即施加，锚点失配拒打包）。
+        # 登记表 scripts/patches/registry.json。ensure 语义（缺席即施加，锚点失配拒打包）——
+        # 必须显式带 --apply：apply-patches 的默认模式是 --check（只验在场、不写文件），
+        # 而 vendor/*/lib 是入库跟踪的产物，从不施加就永远缺席，本门禁必然判红。
+        # 注意 scope：默认 scope=vendor，engine 范围的补丁（target 在 usr/ 下）不会被选中，
+        # 也不会被这条命令误判——两段各管各的范围，互不越界。
         # 雷点 8：全量输出——Select-First 截断管道会杀 node 致误判失败
-        node (Join-Path $Root "scripts\patches\apply-patches.mjs") (Join-Path $Root "vendor") 2>&1
+        node (Join-Path $Root "scripts\patches\apply-patches.mjs") (Join-Path $Root "vendor") --apply 2>&1
         if ($LASTEXITCODE -ne 0) { Deny-Abi $abi "vendor 补丁校验/施加失败"; continue }
+        # 施加后复查（防 exit 0 但补丁缺席的半成品，与引擎树两段式同款）
+        node (Join-Path $Root "scripts\patches\apply-patches.mjs") (Join-Path $Root "vendor") --check 2>&1
+        if ($LASTEXITCODE -ne 0) { Deny-Abi $abi "vendor 补丁施加后复查失败"; continue }
         # 浏览器语法下限：注入段的 lib/client.js 降级（0.14.1 块C G-1 的第二段）。
         # 为什么注入段也要降：快照段的降级（build-snapshot-013.mjs 的 0f-1b）只覆盖快照内已有产物，
         # 而注入包里**新进来**的 lib/client.js 不在其中。我方 3 个带 client bundle 的包已改自身构建
