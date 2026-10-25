@@ -163,6 +163,55 @@ describe('设置首页：分类列表', () => {
   })
 })
 
+describe('重新打开设置后不沿用旧历史', () => {
+  it('上次在 A 页、这次从列表进 B 页后，返回直接回列表（不跳到 A）', async () => {
+    const first = buildPanel(['通用设置', '开发者选项'], '通用设置')
+    nav = new MobileSettingsNav()
+    nav.attach()
+    first.rows.get('通用设置')!.click()
+    await settle()
+    first.rows.get('开发者选项')!.click()
+    await settle()
+    nav.detach()
+
+    // 关闭后重新打开：新面板、新实例（与真实关闭/重开一致）
+    const second = buildPanel(['通用设置', '开发者选项'])
+    nav = new MobileSettingsNav()
+    nav.attach()
+    second.rows.get('开发者选项')!.click()
+    await settle()
+    back(second.panel).click()
+    await settle()
+    expect(second.panel.getAttribute('data-dsh-settings-level'), '应直接回列表').toBe('home')
+  })
+})
+
+describe('二级页之间跳转与逐页返回', () => {
+  it('详情页里换到另一个分区后，返回回到上一页而不是列表', async () => {
+    const handle = buildPanel(['通用设置', '关于'], '通用设置')
+    nav = new MobileSettingsNav()
+    nav.attach()
+    handle.rows.get('通用设置')!.click()
+    await settle()
+    // 详情页里切到「关于」（入口就是这么做的：点一下导航行）
+    handle.rows.get('关于')!.click()
+    await settle()
+    expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('detail')
+    expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent).toBe('关于')
+
+    back(handle.panel).click()
+    await settle()
+    // 回到「通用设置」这一页，而不是一级列表
+    expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('detail')
+    expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent).toBe('通用设置')
+
+    // 再返一次才回列表
+    back(handle.panel).click()
+    await settle()
+    expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('home')
+  })
+})
+
 describe('二级页：点一级分类进入', () => {
   it('点任意一级行进入二级页，标题取该行的注册名，焦点落到返回控件', () => {
     const handle = buildPanel(['通用设置', '开发者选项'])
