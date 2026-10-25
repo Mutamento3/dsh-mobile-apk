@@ -80,6 +80,22 @@
 - 剩余形态仅为「删除瞬间恰逢会话开始运行」的毫秒窗竞态，后果是该次删除对运行中文件的操作
   与新会话写入交错（jsonl 追加方为引擎，rename 后旧句柄继续写向墓地目录，不损坏新会话）。
 
+## 上游槽位 entry 的 undefined 组件崩溃（2026-10-25，小米 14 实锤，守卫已上）
+
+页面 bootstrap 期 `slot entry crashed in 'conversation.input.left'` + React #130（元素类型
+undefined）→ 整树卸载、`pageSideRuntime=unavailable`、启动流两次重试耗尽落修复门。**四组对照
+均复现**：壳 0.14.7 与 main（0.14.9-DEV-FAST）、快照 rc.2 与 rc.3、第三方插件全摘、装载列表
+57 项全 @deepseek-ai 官方——崩点在上游槽位系统消费一个解析为 undefined 的 entry，且 slot
+outlet 无 per-entry 错误边界，单 entry 崩即整页死。触发环境：小米 14（HyperOS）/ Google
+WebView 155 真机；MuMu 历来全绿（环境差异）。同场连环的另两层（KernelSU su 属主维护租约因
+进程被杀不结算 → 整机隔离；修复门循环）已在设备上逐层解锁，见 dsh-host-web-compat
+slot-guard 注释与本日审计报告。
+
+**处置**：壳侧 fail-soft 守卫已上（dsh-host-web-compat slot-guard，拦截 `__ModuleLoader__`
+赋值包装 react/jsx-runtime，undefined 元素渲染 null + console.warn 一次）；**上游根因未修**
+（待上游给 slot outlet 加 per-entry 错误边界或修复该 entry 的解析）——上游修复前真机每次
+启动都有一个槽位 entry 静默缺席（输入框左侧挂件位），属已知代价，如实登记不记通过。
+
 ## 原生管理中心（2026-10-16）
 
 当前上游插件管理 API 不提供静态依赖图。壳侧在停用前确认操作，比较操作前后完整运行清单并尝试恢复造成失活的变更；这是运行状态检查，不等同于静态依赖分析。只读/不可寻址条目保留展示并禁用开关。插件详情复用运行时暴露的配置 Schema；未激活或未提供可编辑 Schema 的插件明确说明原因。高级配置为合并保存，删除 JSON 字段不代表重置。

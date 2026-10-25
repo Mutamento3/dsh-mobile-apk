@@ -48,6 +48,21 @@ class RepairGateTest {
   }
 
   @Test
+  fun `page-reported boot-ready clears the durable gate regardless of cold-start budget`() {
+    // 小米 14 实锤（2026-10-25）：五轮启动页面每一轮都活着并上报 [dsh-boot-ready]（上游
+    // ErrorBoundary 兜住了 slot entry 的 React #130），但旧守卫「required 且冷启尝试已花掉
+    // 即整条丢弃」让门永不清、用户每轮看到「引擎仍无法启动」，直到手清 native-repair。
+    val fn = source("EngineStartFlow.kt")
+      .substringAfter("fun onPageReadyReported").substringBefore("fun onPageStallReported")
+    assertFalse("ready 到达不得因持久门被丢弃（冷启额度归零也不行）",
+      fn.contains("RepairState.coldStartAttemptInFlight()"))
+    assertTrue("门在场时 ready 必须清门并留痕",
+      fn.contains("RepairState.reset(activity)") && fn.contains("repair gate cleared by page-reported boot-ready"))
+    assertTrue("插件树失败在场时仍丢弃 ready（失败终态优先，语义保留）",
+      fn.contains("if (clientPluginTreeFailed) return"))
+  }
+
+  @Test
   fun `only the explicit retry clears required and the retry budget`() {
     val start = source("EngineStartFlow.kt").substringAfter("fun start()").substringBefore("resetBootStall()")
     assertTrue("自动 start 过闸门只能查询每进程一次的冷启自动尝试（不消耗）",

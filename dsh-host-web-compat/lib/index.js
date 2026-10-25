@@ -489,6 +489,106 @@ function readyWatch(){
 if(document.body){readyWatch();run()}else{document.addEventListener('DOMContentLoaded',function(){readyWatch();run()})}
 })()</script>`;
 
+// Slot-guard：上游槽位 entry 的 undefined 组件守卫（2026-10-25 小米 14/HyperOS 实锤引入）。
+//
+// 现场：页面 bootstrap 期 `slot entry crashed in 'conversation.input.left'` + React #130
+// （"Element type: ... got: undefined"），随后 pageSideRuntime=unavailable、整树卸载白屏、
+// 启动流两次重试耗尽落修复门。四组对照（壳 0.14.7/main × 快照 rc.2/rc.3 × 第三方全摘 ×
+// 57 项全 @deepseek-ai 官方装载）均复现——崩点在上游槽位系统消费一个解析为 undefined 的
+// 组件 entry，与壳版本/第三方插件无关；上游 slot outlet 对 entry 无 per-entry 错误边界，
+// 单 entry 崩即整页死。触发环境为 Google WebView 155 的真机（MuMu 历来全绿），根因待上游修。
+//
+// 本守卫 fail-soft：模块系统装载 react / react/jsx-runtime(-dev-runtime) 命名空间时，把
+// createElement / jsx / jsxs / jsxDEV 包一层——type === undefined 的调用降级为 render null
+// （该 entry 静默缺席、页面其余照常渲染）+ console.warn 一次。口径与既有 polyfill 相同：
+// 不改上游字节，只在外围打补丁；warn 不用 error 级，避免把「已降级」写进 boot-diag 的
+// console-error 通道冒充故障。
+//
+// 注入位置必须最早求值（`<head[^>]*>` 开标签后、上游 queue 脚本之前）：__ModuleLoader__
+// 由上游 head 首个内联脚本赋值、bundle 的 load() 排队都在 head 内同步完成，`</head>` 注入点
+// 赶不上。这里用 defineProperty 的 set trap 拦截赋值——queue 赋值发生时立即 patch 其
+// load/create；load 路径包住每个注册项的 factory（真模块系统执行 factory 时传入的 require
+// 一律过 wrapRequire，拦 react* 命名空间），create 路径对返回的系统再包一层 require 兜底。
+// Idempotent: skipped when already present; pure frontend injection, zero upstream changes.
+const SLOT_GUARD_SCRIPT = `<script>(function(){
+if(window.__dshSlotGuard)return;window.__dshSlotGuard=1;
+var warned=false;
+function warn(tag){if(warned)return;warned=true;try{console.warn('[slot-guard] undefined element neutralized (last: '+tag+'); a slot entry is missing its component - page continues without it')}catch(e){}}
+function guard(ns,keys,tag){
+  if(!ns||typeof ns!=='object')return;
+  if(ns.__dshSlotGuardNs)return;
+  try{Object.defineProperty(ns,'__dshSlotGuardNs',{value:1})}catch(e){ns.__dshSlotGuardNs=1}
+  for(var i=0;i<keys.length;i++){
+    var k=keys[i],f=ns[k];
+    if(typeof f!=='function')continue;
+    (function(k,f){ns[k]=function(type){
+      if(type===undefined){warn(tag+'.'+k);return null}
+      return f.apply(this,arguments)
+    }})(k,f)
+  }
+}
+function onModule(mod,spec){
+  if(spec==='react')guard(mod,['createElement'],spec);
+  else if(spec==='react/jsx-runtime')guard(mod,['jsx','jsxs'],spec);
+  else if(spec==='react/jsx-dev-runtime')guard(mod,['jsxDEV'],spec)
+}
+function wrapRequire(req){
+  if(typeof req!=='function')return req;
+  try{
+    return new Proxy(req,{apply:function(target,thisArg,args){
+      var m=Reflect.apply(target,thisArg,args);
+      try{onModule(m,String(args[0]))}catch(e){}
+      return m
+    }})
+  }catch(e){return req}
+}
+function install(v){
+  try{
+    if(!v||typeof v!=='object')return v;
+    if(typeof v.load==='function'&&!v.__dshSlotGuardLoad){
+      v.__dshSlotGuardLoad=1;
+      var origLoad=v.load;
+      v.load=function(reg){
+        try{
+          if(reg&&typeof reg.factory==='function'&&!reg.__dshSlotGuard){
+            reg.__dshSlotGuard=1;
+            var f=reg.factory;
+            reg.factory=function(req){return f.call(this,wrapRequire(req))}
+          }
+        }catch(e){}
+        return origLoad.call(this,reg)
+      }
+    }
+    if(typeof v.create==='function'&&!v.__dshSlotGuardCreate){
+      v.__dshSlotGuardCreate=1;
+      var origCreate=v.create;
+      v.create=function(){
+        var sys=origCreate.apply(this,arguments);
+        try{
+          if(sys&&typeof sys==='object'&&typeof sys.require==='function'&&!sys.__dshSlotGuardReq){
+            sys.__dshSlotGuardReq=1;
+            var r=sys.require;
+            sys.require=function(spec){var m=r(spec);onModule(m,String(spec));return m}
+          }
+        }catch(e){}
+        return sys
+      }
+    }
+  }catch(e){}
+  return v
+}
+var cur;
+try{
+  cur=window.__ModuleLoader__;
+  if(cur)install(cur);
+  Object.defineProperty(window,'__ModuleLoader__',{
+    configurable:true,
+    get:function(){return cur},
+    set:function(v){cur=install(v)}
+  })
+}catch(e){}
+})()</script>`;
+
 // Theme bridge: on some vendor WebViews (measured: vivo/Android 16) prefers-color-scheme does not
 // follow the system uiMode — the hook must run before any upstream matchMedia query (ui-theme plugin);
 // the shell APK pushes the system dark state via window.__dshThemeBridge.setDark().
@@ -960,6 +1060,17 @@ function injectStaticFallback(html) {
 }
 
 /**
+ * Slot-guard 注入：`<head[^>]*>` 开标签后（一切上游脚本之前——见 SLOT_GUARD_SCRIPT 头注释的
+ * 时序论证）。哨兵幂等；页面没有 <head> 开标签时原样返回（replace 不命中即原文）。
+ * @param html - 引擎返回的 index.html。
+ * @returns 注入后的 HTML（已注入或哨兵在场时返回原串）。
+ */
+function injectSlotGuard(html) {
+  if (typeof html !== 'string' || html.includes('__dshSlotGuard')) return html
+  return html.replace(/<head[^>]*>/, (m) => m + SLOT_GUARD_SCRIPT)
+}
+
+/**
  * Android directory-picker backend: kind 'native'. pick() waits for the
  * WebView page (polling the engine) to run the SAF chooser and POST the
  * real path back; abort cancels the pending request.
@@ -1104,8 +1215,10 @@ export function apply(ctx) {
     ['polyfill', POLYFILL_SCRIPT],
     ['boot-watchdog', BOOT_WATCHDOG_SCRIPT],
     ['theme-bridge', THEME_BRIDGE_SCRIPT],
+    ['slot-guard', SLOT_GUARD_SCRIPT],
     ['picker', PICKER_SCRIPT],
   ]);
+
 
   // Polyfills + picker bridge script into every index response.
   // The idempotency guard must use a marker unique to this plugin's injection: upstream HTML already
@@ -1122,6 +1235,14 @@ export function apply(ctx) {
   // 「入口 chunk 全灭」时唯一的可见反馈——若与它共用判据就会被一起跳过。故单独一次 tapIndex
   // （自带 `dsh-static-fallback` 哨兵幂等）。
   ctx.webServer.tapIndex((html) => injectStaticFallback(html));
+
+  // Slot-guard must be the earliest-evaluated injection *in the page* (see SLOT_GUARD_SCRIPT header):
+  // it traps the upstream __ModuleLoader__ assignment performed by the queue script at the very top of
+  // <head>, before any bundle registers. The tapIndex registration order below is deliberately LAST —
+  // smoke-injections.mjs pins transforms[0]=polyfill (pick-token guard) and transforms[1]=static
+  // fallback; this one is transforms[2] with its own `__dshSlotGuard` sentinel and a `<head>` open-tag
+  // injection point. A page without a <head> tag passes through untouched.
+  ctx.webServer.tapIndex((html) => injectSlotGuard(html));
 
   // Android directory-picker backend: registered as ctx.directoryPicker.
   // Endpoint auth: the shell APK generates DSH_PICK_TOKEN on every start (engine env); the page JS

@@ -52,7 +52,7 @@ try {
   // 此前这里断言「恰好一条」并只跑 transforms[0] —— 于是块C 新增的静态占位脚本
   // **从未被本门禁解析检查过**：一道看不见自己盲区的防线（0.14.1 白闪缺陷 D4 的旁证）。
   // 现在先断言条数契约（新增注入面必须显式更新本行 → 强制其进入下方逐段解析），再逐条应用。
-  check('registers the polyfill + static-fallback index transforms', transforms.length === 2, String(transforms.length))
+  check('registers the polyfill + static-fallback + slot-guard index transforms', transforms.length === 3, String(transforms.length))
 
   // 逐条应用（而不是只看 transforms[0]）：每一条注入的脚本体都要过下面的解析与标记检查。
   const html = transforms.reduce((acc, fn) => fn(acc), '<html><head><title>t</title></head><body></body></html>')
@@ -232,6 +232,19 @@ try {
   check('static fallback transform is idempotent (own sentinel)', transforms[1](fallbackOnce) === fallbackOnce)
   check('static fallback is NOT skipped by the pick-token sentinel',
     transforms[1]('<html><head>x-dsh-pick-token</head><body></body></html>').includes('dsh-static-fallback'))
+
+  // slot-guard（transforms[2]）：注入点在 <head> 开标签后（早于上游 queue 脚本）、哨兵幂等、
+  // 与 pick-token 判据独立（pick-token 在场的页面同样要拿到守卫）。
+  const guardPage = transforms[2]('<html><head><script>window.__ModuleLoader__={}</script></head><body></body></html>')
+  check('slot-guard lands right after the <head> open tag',
+    guardPage.startsWith('<html><head><script>(function(){') && guardPage.includes('__dshSlotGuard'))
+  check('slot-guard outranks the upstream queue script in evaluation order',
+    guardPage.indexOf('__dshSlotGuard') < guardPage.indexOf('window.__ModuleLoader__'))
+  check('slot-guard transform is idempotent (own sentinel)', transforms[2](guardPage) === guardPage)
+  check('slot-guard is NOT skipped by the pick-token sentinel',
+    transforms[2]('<html><head>x-dsh-pick-token</head><body></body></html>').includes('__dshSlotGuard'))
+  check('slot-guard leaves a page without <head> untouched',
+    transforms[2]('<html><body>ok</body></html>') === '<html><body>ok</body></html>')
 } finally {
   rmSync(scratch, { recursive: true, force: true })
 }

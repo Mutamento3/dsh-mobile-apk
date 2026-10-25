@@ -266,10 +266,20 @@ internal class EngineStartFlow(private val activity: MainActivity) {
    */
   fun onPageReadyReported(rawLine: String) {
     if (!canRunEngineWork()) return
-    // 冷启自动尝试在途时允许健康收敛清门（否则自动尝试拉起引擎后门永远清不掉，
-    // 页面就绪报文被这道守卫原样丢弃）；本进程内再落门则恢复原语义。
-    if (clientPluginTreeFailed || (RepairState.required(activity) && !RepairState.coldStartAttemptInFlight())) return
-    RepairState.reset(activity)
+    // 页面 ready 是**最硬的健康证据**（结果性判据：真实 DOM 已渲染）：它到达时必须清修复门。
+    // 此前（0.14.10 审计 §B-1，小米 14 实锤 2026-10-25）：门在场且冷启自动尝试已花掉时，
+    // 本守卫把 ready 报文整条丢弃——实测五轮启动页面**每一轮都活着并上报 ready**（上游
+    // ErrorBoundary 兜住了 slot entry 的 React #130），但壳因持久门无视它，用户每轮看到
+    // 「引擎仍无法启动」引导页，直到手清 native-repair 才亮。coldStartAttemptInFlight 的
+    // 例外只覆盖「自动尝试刚花掉、门还没来得及被本轮失败重置」的窗口，覆盖不了
+    // 「门是历史残留、本进程已无自动尝试额度」的常态——那正是环境性死亡后的真实形态。
+    // 保留的语义边界：clientPluginTreeFailed 在场仍丢弃（插件树失败是页面自身的终态，
+    // ready 行与失败行同源竞争时以失败为准——那是另一条契约，不在本修复动）。
+    if (clientPluginTreeFailed) return
+    if (RepairState.required(activity)) {
+      RepairState.reset(activity)
+      LogCollector.log("dsh-shell", "repair gate cleared by page-reported boot-ready")
+    }
     pageReadyReported = true
     if (pageReadyLogged) return
     pageReadyLogged = true
