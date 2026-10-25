@@ -20,6 +20,7 @@ import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Single source of truth for the bridge types (incl. the Window.androidBridge global).
 import type {} from '../android-bridge.ts'
+import { openSettingsDocument } from '../mobile/settings-document.ts'
 
 /** Full section props: the settings shell supplies only `close`, plus the
  *  developer-options child seat (adb authorization panel et al) this section declares. */
@@ -260,7 +261,7 @@ export function DevSection({ renderSlot }: DevSectionProps) {
       const raw = window.androidBridge?.exportConfig?.()
       const j = JSON.parse(raw ?? '{}') as { ok?: boolean; path?: string; error?: string }
       setConfigMsg(j.ok
-        ? tr('已导出到 ', 'Exported to ') + (j.path ?? 'exports/config/settings.yaml')
+        ? tr('已导出到 ', 'Exported to ') + (j.path ?? 'exports/config/')
         : tr('导出失败：', 'Export failed: ') + (j.error ?? tr('未知错误', 'unknown error')))
     } catch {
       setConfigMsg(tr('导出失败：应用内连接不可用（仅安卓应用内可用）——请重新打开应用后重试', 'Export failed: the app bridge is unavailable. Reopen the app and try again.'))
@@ -350,10 +351,11 @@ export function DevSection({ renderSlot }: DevSectionProps) {
         <div className="dsh-gs-text">
           <div className="dsh-gs-title">{tr('配置文件', 'Config file')}</div>
           <div className="dsh-gs-desc">
-            {tr('导出到 Documents/dshdata/exports/config/settings.yaml，改完点「导入配置」生效。导出不含 API 密钥。', 'Exported to Documents/dshdata/exports/config/settings.yaml; edit it there, then tap Import config. API keys are not included.')}
+            {tr('导出到 Documents/dshdata/exports/config/（文件名随活动配置而定，通常是 cordis.patch.yml），改完点「导入配置」生效。导出不含 API 密钥。', 'Exported to Documents/dshdata/exports/config/ (the file name follows the active config, usually cordis.patch.yml); edit it there, then tap Import config. API keys are not included.')}
           </div>
         </div>
         <div className="dsh-gs-control dsh-gs-actions">
+          <Button size="sm" onClick={() => { openSettingsDocument() }}>{tr('打开', 'Open')}</Button>
           <Button size="sm" onClick={exportConfig}>{tr('导出配置', 'Export config')}</Button>
           <Button size="sm" onClick={importConfig}>{tr('导入配置', 'Import config')}</Button>
         </div>
