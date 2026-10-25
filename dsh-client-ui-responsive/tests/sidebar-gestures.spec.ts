@@ -199,6 +199,25 @@ function dragging(): boolean {
   return document.documentElement.hasAttribute(DRAWER_DRAGGING_ATTR)
 }
 
+/**
+ * 等某个断言自己成立，而不是「睡固定毫秒再断言」。
+ *
+ * 源码的横向容器扫描是 50ms 防抖（sidebar-gestures.ts 的 queueSurfaceRefresh）。原先测试
+ * 睡 70ms——只留 20ms 余量。全量并行跑时事件循环被别的用例占住，50ms 的回调会晚于 70ms
+ * 的断言落地，于是真实行为正确、测试却红（实测在全量跑里偶发、单跑三次全绿）。
+ *
+ * 改法：轮询等条件成立（含一次宏任务让出，保证 50ms 定时器有机会跑），超时才失败。
+ * 判据不变，只把「等多久」从猜数字改成等事实。
+ */
+async function until(predicate: () => boolean, why: string, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    if (predicate()) return
+    if (Date.now() > deadline) throw new Error('等待超时：' + why)
+    await new Promise<void>(resolve => window.setTimeout(resolve, 10))
+  }
+}
+
 beforeEach(() => {
   localStorage.clear()
   document.body.innerHTML = ''
@@ -968,12 +987,10 @@ describe('触点按下前的原生平移策略', () => {
     Object.defineProperty(scroller, 'scrollWidth', { configurable: true, value: 800 })
     Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 200 })
     h.drawer.appendChild(scroller)
-    await new Promise<void>(resolve => window.setTimeout(resolve, 70))
-    expect(scroller.hasAttribute('data-dsh-horizontal-scroll')).toBe(true)
+    await until(() => scroller.hasAttribute('data-dsh-horizontal-scroll'), '新增的横向容器应被标记')
     Object.defineProperty(scroller, 'scrollWidth', { configurable: true, value: 200 })
     window.dispatchEvent(new Event('resize'))
-    await new Promise<void>(resolve => window.setTimeout(resolve, 70))
-    expect(scroller.hasAttribute('data-dsh-horizontal-scroll')).toBe(false)
+    await until(() => !scroller.hasAttribute('data-dsh-horizontal-scroll'), '溢出消失后标记应被摘掉')
   })
 
   it('父级尺寸或字体样式变化只重测其子树里的横向容器', async () => {
@@ -984,13 +1001,11 @@ describe('触点按下前的原生平移策略', () => {
     Object.defineProperty(scroller, 'scrollWidth', { configurable: true, get: () => width })
     Object.defineProperty(scroller, 'clientWidth', { configurable: true, value: 200 })
     h.drawer.appendChild(scroller)
-    await new Promise<void>(resolve => window.setTimeout(resolve, 70))
-    expect(scroller.hasAttribute('data-dsh-horizontal-scroll')).toBe(true)
+    await until(() => scroller.hasAttribute('data-dsh-horizontal-scroll'), '新增的横向容器应被标记')
 
     width = 200
     h.drawer.style.fontSize = '20px'
-    await new Promise<void>(resolve => window.setTimeout(resolve, 70))
-    expect(scroller.hasAttribute('data-dsh-horizontal-scroll')).toBe(false)
+    await until(() => !scroller.hasAttribute('data-dsh-horizontal-scroll'), '父级字体变化后标记应被摘掉')
   })
 
   it('完整侧栏在手势中挂载时不扫描全 frame；松手后的帧先结算再做一次扫描', async () => {
