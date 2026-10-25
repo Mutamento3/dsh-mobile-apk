@@ -1549,6 +1549,8 @@ flowchart TD
 
 ### 注入层子仓
 
+Settings entry recovery (#563): `dsh-client-ui-responsive/src/client/mobile/about-entry.ts` repairs the adapter-owned About button beside each handled version row, including after module reload, and limits mutation-triggered scans to the settings dialog. `dsh-client-ui-responsive/src/client/mobile/settings-nav.ts` returns focus to a visible enabled navigation row when the active row is hidden. Regression coverage lives in `about-entry.spec.ts` and `settings-nav.spec.ts` under the package tests directory.
+
 #### S01 引擎侧注入层（三个子仓）
 
 Touch reorder: `sidebar-reorder.ts` flushes each synthetic React drag phase. On multitouch, cancellation, detach, or out-of-list release, a source-row drop takes the upstream source-id no-op before dragend; dragend alone can commit a stale hover. DataTransfer types must also satisfy the global file-drop listener. The ReactDOM declaration is covered in the source ledger below. Browser-stage lease timers use numeric window timer handles.
