@@ -367,8 +367,10 @@ object NotifySuppressQueue {
         load(app)
         if (!journalWritable) retryRecoveryBackup(app)
       }
+      // 补投派到 [flushExecutor]（2026-10-26 评审）：这里的调用方是 EngineService.onCreate /
+      // 动作广播 receiver 的**主线程**，而 flush 的 journal commit + 通知 binder 投递是成批 IO。
       if (pendingCount() > 0) {
-        if (!NotifyStore.isForeground(app) || !NotifyCenter.suppressForeground(app)) flush(app) else scheduleTick(app)
+        if (!NotifyStore.isForeground(app) || !NotifyCenter.suppressForeground(app)) flushAsync(app) else scheduleTick(app)
       }
     } catch (t: Throwable) {
       NotifyProbe.log(app, TAG, "suppress deferred restore failed: " + t.message)
@@ -514,6 +516,28 @@ object NotifySuppressQueue {
    */
   fun retryRetained(context: Context): Int = flush(context)
 
+  /**
+   * 把一次 flush 派到 [flushExecutor]（2026-10-26 评审）。
+   *
+   * 调用方可能是主线程：[restore] 由 `EngineService.onCreate` / 动作广播 receiver 触发，
+   * [NotifyCenter.onSuppressForegroundChanged] 由设置页开关触发。flush 的 journal commit 与
+   * 通知 binder 投递属于成批 IO，不能吃 receiver 的 10s 预算，也不该卡设置页。
+   */
+  fun flushAsync(context: Context) {
+    val app = context.applicationContext
+    try {
+      flushExecutor.execute {
+        try {
+          flush(app)
+        } catch (t: Throwable) {
+          NotifyProbe.log(app, TAG, "suppress deferred flush (async) failed: " + t.message)
+        }
+      }
+    } catch (_: java.util.concurrent.RejectedExecutionException) {
+      // executor 永不 shutdown；被外部关停时放弃本轮，队列仍在，下次 enqueue/tick 会再来。
+    }
+  }
+
   /** 队列非空期间的自续 tick：前台则继续等，后台则补投。队列一空即停（有界）。
    *  调度归主 Handler，**执行**（prefs 读 + flush 的落盘/通知投递）派 [flushExecutor]。 */
   private fun scheduleTick(context: Context) {
@@ -526,10 +550,17 @@ object NotifySuppressQueue {
         if (pendingCount() == 0) return@postDelayed
         try {
           flushExecutor.execute {
-            if (NotifyStore.isForeground(app) && NotifyCenter.suppressForeground(app)) scheduleTick(app) else flush(app)
+            try {
+              if (NotifyStore.isForeground(app) && NotifyCenter.suppressForeground(app)) scheduleTick(app) else flush(app)
+            } catch (t: Throwable) {
+              // 执行体只可能在 flush 之外抛（flush 自带异常边界）。不能让它静默断掉自续链：
+              // 否则队列非空却再也没有下一拍。补一拍，最坏是每 30 秒重试一次。
+              NotifyProbe.log(app, TAG, "suppress deferred tick failed: " + t.message)
+              if (pendingCount() > 0) scheduleTick(app)
+            }
           }
         } catch (_: java.util.concurrent.RejectedExecutionException) {
-          // 进程关停竞态：本轮 tick 放弃，无副作用（队列仍在，下次 start/touch 会重新调度）。
+          // executor 从不 shutdown，这里只防御被外部关停：本轮放弃，队列仍在。
         }
       }, FLUSH_TICK_MS)
     } catch (t: Throwable) {
