@@ -602,6 +602,38 @@ const IMPLS = {
     },
   },
 
+  // ── settings-account：意见反馈入口从账号菜单搬到「设置 → 通用」最下方（0.15.0 用户定例）──
+  // 账号菜单里的「意见反馈」是上游 UI 的一个项，点开在系统浏览器打开飞书问卷。用户要求把它
+  // 挪到通用设置最下方：本补丁做两件事——从菜单项数组里摘掉那一项；把入口以
+  // globalThis.__dshContactUs 暴露出去，供本包 GeneralSettings 的反馈行调用（行为不变：
+  // 仍由上游自己组装 uid / 构建版本 / device_info 再打开）。
+  'settings-account-feedback-entry': {
+    file: 'usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-account/lib/client.js',
+    scope: 'engine',
+    check: (s) => s.includes('__dshContactUs'),
+    apply: (s) => {
+      const ITEM = '{\n\t\t\t\t\t\t\t\tid: "contact",\n\t\t\t\t\t\t\t\tlabel: t("contactUs"),\n'
+        + '\t\t\t\t\t\t\t\ticon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconPaperPlaneOutlineMedium, { size: 16 })\n'
+        + '\t\t\t\t\t\t\t},'
+      const ANCHOR = '\t\t\t};\n\t\t\tif (desktop) {'
+      const EXPOSE = '\t\t\t};\n'
+        + '\t\t\tif (typeof globalThis !== "undefined") {\n'
+        + '\t\t\t\tglobalThis.__dshContactUs = () => {\n'
+        + '\t\t\t\t\ttry {\n'
+        + '\t\t\t\t\t\toperations.contactUs();\n'
+        + '\t\t\t\t\t} catch (_error) {\n'
+        + '\t\t\t\t\t}\n'
+        + '\t\t\t\t};\n'
+        + '\t\t\t}\n'
+        + '\t\t\tif (desktop) {'
+      if (!s.includes(ITEM)) throw new Error('settings-account 菜单项锚点未命中——上游客户端包已变，请人工核对')
+      if (!s.includes(ANCHOR)) throw new Error('settings-account operations 尾部锚点未命中')
+      s = s.replace(ITEM, '', 1).replace(ANCHOR, EXPOSE, 1)
+      if (!s.includes('__dshContactUs') || s.includes('id: "contact"')) throw new Error('settings-account 复核失败——不写回')
+      return s
+    },
+  },
+
   // ── marketplace J：市场对话框改成整页（带返回条）──
   // 用户定例（0.15.0）：市场要是「完整的、可返回上级的界面」，不是浮在 UI 上的小窗。
   // 该页所在面（插件页）不在设置对话框内，DOM 里没有设置导航，跳设置分区不可行；

@@ -410,6 +410,13 @@
       "summary": "inspector 的 Worker 不再清空 execArgv：显式传 --expose-internals，使 android-arm64 上 requireBuiltin 回退可用",
       "provenance": "2026-10-21 apk issue #472：node-addon-require-builtin 无 android-arm64 预编译件，Worker 内 internal/modules/esm/loader 必 MODULE_NOT_FOUND（设备实测）",
       "marker": "dsh-mobile inspector worker expose-internals (472)"
+    },
+    {
+      "id": "settings-account-feedback-entry",
+      "target": "usr/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-settings-account/lib/client.js",
+      "summary": "摘掉账号菜单里的「意见反馈」项，并把入口暴露为 globalThis.__dshContactUs 供通用设置调用",
+      "provenance": "0.15.0 用户定例：入口搬到「设置 → 通用」最下方",
+      "marker": "__dshContactUs"
     }
   ],
   "retired": [
