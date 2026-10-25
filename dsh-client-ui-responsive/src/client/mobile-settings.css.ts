@@ -195,6 +195,12 @@ export const MOBILE_SETTINGS_CSS: string = `
     color: var(--dsw-alias-label-tertiary);
   }
 
+  /* 刚打开设置时不要把上游默认选中的第一行画成「已选中」（用户反馈）。
+     只压背景，不动 aria-current；用户第一次触碰时由设置导航撤掉这个标记。 */
+  html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-fresh] nav button[aria-current] {
+    background: transparent;
+  }
+
   /* ── 二级页：整屏是所选分区的内容 ────────────────────────────────── */
   html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-level='detail'] > nav {
     display: none;
@@ -209,6 +215,14 @@ export const MOBILE_SETTINGS_CSS: string = `
   html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-level='detail'] > div:last-child > div:first-child {
     height: auto;
     padding: 4px 12px 8px;
+  }
+
+  /* 二级页只留返回，不要关闭（0.15.0 用户定例）：我们的标题条已经有「‹ 返回」，
+     上游表头那个「×」是第二个退出控件，并排时既挤又容易误触。
+     关闭整体设置仍可走：返回上一级后关闭，或系统返回（back-stack 逐级 detail -> home -> 关闭）。
+     这里按 DOM 顺序取表头最后一个按钮：同一表头里「打开配置文件」已被 JS 隐藏并挪到开发者选项。 */
+  html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-level='detail'] > div:last-child > div:first-child > button:last-of-type {
+    display: none;
   }
 
   html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-level] > div:last-child > div:nth-child(2) {

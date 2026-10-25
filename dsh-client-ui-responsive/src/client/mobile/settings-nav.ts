@@ -32,6 +32,8 @@ const LEVEL_HOME = 'home'
 const LEVEL_DETAIL = 'detail'
 /** 返回控件（首页 = 关设置，二级页 = 回首页）。 */
 const BACK_ATTR = 'data-dsh-settings-back'
+/** 「刚打开、用户还没动」的临时标记：只用于压掉默认选中行的背景。 */
+const FRESH_ATTR = 'data-dsh-settings-fresh'
 /** 顶部条：返回控件 +（二级页才显示的）分区标题 + 右侧占位。 */
 const BAR_ATTR = 'data-dsh-settings-bar'
 const BAR_TITLE_ATTR = 'data-dsh-settings-bar-title'
@@ -62,6 +64,7 @@ const OWN_SECTION_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
   ['通知', '任务提醒与授权请求'],
   ['模型能力', '补齐第三方模型的思考档位'],
   ['应用更新', '检查新版本并下载安装包'],
+  ['关于', '应用与引擎版本'],
 ])
 
 /** English descriptions for the same own sections; the keys stay the registered labels. */
@@ -71,6 +74,7 @@ const OWN_SECTION_DESCRIPTIONS_EN: ReadonlyMap<string, string> = new Map([
   ['通知', 'Task alerts and approval requests'],
   ['模型能力', 'Thinking levels for third-party models'],
   ['应用更新', 'Check for a new version and download the installer'],
+  ['关于', 'App and engine versions'],
 ])
 
 /**
@@ -233,6 +237,12 @@ export class MobileSettingsNav {
   /** 当前追踪的面板；换面板（React 重建）时复位到首页。 */
   private panel: HTMLElement | null = null
   private level: string = LEVEL_HOME
+  /** 当前二级页对应的分区名（上游 aria-current 的事实）。 */
+  private currentLabel: string | null = null
+  /** 上一个二级页分区名：返回键据此回到「上一页」而不是一路退回列表。 */
+  private previousLabel: string | null = null
+  /** 面板刚打开、用户还没动过：此时压掉上游默认选中行的背景（不改 aria-current）。 */
+  private freshPanel = false
   /** 刚进入二级页时先上屏的标题（等上游把 `aria-current` 挪到目标行后即可撤下）。 */
   private pendingTitle: string | null = null
   /** 同步完成后要落焦点的目标：`'back'` = 返回控件，`'row'` = 当前一级行。 */
@@ -303,6 +313,12 @@ export class MobileSettingsNav {
       }
 
       // 一级分类：进入二级页。这里**不能**拦事件——真正切分区的仍是上游 onSelect。
+      // 任何一次触碰都算「用户动过了」：撤掉 fresh，恢复上游的选中外观。
+      if (this.freshPanel) {
+        this.freshPanel = false
+        document.querySelector('[data-dsh-settings-dialog]')?.removeAttribute(FRESH_ATTR)
+      }
+
       if (this.level === LEVEL_HOME && target.closest('nav button') !== null) {
         const button = target.closest('nav button')
         if (button !== null) this.enterDetail(panel, button)
@@ -340,9 +356,23 @@ export class MobileSettingsNav {
     this.backToHome(panel)
   }
 
-  /** 返回键：二级页回首页，首页关设置。 */
+  /** 返回键：二级页先回「上一页」，没有再回首页；首页关设置。 */
   private goBack(panel: HTMLElement): void {
     if (this.level === LEVEL_DETAIL) {
+      // 分区之间也能跳（如「通用 → 关于」），返回应回到跳转前那一页而不是直接回列表。
+      const previous = this.previousLabel
+      if (previous !== null) {
+        const row = [...panel.querySelectorAll('nav button')].find(button => rowLabel(button) === previous)
+        if (row !== undefined) {
+          // 先把记账改成目标分区再点：否则这次「从 B 切回 A」会被记成新的历史，导致
+          // 再按一次返回又跳回 B（往返循环，永远回不到列表）。
+          this.previousLabel = null
+          this.currentLabel = previous
+          this.pendingTitle = previous
+          ;(row as HTMLElement).click()
+          return
+        }
+      }
       this.backToHome(panel)
       return
     }
@@ -359,6 +389,11 @@ export class MobileSettingsNav {
 
   private enterDetail(panel: HTMLElement, button: Element): void {
     this.pendingTitle = rowLabel(button) || null
+    // 从列表进入：当前分区就是这一行，历史清空。
+    // 不这么做的话，关闭设置再打开时会带着上一次的分区名，第一次切换就记出假历史，
+    // 返回键会跳到用户根本没去过的分区。
+    this.currentLabel = rowLabel(button) || null
+    this.previousLabel = null
     this.level = LEVEL_DETAIL
     this.focusTarget = 'back'
     this.sync()
@@ -367,6 +402,7 @@ export class MobileSettingsNav {
   private backToHome(panel: HTMLElement): void {
     this.level = LEVEL_HOME
     this.pendingTitle = null
+    this.previousLabel = null
     this.focusTarget = 'row'
     this.sync()
   }
@@ -400,8 +436,14 @@ export class MobileSettingsNav {
         this.panel = panel
         this.level = LEVEL_HOME
         this.pendingTitle = null
+        this.freshPanel = true
       }
       if (panel.getAttribute(LEVEL_ATTR) !== this.level) panel.setAttribute(LEVEL_ATTR, this.level)
+      // 刚打开时上游默认把第一行标成 aria-current，看着像「已经选中了通用设置」（用户反馈）。
+      // 只压**外观**：给面板打 fresh 标记，用户第一次触碰就撤掉；aria-current 一律不动
+      // ——返回时的焦点定位与标题跟随都依赖它，之前删标记的做法把这两件事弄坏了。
+      if (this.freshPanel) panel.setAttribute(FRESH_ATTR, '')
+      else panel.removeAttribute(FRESH_ATTR)
       const bar = this.ensureBar(panel)
       this.syncRows(panel)
       this.syncTitle(panel, bar)
@@ -555,6 +597,11 @@ export class MobileSettingsNav {
       return
     }
     const activeLabel = rowLabel(panel.querySelector(ACTIVE_ROW_SELECTOR) ?? panel.ownerDocument.createElement('span'))
+    // 记录分区切换：详情页里从 A 换到 B 时把 A 记成「上一页」，返回键据此回到 A。
+    if (activeLabel !== '') {
+      if (this.currentLabel !== null && activeLabel !== this.currentLabel) this.previousLabel = this.currentLabel
+      this.currentLabel = activeLabel
+    }
     if (this.pendingTitle !== null) {
       this.writeTitle(title, this.pendingTitle)
       // 上游把 aria-current 挪到目标行后即可交回常规路径（期间语言切换也由它接手）。

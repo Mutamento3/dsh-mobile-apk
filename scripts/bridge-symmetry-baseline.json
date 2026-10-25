@@ -24,30 +24,94 @@
     }
   ],
   "pairs": [
-    { "surface": "backGateBridge", "setter": "setAvailable", "getter": "getBackAvailable", "reason": "名字不含同一 token（available vs backAvailable），但语义成对：上行信号 + 只读回读" }
+    {
+      "surface": "backGateBridge",
+      "setter": "setAvailable",
+      "getter": "getBackAvailable",
+      "reason": "名字不含同一 token（available vs backAvailable），但语义成对：上行信号 + 只读回读"
+    }
   ],
   "kotlinOnly": [
-    { "surface": "androidBridge", "method": "version", "reason": "页面侧类型面未声明；版本字符串当前无页面消费者（保留面）" },
-    { "surface": "androidBridge", "method": "checkEngine", "reason": "页面侧类型面未声明；引擎探活由壳侧看门狗消费，页面无消费者" },
-    { "surface": "androidBridge", "method": "keepScreenOn", "reason": "页面侧类型面未声明；由 MainActivity 注入 CSS/生命周期路径调用" },
-    { "surface": "androidBridge", "method": "showNotification", "reason": "页面侧类型面未声明；§8.2 #67 已实测 JS 侧零调用者（桥面公开但无页面消费）" },
-    { "surface": "androidBridge", "method": "pickDirectory", "reason": "页面侧类型面未声明；目录选择走 host-web-compat 的 SAF 桥，不经该入口" },
-    { "surface": "androidBridge", "method": "settingsPath", "reason": "页面侧类型面未声明；由注入层 settings-document.ts 直接读 window.androidBridge（类型面待补，见 ST-26 后续）" },
-    { "surface": "androidBridge", "method": "exportSettingsDocument", "reason": "页面侧类型面未声明；apk #168 新增，注入层直读" },
-    { "surface": "androidBridge", "method": "copyText", "reason": "页面侧类型面未声明；composer 回退路径直读" },
-    { "surface": "androidBridge", "method": "requestAllFilesAccess", "reason": "页面侧类型面未声明；设置页权限引导由壳侧 Intent 承担" },
-    { "surface": "androidBridge", "method": "getPickToken", "reason": "页面侧类型面未声明；token 由引擎侧 pick 端点消费，页面不读" },
-    { "surface": "backGateBridge", "method": "getBackAvailable", "reason": "页面侧只声明了上行 setAvailable；getter 供设备侧断言/自证，页面声明待补（本轮登记为已知缺口，不假绿）" },
-    { "surface": "consoleBridge", "method": "writeRaw", "reason": "页面走 writeKeys（编码串），不走 writeRaw：WebView 的桥在字符串参数含 \\n/\\r 时整次调用静默消失（设备实测：writeRaw(\"PLAIN\") 有输出，writeRaw(\"WITHNL\\n\") 连日志都没有），而控制台要送的方向键/Ctrl-C/Tab 全属这类字符，故页面必须先编码。writeRaw 保留给壳内 submit 与调试用（不经 JS 桥，没有该限制）。" },
-    { "surface": "consoleBridge", "method": "ready", "reason": "页面不轮询 ready()：会话状态由壳侧主动 pushStatus() 推给页面（ConsoleActivity.kt:68/114），页面用推来的 state==='ready' 驱动按钮使能，故无调用点。保留为壳侧只读探针面（供调试与外部断言）；G-6 把它纳入扫描面后必须登记，否则删掉它不会有任何门禁报警" }
+    {
+      "surface": "androidBridge",
+      "method": "checkEngine",
+      "reason": "页面侧类型面未声明；引擎探活由壳侧看门狗消费，页面无消费者"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "keepScreenOn",
+      "reason": "页面侧类型面未声明；由 MainActivity 注入 CSS/生命周期路径调用"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "showNotification",
+      "reason": "页面侧类型面未声明；§8.2 #67 已实测 JS 侧零调用者（桥面公开但无页面消费）"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "pickDirectory",
+      "reason": "页面侧类型面未声明；目录选择走 host-web-compat 的 SAF 桥，不经该入口"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "settingsPath",
+      "reason": "页面侧类型面未声明；由注入层 settings-document.ts 直接读 window.androidBridge（类型面待补，见 ST-26 后续）"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "exportSettingsDocument",
+      "reason": "页面侧类型面未声明；apk #168 新增，注入层直读"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "copyText",
+      "reason": "页面侧类型面未声明；composer 回退路径直读"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "requestAllFilesAccess",
+      "reason": "页面侧类型面未声明；设置页权限引导由壳侧 Intent 承担"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "getPickToken",
+      "reason": "页面侧类型面未声明；token 由引擎侧 pick 端点消费，页面不读"
+    },
+    {
+      "surface": "backGateBridge",
+      "method": "getBackAvailable",
+      "reason": "页面侧只声明了上行 setAvailable；getter 供设备侧断言/自证，页面声明待补（本轮登记为已知缺口，不假绿）"
+    },
+    {
+      "surface": "consoleBridge",
+      "method": "ready",
+      "reason": "页面不轮询 ready()：会话状态由壳侧主动 pushStatus() 推给页面（ConsoleActivity.kt:68/114），页面用推来的 state==='ready' 驱动按钮使能，故无调用点。保留为壳侧只读探针面（供调试与外部断言）；G-6 把它纳入扫描面后必须登记，否则删掉它不会有任何门禁报警"
+    },
+    { "surface": "consoleBridge", "method": "writeRaw", "reason": "页面走 writeKeys（编码串），不走 writeRaw：WebView 的桥在字符串参数含 \\n/\\r 时整次调用静默消失（设备实测：writeRaw(\"PLAIN\") 有输出，writeRaw(\"WITHNL\\n\") 连日志都没有），而控制台要送的方向键/Ctrl-C/Tab 全属这类字符，故页面必须先编码。writeRaw 保留给壳内 submit 与调试用（不经 JS 桥，没有该限制）。" }
   ],
   "tsOnly": [],
   "setterWithoutGetter": [
-    { "surface": "androidBridge", "method": "setRootGranted", "reason": "issue #262（0.14.2-fx-2-root.1）：读面是复合状态 rootGrantState()（granted/consentValid/channelRoot 一次带出），写方法自身即写后回读返回同一全量 JSON——单字段 getter 会造成第二份真源，故有意不设" },
-    { "surface": "androidBridge", "method": "setRootConsent", "reason": "issue #262（0.14.2-fx-2-root.1）：同 setRootGranted——同意位只是 rootGrantState() 的一个字段，写后回读已覆盖读面" }
+    {
+      "surface": "androidBridge",
+      "method": "setRootGranted",
+      "reason": "issue #262（0.14.2-fx-2-root.1）：读面是复合状态 rootGrantState()（granted/consentValid/channelRoot 一次带出），写方法自身即写后回读返回同一全量 JSON——单字段 getter 会造成第二份真源，故有意不设"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "setRootConsent",
+      "reason": "issue #262（0.14.2-fx-2-root.1）：同 setRootGranted——同意位只是 rootGrantState() 的一个字段，写后回读已覆盖读面"
+    }
   ],
   "preferenceGetters": [
-    { "surface": "androidBridge", "method": "getOverlayEnabled", "reason": "返回持久化偏好，而非 OverlayController.isEnabled 事实值（偏好 && canDrawOverlays && 服务在场）——ST-02 已改壳侧判定，桥面 getter 仍返偏好；本条保留至桥面同步事实值" },
-    { "surface": "androidBridge", "method": "getDevLogEnabled", "reason": "返回 dev 开关偏好，未回读「日志目录是否真在写」的事实值" }
+    {
+      "surface": "androidBridge",
+      "method": "getOverlayEnabled",
+      "reason": "返回持久化偏好，而非 OverlayController.isEnabled 事实值（偏好 && canDrawOverlays && 服务在场）——ST-02 已改壳侧判定，桥面 getter 仍返偏好；本条保留至桥面同步事实值"
+    },
+    {
+      "surface": "androidBridge",
+      "method": "getDevLogEnabled",
+      "reason": "返回 dev 开关偏好，未回读「日志目录是否真在写」的事实值"
+    }
   ]
 }
