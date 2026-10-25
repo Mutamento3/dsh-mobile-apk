@@ -26,6 +26,15 @@ const VERSION = /\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?/
 /** 抓到的引擎版本；供「关于」页面读取（空 = 尚未抓到）。 */
 let engineVersion = ''
 
+/**
+ * 是否已经成功接管过（内联入口插进去过一次）。
+ *
+ * 导航行的收起判据用它而不是「此刻页面上有没有入口」：回到一级列表时分区内容不渲染，
+ * 内联入口自然不在 DOM 里，若按后者判断就会把导航行放出来——用户反馈「关于又出现在
+ * 一级列表里」。只有从未接管成功（精确文案没找到）时才保留导航行作为兜底入口。
+ */
+let entryInstalled = false
+
 /** 当前已知的引擎版本；空串表示还没从上游那行抓到。 */
 export function getEngineVersion(): string {
   return engineVersion
@@ -78,6 +87,36 @@ function openAboutSection(): void {
 
 /** 把上游版本行换成「关于」入口；返回清理函数。 */
 export function installAboutEntry(): () => void {
+  // 热推 / 重复安装：沿用上一实例留下的现场——版本行已被隐藏（带 data-dsh-about-source）
+  // 就说明接管过。否则新实例以为「没接管过」，会把导航行放出来，列表里又多一个「关于」。
+  // 旧实例插入的按钮不需要重建：点击走文档级委托，新实例照样接得住。
+  if (!entryInstalled && document.querySelector('[data-dsh-about-source]') !== null) entryInstalled = true
+
+  /**
+   * 导航里那条「关于」只在**没有内联入口**时显示。
+   *
+   * 每轮都按现状同步，而不是「插入入口时顺手隐藏一次」：React 重建导航行会把
+   * `display:none` 与标记一起丢掉，只做一次的话列表里会重新冒出第二个「关于」。
+   */
+  const syncNavRow = (scope: ParentNode): void => {
+    const hasEntry = entryInstalled || scope.querySelector('[data-dsh-about-entry]') !== null
+    for (const navRow of scope.querySelectorAll<HTMLElement>('nav button')) {
+      if (!(navRow.textContent ?? '').includes(tr('关于', 'About'))) continue
+      if (hasEntry) {
+        if (navRow.dataset.dshAboutNavHidden !== '1') {
+          navRow.dataset.dshAboutNavHidden = '1'
+          navRow.style.display = 'none'
+        }
+        continue
+      }
+      // 没有内联入口（例如用户停在别的分区）：保留导航行，页面依然可达。
+      if (navRow.dataset.dshAboutNavHidden === '1') {
+        delete navRow.dataset.dshAboutNavHidden
+        navRow.style.display = ''
+      }
+    }
+  }
+
   const swap = (): void => {
     // 本入口只存在于设置对话框里：没有它就直接返回。
     // 观察器挂在 body 上（必须能看见对话框出现），而聊天流式输出会高频改动 DOM——
@@ -88,6 +127,8 @@ export function installAboutEntry(): () => void {
     const leaves = [...scope.querySelectorAll<HTMLElement>('div, p, span')]
       .filter((node) => node.children.length === 0)
 
+    syncNavRow(scope)
+
     // 第一步：修已处理节点。React 重渲染会把 style 写回原值，只认标记不认样式的话
     // 上游版本行会「复活」，界面上就变成版本行 + 关于入口同时出现。
     for (const node of leaves) {
@@ -95,11 +136,15 @@ export function installAboutEntry(): () => void {
       if (node.style.display !== 'none') node.style.display = 'none'
     }
 
-    // 第二步：挑未处理过的候选。优先「当前版本 / Current version」这条精确文案，
-    // 找不到才退回「含版本 + x.y.z」的宽松匹配（改版/别的语言时仍能工作）。
+    // 第二步：只认「当前版本 / Current version」这条精确文案。
+    //
+    // 不能保留「含版本 + x.y.z」的宽松兜底：其它分区里只要有一行短文案写着
+    // 「版本 1.2.3」（插件/模型的信息行就有），松匹配会把它隐藏并插上「关于」入口——
+    // 这是本轮审查实测到的真 bug。精确文案找不到时**什么都不做**：导航里那条「关于」
+    // 仍可见，用户依然进得去，属于安全失败。
     const fresh = leaves.filter((node) => !node.hasAttribute(HANDLED))
     const preferred = fresh.find((node) => /当前版本|current version/i.test(node.textContent ?? ''))
-    const candidates = preferred === undefined ? fresh : [preferred, ...fresh.filter((node) => node !== preferred)]
+    const candidates = preferred === undefined ? [] : [preferred]
 
     for (const node of candidates) {
       // 绝不能把我们自己「关于」页里的版本行当成上游那一行：那会导致版本行被隐藏、
@@ -108,7 +153,7 @@ export function installAboutEntry(): () => void {
       if (node.closest('[data-dsh-about-entry]') !== null) continue
       const text = (node.textContent ?? '').trim()
       if (text.length === 0 || text.length > 60) continue
-      if (!/版本|version/i.test(text)) continue
+      if (!/当前版本|current version/i.test(text)) continue
       // 带我们标签的版本行不是上游那行（上游只写「当前版本：x.y.z」）。
       if (/DeepCode|DeepSeek/i.test(text)) continue
       const found = VERSION.exec(text)
@@ -128,13 +173,9 @@ export function installAboutEntry(): () => void {
         button.appendChild(label)
         node.insertAdjacentElement('afterend', button)
       }
-      // 入口已就位，才把导航里那条同名行收起来——否则页面没有别的路可进。
-      for (const navRow of scope.querySelectorAll<HTMLElement>('nav button')) {
-        if (!(navRow.textContent ?? '').includes(tr('关于', 'About'))) continue
-        if (navRow.dataset.dshAboutNavHidden === '1') continue
-        navRow.dataset.dshAboutNavHidden = '1'
-        navRow.style.display = 'none'
-      }
+      entryInstalled = true
+      // 同一轮就收起导航行：只靠下一轮 observer 的话，页面若不再变化就不会执行。
+      syncNavRow(scope)
       return
     }
   }
@@ -166,5 +207,8 @@ export function installAboutEntry(): () => void {
   return () => {
     observer.disconnect()
     document.removeEventListener('click', onClick, true)
+    // 不归零：同一模块实例生命周期内「接管过」不会因为 dispose 而变得不成立。
+    // 热重载得到的是全新模块实例（entryInstalled 天然为 false），届时导航行先露出来，
+    // 等用户进「通用」再次接管后才收起——这比「卸载即忘」更不容易出现双入口。
   }
 }

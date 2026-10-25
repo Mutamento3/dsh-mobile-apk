@@ -148,6 +148,79 @@ describe('关于入口（独立页面）', () => {
     await act(async () => { root?.unmount() })
   })
 
+  it('没有「当前版本」文案时不得劫持别的「版本 x.y.z」行', async () => {
+    // 其它分区里常见的短信息行（例如插件/模型的「版本 1.2.3」）不能被当成上游版本行：
+    // 松匹配会把它隐藏并插上「关于」入口，这是审查中实测到的真 bug。
+    const host = seed('<div id="decoy">版本 1.2.3</div>')
+    cleanup = installAboutEntry()
+    await tick()
+    expect(host.querySelector<HTMLElement>('#decoy')!.style.display, '诱饵行不得被隐藏').not.toBe('none')
+    expect(document.querySelectorAll('[data-dsh-about-entry]').length).toBe(0)
+  })
+
+  it('精确文案存在时仍然正常接管', async () => {
+    const host = seed('<div id="decoy">版本 1.2.3</div><div id="real">当前版本：0.2.1-rc.2</div>')
+    cleanup = installAboutEntry()
+    await tick()
+    expect(host.querySelector<HTMLElement>('#real')!.style.display).toBe('none')
+    expect(host.querySelector<HTMLElement>('#decoy')!.style.display).not.toBe('none')
+    expect(host.querySelectorAll('[data-dsh-about-entry]').length).toBe(1)
+  })
+
+  it('导航行被重建后仍保持收起（不会冒出第二个关于）', async () => {
+    const host = seed('<div id="v">当前版本：0.2.1-rc.2</div><nav><button id="nav-about">关于</button></nav>')
+    cleanup = installAboutEntry()
+    await tick()
+    const first = host.querySelector<HTMLElement>('#nav-about')!
+    expect(first.style.display).toBe('none')
+    // 模拟 React 重建导航行：新节点、无标记、无内联样式
+    const nav = host.querySelector('nav')!
+    nav.innerHTML = '<button id="nav-about2">关于</button>'
+    await tick()
+    expect(host.querySelector<HTMLElement>('#nav-about2')!.style.display, '重建后仍应收起').toBe('none')
+    expect(host.querySelectorAll('[data-dsh-about-entry]').length).toBe(1)
+  })
+
+  it('回到一级列表（入口不在 DOM 里）时导航行仍然收起', async () => {
+    const host = seed('<div id="v">当前版本：0.2.1-rc.2</div><nav><button id="nav-about">关于</button></nav>')
+    cleanup = installAboutEntry()
+    await tick()
+    // 模拟离开分区：分区内容（含内联入口）被 React 卸载，只剩导航
+    host.querySelector('#v')!.remove()
+    host.querySelector('[data-dsh-about-entry]')?.remove()
+    await tick()
+    expect(host.querySelector<HTMLElement>('#nav-about')!.style.display, '导航行不得回到列表').toBe('none')
+  })
+
+  it('重复安装（插件重载）不会把导航行放出来，也不会多出入口', async () => {
+    const host = seed('<div id="v">当前版本：0.2.1-rc.2</div><nav><button id="nav-about">关于</button></nav>')
+    const first = installAboutEntry()
+    await tick()
+    expect(host.querySelector<HTMLElement>('#nav-about')!.style.display).toBe('none')
+    // 插件卸载（热推）后重新安装：DOM 现场还在，新实例必须沿用
+    first()
+    cleanup = installAboutEntry()
+    await tick()
+    expect(host.querySelector<HTMLElement>('#nav-about')!.style.display, '导航行不得放出').toBe('none')
+    expect(host.querySelectorAll('[data-dsh-about-entry]').length, '不得多出入口').toBe(1)
+    // 旧实例插入的按钮仍可点（文档级委托）
+    const clicked: string[] = []
+    host.querySelector('#nav-about')!.addEventListener('click', () => clicked.push('nav'))
+    host.querySelector<HTMLElement>('[data-dsh-about-entry]')!.click()
+    await tick()
+    expect(clicked.length, '点击应仍然触发分区切换').toBe(1)
+  })
+
+  it('从未接管成功时导航行保留（兜底入口）', async () => {
+    // 「是否接管过」是模块级状态：这里要一份全新的模块实例，否则会被前面用例污染。
+    vi.resetModules()
+    const fresh = await import('../src/client/mobile/about-entry.ts')
+    const host = seed('<div>没有版本行</div><nav><button id="nav-about">关于</button></nav>')
+    cleanup = fresh.installAboutEntry()
+    await tick()
+    expect(host.querySelector<HTMLElement>('#nav-about')!.style.display).not.toBe('none')
+  })
+
   it('重复渲染不会插入第二个入口', async () => {
     const host = seed('<div id="v">当前版本：0.2.1-rc.2</div>')
     cleanup = installAboutEntry()
