@@ -2,6 +2,7 @@ package com.dsharnessmobile.shell
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -103,4 +104,40 @@ class SourceMirrorTest {
     assertTrue("必须定位到分组内的片段", found != null && found.isFile)
     assertNull("缺失的镜像返回 null 而不是造一个路径", SourceMirror.fragmentFile(temp.root, SourceMirror.Mirror.NJU))
   }
+
+
+  /** #554：换链必须原子——先删后建的窗口内 chosen_mirrors 缺失，pkg 下次 update 随机重选覆盖。 */
+  @Test
+  fun swapLeavesNoWindowWhereChosenMirrorIsAbsent() {
+    val usr = tempFolder()
+    val links = RecordingLinks()
+    SourceMirror.writeChosenTarget(usr, "chinese_mainland/mirrors.tuna.tsinghua.edu.cn", links)
+    SourceMirror.writeChosenTarget(usr, "chinese_mainland/mirrors.aliyun.com", links)
+    // 第二次换链后：最终链接在场且指向新目标；任何时刻都没有「delete 之后、create 之前」的空窗。
+    // 宿主 Path 分隔符差异归一（Windows JVM 上链接目标是反斜杠，与 readChosenMirror 的 fileName 同款坑）。
+    assertEquals("chinese_mainland/mirrors.aliyun.com", SourceMirror.readChosenTarget(usr, links)!!.replace(92.toChar(), '/'))
+    assertFalse("不允许出现先删后建的序列", links.sawDeleteOfLiveLink)
+  }
+
+  /** 换链过程中的每一步之后链接都在场：delete 只允许指向 staging 临时名。 */
+  private class RecordingLinks : SourceMirror.LinkPrimitives {
+    val targets = mutableMapOf<String, String>()
+    var sawDeleteOfLiveLink = false
+    override fun isSymbolicLink(path: java.nio.file.Path) = targets.containsKey(path.toString())
+    override fun readSymbolicLink(path: java.nio.file.Path): java.nio.file.Path = java.nio.file.Paths.get(targets.getValue(path.toString()))
+    override fun deleteIfExists(path: java.nio.file.Path): Boolean {
+      // 删的是正式名且它当前在场 = 旧实现「先删后建」的空窗形态。
+      if (path.toString().endsWith("chosen_mirrors") && targets.containsKey(path.toString())) sawDeleteOfLiveLink = true
+      return targets.remove(path.toString()) != null
+    }
+    override fun createSymbolicLink(link: java.nio.file.Path, target: java.nio.file.Path): java.nio.file.Path {
+      targets[link.toString()] = target.toString(); return link
+    }
+    override fun moveAtomic(from: java.nio.file.Path, to: java.nio.file.Path) {
+      val v = targets.remove(from.toString()) ?: error("staging missing")
+      targets[to.toString()] = v
+    }
+  }
+
+  private fun tempFolder(): java.io.File = java.nio.file.Files.createTempDirectory("srcmirror").toFile()
 }
