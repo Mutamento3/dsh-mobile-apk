@@ -2346,6 +2346,7 @@ glob:dsh-client-ui-responsive/src/client/mobile/*
 glob:dsh-client-ui-responsive/src/client/dev-section/*
 dsh-client-ui-responsive/src/client/general-settings/GeneralSettings.tsx
 dsh-client-ui-responsive/src/client/general-settings/general-settings.css.ts
+glob:dsh-client-ui-responsive/src/client/marketplace/*
 dsh-host-web-compat/lib/index.js
 glob:dsh-host-web-compat/scripts/*
 dsh-shell-termux/src/index.ts

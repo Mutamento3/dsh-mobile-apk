@@ -54,6 +54,41 @@
       "marker": "dshm-compat 且 mobile=1 且 mobileEmpty"
     },
     {
+      "id": "market-E-collapse",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "插件市场按仓库折叠：一行一仓库（仓库名/作者/star），展开后列出子包；单包仓库不折叠",
+      "provenance": "0.15.0 用户指定做法（monorepo 子包共用仓库 star，连排时看起来像数据错误）",
+      "marker": "kidOpen"
+    },
+    {
+      "id": "market-F-pages",
+      "target": "dshmarketplace-plugin/lib/index.js",
+      "summary": "搜索端点转发 page 参数（每页 96 条）",
+      "provenance": "0.15.0 用户定例：与上游一致，96 条/页 + 翻页",
+      "marker": "searchParams.get(\"page\")"
+    },
+    {
+      "id": "market-F-client",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "分页条（首末页 + 当前页窗口 + 省略号，上下各一条，支持输入页码跳转）",
+      "provenance": "0.15.0 用户定例：分页显示 1 … 当前 … 末页，上下都有，可输入跳转",
+      "marker": "dshm-pager"
+    },
+    {
+      "id": "market-G-state",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "加载/错误/空态从页面顶部移到列表处（.dshm-list 内一条 li）",
+      "provenance": "0.15.0 用户定例：状态提示显示在插件显示处",
+      "marker": "dshm-list\"},(l!==\"ready\""
+    },
+    {
+      "id": "market-J-fullpage",
+      "target": "dshmarketplace-plugin/lib/client.js",
+      "summary": "市场浮层拉满整屏 + 面板内加「返回 + 标题」页头",
+      "provenance": "0.15.0 用户定例：要完整的可返回界面，不要浮在 UI 上的小窗",
+      "marker": "dshm-pagebar"
+    },
+    {
       "id": "undo-E1",
       "target": "dsh-undo-savepoint/lib/client.js",
       "summary": "移除头部撤销/恢复/快照按钮（保留快照徽章）",

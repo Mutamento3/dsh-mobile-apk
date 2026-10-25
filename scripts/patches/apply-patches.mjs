@@ -483,6 +483,148 @@ const IMPLS = {
     },
   },
 
+  // ── marketplace E：按仓库折叠（一行一仓，展开列子包）──
+  // 0.15.0 用户指定做法：市场列表里同一 monorepo 的子包共用仓库 star，连排时
+  // 「作者全一样、star 全一样」看起来像数据错误。改为一行一仓库（仓库名/作者/star），
+  // 展开后才列出该仓库的子包；只有一个包的仓库不折叠，直接显示原插件行（保留安装入口）。
+  'market-E-collapse': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => s.includes('kidOpen'),
+    apply: (s) => {
+      const identTags = ['Y', 'R', 's.default.Fragment']
+      const el = (tag, props, ...kids) =>
+        's.default.createElement(' + (identTags.includes(tag) ? tag : JSON.stringify(tag)) + ',' + props +
+        kids.map((k) => ',' + k).join('') + ')'
+
+      const GROUP_OLD = 'z=s.default.useMemo(()=>I(c,""),[c]);'
+      const GROUP_NEW = 'z=s.default.useMemo(()=>{let acc=new Map();for(let it of I(c,"")){let r=String(it.fullName||"").split("#")[0];let hit=acc.get(r);if(hit){hit.__children.push(it)}else{let parts=r.split("/");acc.set(r,Object.assign({},it,{name:parts[1]||parts[0],owner:parts[0],__repo:r,__children:[it]}))}}return Array.from(acc.values())},[c]);'
+      const STATE_OLD = '[b,x]=s.default.useState(null),z='
+      const STATE_NEW = '[b,x]=s.default.useState(null),[kidOpen,setKidOpen]=s.default.useState({}),z='
+      const LIST_OLD = 's.default.createElement("ul",{className:"dshm-list"},z.map(o=>s.default.createElement(s.default.Fragment,{key:o.fullName},s.default.createElement(Y,{plugin:o,locale:a,t:e,status:E[o.fullName],onInstall:H}),S[o.fullName]?s.default.createElement(R,{error:S[o.fullName],t:e}):null))),'
+
+      const head = el('div', '{className:"dshm-row-head"}',
+        el('span', '{className:"dshm-name"}', 'o.name'),
+        el('span', '{className:"dshm-owner"}', 'o.owner'),
+        el('span', '{className:"dshm-stars"}', '"\\u2605 ",Number(o.stars??0).toLocaleString()'))
+      const toggle = el('button',
+        '{type:"button",className:"dshm-kids-toggle","aria-expanded":kidOpen[o.__repo]?"true":"false",' +
+        'onClick:()=>setKidOpen(v=>Object.assign({},v,{[o.__repo]:!v[o.__repo]}))}',
+        '(kidOpen[o.__repo]?"\\u6536\\u8D77 ":"\\u5C55\\u5F00 ")+o.__children.length+" \\u4E2A\\u5B50\\u5305"')
+      const kids = 'kidOpen[o.__repo]?' + el('ul', '{className:"dshm-kids"}',
+        'o.__children.map(ch=>' + el('s.default.Fragment', '{key:ch.fullName}',
+          el('Y', '{plugin:ch,locale:a,t:e,status:E[ch.fullName],onInstall:H}'),
+          'S[ch.fullName]?' + el('R', '{error:S[ch.fullName],t:e}') + ':null') + ')') + ':null'
+      const repoLi = el('li', '{className:"dshm-row dshm-repo"}',
+        el('div', '{className:"dshm-row-main"}', head,
+          el('p', '{className:"dshm-summary"}', 'k(o,a)'),
+          'o.__children.length>1?' + toggle + ':null',
+          kids))
+      const rowExpr = 'o.__children.length===1?' +
+        el('Y', '{plugin:o.__children[0],locale:a,t:e,status:E[o.__children[0].fullName],onInstall:H}') +
+        ':' + repoLi
+      const LIST_NEW = el('ul', '{className:"dshm-list"}', 'z.map(o=>' + rowExpr + ')') + ','
+
+      if (LIST_NEW.split('(').length !== LIST_NEW.split(')').length) {
+        throw new Error('E 渲染表达式括号不平衡——拒绝写回')
+      }
+      for (const [old, name] of [[GROUP_OLD, '归并'], [STATE_OLD, '状态'], [LIST_OLD, '列表']]) {
+        if (!s.includes(old)) throw new Error('market-E ' + name + '锚点未命中——上游客户端包已变，请人工核对')
+      }
+      s = s.replace(GROUP_OLD, GROUP_NEW).replace(STATE_OLD, STATE_NEW).replace(LIST_OLD, LIST_NEW)
+      if (!s.includes('kidOpen') || !s.includes('dshm-repo')) throw new Error('market-E 复核失败——不写回')
+      return s
+    },
+  },
+
+  // ── marketplace F：分页（96 条/页 + 上下分页条 + 页码跳转）──
+  // 用户定例（0.15.0）：与上游一致，96 条一页；分页条显示
+  // 「1 … 当前页前后 … 末页」，列表上下各一条，并支持输入页码直接跳转。
+  // 服务端 /api/v1/plugins 单次最多 96 条（实测 limit=200/500/1000 都只回 96），
+  // 因此超过 96 条必须靠 page 翻页；marketplace 路由此前只转发 limit，这里补 page。
+  'market-F-pages': {
+    file: 'dshmarketplace-plugin/lib/index.js',
+    check: (s) => s.includes('searchParams.get("page")'),
+    apply: (s) => {
+      // 上游在 #507 之后把移动过滤改成 mobile=1 分支，参数组装收敛成 _c=await c({...})。
+      const OLD = 'limit:s.searchParams.get("limit")??60,installCheck:"passed"});'
+      const NEW = 'limit:s.searchParams.get("limit")??96,page:s.searchParams.get("page")??void 0,installCheck:"passed"});'
+      if (!s.includes(OLD)) throw new Error('market-F 宿主锚点未命中——搜索端点参数组装已变')
+      s = s.replace(OLD, NEW)
+      if (!s.includes('searchParams.get("page")')) throw new Error('market-F 宿主复核失败——不写回')
+      return s
+    },
+  },
+
+  // 客户端侧：分页条组件 + 取数改为按页 + 上下各插一条分页条。
+  'market-F-client': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => s.includes('dshm-pager'),
+    apply: (s) => {
+      const PAGER = `var PG_LAST={t:0,k:""};function PG({page:pg,total:tt,onJump:j}){let n=Math.max(1,Math.ceil(Number(tt||0)/96));if(n<=1)return null;let s0=Math.max(1,pg-1),e0=Math.min(n,pg+1),win=[];for(let i=s0;i<=e0;i++)win.push(i);let b=(k,label,cur)=>s.default.createElement("button",{key:"p"+k,type:"button",className:"dshm-page-btn"+(cur?" dshm-page-cur":""),"aria-current":cur?"page":void 0,onClick:()=>j(k)},label);let gap=(side)=>s.default.createElement("span",{key:side,className:"dshm-page-gap",role:"presentation",onClick:(ev)=>{ev.preventDefault();ev.stopPropagation();let now=Date.now(),key=side+":"+pg;if(PG_LAST.k===key&&now-PG_LAST.t<400){PG_LAST.t=0;PG_LAST.k="";j(side==="g1"?Math.max(1,pg-1):Math.min(n,pg+1))}else{PG_LAST.t=now;PG_LAST.k=key}}},"\\u2026");let kids=[b(1,"1",pg===1)];if(s0>2)kids.push(gap("g1"));win.forEach(i=>{if(i!==1&&i!==n)kids.push(b(i,String(i),pg===i))});if(e0<n-1)kids.push(gap("g2"));if(n>1)kids.push(b(n,String(n),pg===n));return s.default.createElement("div",{className:"dshm-pager"},kids,s.default.createElement("input",{className:"dshm-page-input",type:"number",min:1,max:n,placeholder:"\\u9875\\u7801","aria-label":"\\u9875\\u7801",onKeyDown:(ev)=>{if(ev.key!=="Enter")return;let v=parseInt(ev.currentTarget.value,10);if(!isNaN(v))j(Math.min(n,Math.max(1,v)))}}))}`
+      const FETCH_OLD = 'function K(e,o){let[t,r]=s.default.useState({status:"idle",results:[]});return s.default.useEffect(()=>{let a=!1;return r(n=>({...n,status:"loading"})),fetch(`${J}?limit=60${e?`&q=${encodeURIComponent(e)}`:""}${o?"&mobile=1":""}`).then(n=>n.ok?n.json():Promise.reject(new Error(n.status))).then(n=>{a||r({status:"ready",results:n.results??[]})}).catch(()=>{a||r({status:"error",results:[]})}),()=>{a=!0}},[e,o]),t}'
+      const FETCH_NEW = 'function K(e,o,p){let[t,r]=s.default.useState({status:"idle",results:[],total:0});return s.default.useEffect(()=>{let a=!1;return r(n=>({...n,status:"loading"})),fetch(`${J}?limit=96&page=${p}${e?`&q=${encodeURIComponent(e)}`:""}${o?"&mobile=1":""}`).then(n=>n.ok?n.json():Promise.reject(new Error(n.status))).then(n=>{a||r({status:"ready",results:n.results??[],total:Number(n.total??0)})}).catch(()=>{a||r({status:"error",results:[],total:0})}),()=>{a=!0}},[e,o,p]),t}'
+      const CALL_OLD = '{status:l,results:c}=K(i,mo)'
+      // pg 必须声明在 K(i,pg) 之前，否则读的是 TDZ 里的未初始化绑定
+      const CALL_NEW = '[pg,setPg]=s.default.useState(1),{status:l,results:c,total:tt}=K(i,mo,pg)'
+      const LIST_TAG = 's.default.createElement("ul",{className:"dshm-list"}'
+      for (const [old, name] of [[FETCH_OLD, '取数 hook'], [CALL_OLD, '调用点'], [LIST_TAG, '列表']]) {
+        if (!s.includes(old)) throw new Error('market-F ' + name + '锚点未命中——上游客户端包已变，请人工核对')
+      }
+      s = s.replace('function V(e,t=300){', PAGER + 'function V(e,t=300){')
+      s = s.replace(FETCH_OLD, FETCH_NEW)
+      s = s.replace(CALL_OLD, CALL_NEW)
+      // 查询词变化时回到第 1 页
+      s = s.replace('async function C(o){', 's.default.useEffect(()=>{setPg(1)},[i]);async function C(o){', 1)
+      // 列表上下各一条分页条
+      const PAGER_EL = 's.default.createElement(PG,{page:pg,total:tt,onJump:setPg}),'
+      s = s.replace(LIST_TAG, PAGER_EL + LIST_TAG, 1)
+      s = s.replace(',b?s.default.createElement(ee', ',' + PAGER_EL + 'b?s.default.createElement(ee', 1)
+      if (!s.includes('dshm-pager') || !s.includes('function PG(') || !s.includes('PG_LAST')) throw new Error('market-F-client 复核失败——不写回')
+      return s
+    },
+  },
+
+  // ── marketplace G：加载/错误/空态改到「插件显示处」──
+  // 用户定例（0.15.0）：状态提示不应出现在页面顶部（搜索框与复选框之下），
+  // 而应出现在列表本该出现的位置。三态统一迁进 .dshm-list 里的一条 li。
+  'market-G-state': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => !s.includes('l==="loading"?s.default.createElement("p",{className:"dshm-state"}'),
+    apply: (s) => {
+      const STATES_OLD = ',l==="loading"?s.default.createElement("p",{className:"dshm-state"},e("loading")):null,l==="error"?s.default.createElement("p",{className:"dshm-state"},e("error")):null,l==="ready"&&z.length===0?s.default.createElement("p",{className:"dshm-state"},e(mo?"mobileEmpty":"empty")):null'
+      const LIST_OLD = '{className:"dshm-list"},z.map(o=>'
+      const LIST_NEW = '{className:"dshm-list"},(l!=="ready"||z.length===0)?s.default.createElement("li",{className:"dshm-state"},e(l==="error"?"error":l==="ready"?(mo?"mobileEmpty":"empty"):"loading")):z.map(o=>'
+      if (!s.includes(STATES_OLD)) throw new Error('market-G 状态段锚点未命中——三态渲染已变')
+      if (!s.includes(LIST_OLD)) throw new Error('market-G 列表锚点未命中——列表起点已变（需先应用 market-E-collapse）')
+      s = s.replace(STATES_OLD, '').replace(LIST_OLD, LIST_NEW)
+      if (s.includes('l==="loading"?s.default.createElement("p"')) throw new Error('market-G 复核失败——顶部状态仍在')
+      return s
+    },
+  },
+
+  // ── marketplace J：市场对话框改成整页（带返回条）──
+  // 用户定例（0.15.0）：市场要是「完整的、可返回上级的界面」，不是浮在 UI 上的小窗。
+  // 该页所在面（插件页）不在设置对话框内，DOM 里没有设置导航，跳设置分区不可行；
+  // 因此把市场自己的浮层拉满整屏，并在面板里加一条「返回 + 标题」页头。
+  'market-J-fullpage': {
+    file: 'dshmarketplace-plugin/lib/client.js',
+    check: (s) => s.includes('dshm-pagebar'),
+    apply: (s) => {
+      const OLD = 's.default.createElement("div",{className:"dshm-panel",onClick:l=>l.stopPropagation()},s.default.createElement(T,{t:r,localeService:t,initialQuery:m}))'
+      // 返回只留上游同款「‹」箭头（不套胶囊、不带文字），标题由页头右侧承担。
+      const BAR = 's.default.createElement("div",{className:"dshm-pagebar"},'
+        + 's.default.createElement("button",{type:"button",className:"dshm-back","aria-label":"\\u8FD4\\u56DE",onClick:()=>e.close()},'
+        + '"\\u2039"),'
+        + 's.default.createElement("span",{className:"dshm-pagetitle"},r("settings.tab")))'
+      const NEW = 's.default.createElement("div",{className:"dshm-panel",onClick:l=>l.stopPropagation()},'
+        + BAR + ',s.default.createElement(T,{t:r,localeService:t,initialQuery:m}))'
+      if (!s.includes(OLD)) throw new Error('market-J 锚点未命中——市场浮层面板结构已变')
+      s = s.replace(OLD, NEW, 1)
+      if (!s.includes('dshm-pagebar')) throw new Error('market-J 复核失败——不写回')
+      return s
+    },
+  },
+
   // ── dsh-undo-savepoint E1-E7（0.3.8 移动端裁剪，字节级锚点）──
   'undo-E1': {    file: 'dsh-undo-savepoint/lib/client.js',
     // 移除类：标记不存在 = 已应用
