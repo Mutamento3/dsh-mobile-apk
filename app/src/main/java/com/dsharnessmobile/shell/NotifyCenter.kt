@@ -342,9 +342,14 @@ object NotifyCenter {
   /** 设置项 key（与 prefs 键同名字面量集中一处，避免设置页/迁移两处漂移）。 */
   const val KEY_SETTING_SUPPRESS = "suppressForeground"
 
-  /** 设置页/长按入口的开关生效即时反馈：关掉抑制时立刻补投被延后的条目。 */
+  /**
+   * 设置页/长按入口的开关生效即时反馈：关掉抑制时立刻补投被延后的条目。
+   *
+   * 走 [NotifySuppressQueue.flushAsync]（2026-10-26 评审）：本函数由设置页主线程调用，
+   * 同步 flush 的 journal commit 与通知 binder 投递会卡住这次点击。
+   */
   fun onSuppressForegroundChanged(context: Context) {
-    if (!suppressForeground(context)) NotifySuppressQueue.flush(context)
+    if (!suppressForeground(context)) NotifySuppressQueue.flushAsync(context)
   }
 
   // ── 渠道选择：纯逻辑（JVM 可测）+ Android 胶水 ─────────────────────────
