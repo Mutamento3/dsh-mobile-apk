@@ -1526,6 +1526,28 @@ class SnapshotTransactionTest {
     }
   }
 
+  @Test
+  fun writeMarkerPreservesAnUnexpectedDirectoryAndItsContents() {
+    val filesDir = tempDir()
+    try {
+      val target = SnapshotTransaction.markerFile(filesDir)
+      target.mkdirs()
+      val original = File(target, "recovery-evidence").apply { writeText("preserve") }
+      try {
+        SnapshotTransaction.writeMarker(filesDir,
+          SnapshotTransaction.Marker(SnapshotTransaction.Phase.SWAPPING, "fp", 1L))
+        org.junit.Assert.fail("a directory cannot become transaction recovery authority")
+      } catch (error: SnapshotFsException) {
+        assertEquals(CODE_MARKER_WRITE, error.code)
+      }
+      assertTrue(target.isDirectory)
+      assertEquals("preserve", original.readText())
+      assertFalse(File(filesDir, ".snapshot-transaction.tmp").exists())
+    } finally {
+      SnapshotFs.deletePath(filesDir)
+    }
+  }
+
   /**
    * 正证（B）：正常写入**不得**经过「先删目标」的窗口 —— 判据是写入后 marker 立即可读，
    * 且 tmp 不残留。旧实现的 deletePath 窗口无法在单线程 JVM 里「同步」被抓到，
