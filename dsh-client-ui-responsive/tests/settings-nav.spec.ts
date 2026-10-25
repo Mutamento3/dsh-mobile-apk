@@ -163,6 +163,29 @@ describe('设置首页：分类列表', () => {
   })
 })
 
+describe('打开设置时不把默认选中画成高亮', () => {
+  it('刚打开时面板带 fresh 标记，aria-current 原样保留', async () => {
+    const handle = buildPanel(['通用设置', '开发者选项'], '通用设置')
+    nav = new MobileSettingsNav()
+    nav.attach()
+    await settle()
+    expect(handle.panel.hasAttribute('data-dsh-settings-fresh')).toBe(true)
+    // 语义不动：上游的默认选中仍在（返回焦点与标题跟随依赖它）
+    expect(handle.rows.get('通用设置')!.getAttribute('aria-current')).toBe('true')
+  })
+
+  it('用户点过一次后撤掉 fresh，点击高亮恢复', async () => {
+    const handle = buildPanel(['通用设置', '开发者选项'], '通用设置')
+    nav = new MobileSettingsNav()
+    nav.attach()
+    await settle()
+    handle.rows.get('开发者选项')!.click()
+    await settle()
+    expect(handle.panel.hasAttribute('data-dsh-settings-fresh')).toBe(false)
+    expect(handle.rows.get('开发者选项')!.getAttribute('aria-current')).toBe('true')
+  })
+})
+
 describe('二级页：点一级分类进入', () => {
   it('点任意一级行进入二级页，标题取该行的注册名，焦点落到返回控件', () => {
     const handle = buildPanel(['通用设置', '开发者选项'])
