@@ -221,6 +221,42 @@ describe('other layers', () => {
     expect(seen).toEqual(['click'])
   })
 
+  it('closes the third-party marketplace full page through its own back button', async () => {
+    signal.attach()
+    // 真机 bug：插件市场被挪到左抽屉后，浮层由 dshmarketplace-plugin 自己渲染在 React 树外，
+    // 本栈看不见它 -> 系统返回被当成「没有可弹的层」-> BackGate 直接 FINISH_ACTIVITY 回桌面。
+    const overlay = document.createElement('div')
+    overlay.className = 'dshm-overlay'
+    const panel = document.createElement('div')
+    panel.className = 'dshm-panel'
+    const pagebar = document.createElement('div')
+    pagebar.className = 'dshm-pagebar'
+    const backButton = document.createElement('button')
+    backButton.className = 'dshm-back'
+    pagebar.appendChild(backButton)
+    panel.appendChild(pagebar)
+    overlay.appendChild(panel)
+    document.body.appendChild(overlay)
+    const seen = record(backButton)
+    await flush()
+    expect(window.__dshBackKinds, '市场浮层必须被认成一层').toEqual(['marketplace'])
+    expect(window.__dshBack?.()).toBe(true)
+    expect(seen).toEqual(['click'])
+  })
+
+  it('falls back to the overlay itself when the marketplace has no back button', async () => {
+    signal.attach()
+    const overlay = document.createElement('div')
+    overlay.className = 'dshm-overlay'
+    overlay.appendChild(document.createElement('div'))
+    document.body.appendChild(overlay)
+    const seen = record(overlay)
+    await flush()
+    expect(window.__dshBackKinds).toEqual(['marketplace'])
+    expect(window.__dshBack?.()).toBe(true)
+    expect(seen).toEqual(['click'])
+  })
+
   it('leaves right-column fullscreen through the mode toggle, else the collapse toggle', async () => {
     signal.attach()
     const panel = document.createElement('div')
