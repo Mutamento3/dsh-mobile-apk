@@ -141,6 +141,9 @@ internal object SourceMirror {
     fun readSymbolicLink(path: java.nio.file.Path): java.nio.file.Path
     fun deleteIfExists(path: java.nio.file.Path): Boolean
     fun createSymbolicLink(link: java.nio.file.Path, target: java.nio.file.Path): java.nio.file.Path
+
+    /** 原子换链：把临时链接移动到位（覆盖旧链接/文件）。崩溃窗口内要么旧链在、要么新链在。 */
+    fun moveAtomic(from: java.nio.file.Path, to: java.nio.file.Path)
   }
 
   /** 生产实现：直连 NIO。 */
@@ -150,6 +153,9 @@ internal object SourceMirror {
     override fun deleteIfExists(path: java.nio.file.Path) = Files.deleteIfExists(path)
     override fun createSymbolicLink(link: java.nio.file.Path, target: java.nio.file.Path) =
       Files.createSymbolicLink(link, target)
+    override fun moveAtomic(from: java.nio.file.Path, to: java.nio.file.Path) {
+      Files.move(from, to, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+    }
   }
 
   /**
@@ -160,14 +166,37 @@ internal object SourceMirror {
    * @param links 链接原语（生产用 [PRODUCTION_LINKS]）。
    */
   fun writeChosenMirror(prefix: File, mirror: Mirror, links: LinkPrimitives = PRODUCTION_LINKS) {
-    val link = File(prefix, "etc/termux/chosen_mirrors")
-    links.deleteIfExists(link.toPath())
-    links.createSymbolicLink(
-      link.toPath(),
-      // 相对链接：快照目录可能被整体搬迁，绝对链接会断。
-      File(GROUP_CHINESE_MAINLAND + "/" + mirror.file).toPath(),
-    )
+    // 相对链接：快照目录可能被整体搬迁，绝对链接会断。
+    writeChosenTarget(prefix, File(GROUP_CHINESE_MAINLAND, mirror.file).toString(), links)
   }
+
+  /**
+   * 把 chosen_mirrors 指到任意相对目标（文件名形式如 chinese_mainland/<mirror>）。
+   *
+   * 原子性：旧实现 delete→create 之间存在崩溃窗口——chosen_mirrors 缺失时 pkg 的
+   * 下一次 update 会走「不存在 → default + 全部镜像」随机重选并覆盖 sources.list
+   * （本文件头部实测过的漂移形态），恰是换源功能要防的事。现改为临时链接 + 原子 move。
+   *
+   * @param targetRelative 相对 etc/termux/ 的目标（如 chinese_mainland/mirrors.tuna.tsinghua.edu.cn）。
+   */
+  fun writeChosenTarget(prefix: File, targetRelative: String, links: LinkPrimitives = PRODUCTION_LINKS) {
+    val dir = File(prefix, "etc/termux")
+    val link = File(dir, "chosen_mirrors")
+    val staging = File(dir, ".chosen_mirrors.swap")
+    links.deleteIfExists(staging.toPath())
+    links.createSymbolicLink(staging.toPath(), File(targetRelative).toPath())
+    try {
+      links.moveAtomic(staging.toPath(), link.toPath())
+    } finally {
+      links.deleteIfExists(staging.toPath())
+    }
+  }
+
+  /** 读出 chosen_mirrors 的原始相对目标（如 chinese_mainland/mirrors.tuna…；非软链/缺失返回 null）。 */
+  fun readChosenTarget(prefix: File, links: LinkPrimitives = PRODUCTION_LINKS): String? = runCatching {
+    val link = File(prefix, "etc/termux/chosen_mirrors")
+    if (links.isSymbolicLink(link.toPath())) links.readSymbolicLink(link.toPath()).toString() else null
+  }.getOrNull()
 
   /**
    * 读出 chosen_mirrors 指向的镜像文件名。

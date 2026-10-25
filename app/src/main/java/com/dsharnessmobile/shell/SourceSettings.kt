@@ -91,6 +91,9 @@ internal object SourceSettings {
       runCatching { backup.writeText(target.readText()) }
         .onFailure { return Result(false, "无法备份当前软件源，已中止（未做任何修改）") }
     }
+    // chosen_mirrors 同样要记初态：回滚若只还原 sources.list，pkg 的下一次 update 会以
+    // 残留的新链接为准把 sources.list 又改回去——「已回滚」实际没回滚。
+    val previousChosen = SourceMirror.readChosenTarget(prefix)
 
     return try {
       SourceMirror.replaceAtomically(target, SourceMirror.sourcesListContent(mainUrl))
@@ -102,11 +105,11 @@ internal object SourceSettings {
       if (verify == null) {
         Result(true, "已切换到" + mirror.labelZh + "，索引已刷新")
       } else {
-        rollback(target, backup, hadPrevious)
+        rollback(target, backup, hadPrevious, prefix, previousChosen)
         Result(false, verify, rolledBack = true)
       }
     } catch (t: Throwable) {
-      rollback(target, backup, hadPrevious)
+      rollback(target, backup, hadPrevious, prefix, previousChosen)
       Result(false, "切换失败：" + (t.message ?: t.javaClass.simpleName), rolledBack = true)
     }
   }
@@ -235,13 +238,23 @@ internal object SourceSettings {
     "Could not get lock",
   )
 
-  private fun rollback(target: File, backup: File, hadPrevious: Boolean) {
+  private fun rollback(target: File, backup: File, hadPrevious: Boolean, prefix: File? = null, previousChosen: String? = null) {
     runCatching {
       if (hadPrevious && backup.isFile) {
         SourceMirror.replaceAtomically(target, backup.readText())
       } else {
         // 从没有源变成有源的情形：回滚就是删掉我们写的那个文件。
         target.delete()
+      }
+      // chosen_mirrors 一并还原：留成新镜像时，pkg 的下一次 update 会以链接为准
+      // 把刚还原的 sources.list 再改写回去（双写语义的反向也必须成立）。
+      if (prefix != null) {
+        if (previousChosen != null) {
+          runCatching { SourceMirror.writeChosenTarget(prefix, previousChosen) }
+            .onFailure { Log.w(TAG, "chosen_mirrors 回滚失败: " + it.message) }
+        } else {
+          File(prefix, "etc/termux/chosen_mirrors").delete()
+        }
       }
     }.onFailure { Log.e(TAG, "回滚失败: " + it.message) }
   }

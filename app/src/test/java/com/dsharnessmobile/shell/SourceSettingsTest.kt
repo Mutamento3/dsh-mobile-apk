@@ -36,6 +36,10 @@ class SourceSettingsTest {
       targets[link.toString()] = target.toString()
       return link
     }
+    override fun moveAtomic(from: java.nio.file.Path, to: java.nio.file.Path) {
+      val value = targets.remove(from.toString()) ?: error("staging link missing")
+      targets[to.toString()] = value
+    }
   }
   /** 造一个带 chinese_mainland 分组的 usr 前缀。 */
   private fun prefix(vararg mirrors: SourceMirror.Mirror): File {
