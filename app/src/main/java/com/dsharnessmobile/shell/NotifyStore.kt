@@ -73,6 +73,17 @@ object NotifyStore {
   @Volatile
   private var appContext: Context? = null
 
+  /**
+   * 启动 drain 执行器：`start()` 的调用方在主线程（EngineService.onCreate / 动作广播
+   * receiver），积压行的随机读 + 逐行投递 + offset commit 派到这里（2026-10-25 审计，
+   * receiver 10s ANR 预算）。drain 自带锁，与 watcher/tick 并发安全。
+   */
+  private val drainExecutor by lazy {
+    java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+      Thread(r, "dsh-notify-store-drain").apply { isDaemon = true }
+    }
+  }
+
   /** 最近一次 watcher 事件时刻（任意路径，不筛）：心跳里对照「文件在长 / 事件不来」即判 watcher 失聪。 */
   @Volatile
   private var lastWatchEventAt = 0L
@@ -183,8 +194,18 @@ object NotifyStore {
     val d = dir(app)
     if (!d.exists()) d.mkdirs()
     watching(app, d)
-    // 启动即消费一次（进程离线期间的积压行：偏移持久化保证不重复投递）
-    drain(app, TRIGGER_START)
+    // 启动即消费一次（进程离线期间的积压行：偏移持久化保证不重复投递）。
+    // 派后台（2026-10-25 审计）：调用方是 EngineService.onCreate / NotifyActionReceiver.onReceive
+    // 的**主线程**，drain 的随机读（上限 256KB）+ 逐行投递 + offset commit 是成批磁盘 IO，
+    // 广播 receiver 有 10s ANR 预算。drain 自带锁，与 watcher/tick 并发安全；冷启动的补投
+    // 语义不变（引擎未就绪时本就靠退避重试，不依赖这第一次 drain 同步完成）。
+    drainExecutor.execute {
+      try {
+        drain(app, TRIGGER_START)
+      } catch (t: Throwable) {
+        LogCollector.log(TAG, "startup drain failed: " + t.message)
+      }
+    }
   }
 
   /**
