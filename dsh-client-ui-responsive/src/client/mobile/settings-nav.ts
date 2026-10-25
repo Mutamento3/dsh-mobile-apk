@@ -32,6 +32,8 @@ const LEVEL_HOME = 'home'
 const LEVEL_DETAIL = 'detail'
 /** 返回控件（首页 = 关设置，二级页 = 回首页）。 */
 const BACK_ATTR = 'data-dsh-settings-back'
+/** 「刚打开、用户还没动」的临时标记：只用于压掉默认选中行的背景。 */
+const FRESH_ATTR = 'data-dsh-settings-fresh'
 /** 顶部条：返回控件 +（二级页才显示的）分区标题 + 右侧占位。 */
 const BAR_ATTR = 'data-dsh-settings-bar'
 const BAR_TITLE_ATTR = 'data-dsh-settings-bar-title'
@@ -239,6 +241,8 @@ export class MobileSettingsNav {
   private currentLabel: string | null = null
   /** 上一个二级页分区名：返回键据此回到「上一页」而不是一路退回列表。 */
   private previousLabel: string | null = null
+  /** 面板刚打开、用户还没动过：此时压掉上游默认选中行的背景（不改 aria-current）。 */
+  private freshPanel = false
   /** 刚进入二级页时先上屏的标题（等上游把 `aria-current` 挪到目标行后即可撤下）。 */
   private pendingTitle: string | null = null
   /** 同步完成后要落焦点的目标：`'back'` = 返回控件，`'row'` = 当前一级行。 */
@@ -309,6 +313,12 @@ export class MobileSettingsNav {
       }
 
       // 一级分类：进入二级页。这里**不能**拦事件——真正切分区的仍是上游 onSelect。
+      // 任何一次触碰都算「用户动过了」：撤掉 fresh，恢复上游的选中外观。
+      if (this.freshPanel) {
+        this.freshPanel = false
+        document.querySelector('[data-dsh-settings-dialog]')?.removeAttribute(FRESH_ATTR)
+      }
+
       if (this.level === LEVEL_HOME && target.closest('nav button') !== null) {
         const button = target.closest('nav button')
         if (button !== null) this.enterDetail(panel, button)
@@ -426,8 +436,14 @@ export class MobileSettingsNav {
         this.panel = panel
         this.level = LEVEL_HOME
         this.pendingTitle = null
+        this.freshPanel = true
       }
       if (panel.getAttribute(LEVEL_ATTR) !== this.level) panel.setAttribute(LEVEL_ATTR, this.level)
+      // 刚打开时上游默认把第一行标成 aria-current，看着像「已经选中了通用设置」（用户反馈）。
+      // 只压**外观**：给面板打 fresh 标记，用户第一次触碰就撤掉；aria-current 一律不动
+      // ——返回时的焦点定位与标题跟随都依赖它，之前删标记的做法把这两件事弄坏了。
+      if (this.freshPanel) panel.setAttribute(FRESH_ATTR, '')
+      else panel.removeAttribute(FRESH_ATTR)
       const bar = this.ensureBar(panel)
       this.syncRows(panel)
       this.syncTitle(panel, bar)

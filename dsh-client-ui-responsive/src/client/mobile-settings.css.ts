@@ -195,6 +195,12 @@ export const MOBILE_SETTINGS_CSS: string = `
     color: var(--dsw-alias-label-tertiary);
   }
 
+  /* 刚打开设置时不要把上游默认选中的第一行画成「已选中」（用户反馈）。
+     只压背景，不动 aria-current；用户第一次触碰时由设置导航撤掉这个标记。 */
+  html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-fresh] nav button[aria-current] {
+    background: transparent;
+  }
+
   /* ── 二级页：整屏是所选分区的内容 ────────────────────────────────── */
   html[data-dsh-mobile-form] [data-dsh-settings-dialog][data-dsh-settings-level='detail'] > nav {
     display: none;
