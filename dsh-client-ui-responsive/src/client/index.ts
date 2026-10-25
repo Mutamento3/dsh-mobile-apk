@@ -53,6 +53,9 @@ import { ApkUpdateSection } from './dev-section/apk-update.tsx'
 import { DEV_SECTION_CSS } from './dev-section/dev-section.css.ts'
 import { MARKETPLACE_CSS } from './marketplace/marketplace.css.ts'
 import { registerMarketplaceAction } from './marketplace/marketplace-entry.tsx'
+import { installAboutEntry } from './mobile/about-entry.ts'
+import { ABOUT_ENTRY_CSS } from './mobile/about-entry.css.ts'
+import { AboutSection } from './mobile/about-section.tsx'
 import { GeneralSettings } from './general-settings/GeneralSettings.tsx'
 import { GENERAL_SETTINGS_CSS } from './general-settings/general-settings.css.ts'
 import { tr } from './i18n.ts'
@@ -358,6 +361,18 @@ export function apply(ctx: ClientContext): void {
   // 「纸色 + 铜色」主题（等宽标题、1px 直角描边、38px 搜索框）。这里只做样式覆盖，
   // 把它拉到与本页其余分区同一套上游行规，不碰对方的行为与数据。
   ctx.effect(() => injectStyle('marketplace', MARKETPLACE_CSS), 'ui-responsive: marketplace row alignment')
+
+  // 「设置 → 通用」底部那行版本改成「关于」入口，点开看壳与引擎两个版本。
+  ctx.effect(() => injectStyle('about-entry', ABOUT_ENTRY_CSS), 'ui-responsive: about entry styles')
+  ctx.effect(() => installAboutEntry(), 'ui-responsive: about entry')
+
+  // 「关于」分区：入口在那行版本的位置（about-entry 点击时切到本分区）。
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'android-about',
+    order: 70,
+    label: () => tr('关于', 'About'),
+  }, AboutSection))
 
   // 插件市场入口：在「插件」页的「添加插件」下拉里。点选后发 `store` 命令回执，
   // 市场插件据此打开它的浮层；该浮层由 market-J-fullpage 补丁做成整页（满屏 + 返回页头）。
