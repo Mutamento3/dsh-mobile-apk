@@ -475,6 +475,10 @@ async function fetchMirror(path, timeoutMs = 20000) {
 }
 
 log('解析 Termux 索引（binary-' + TERMUX_PKG + '）…')
+// OUT_DIR 下面几个写点（Packages / .debs / snapshot.tar.xz）都假定它已存在。
+// 全新 checkout 里 .deploy-tmp 是空的（gitignore），不建目录就会在第一条 writeFileSync
+// 上抛 ENOENT，表现为「解析 Termux 索引」这一步失败——而这跟索引本身毫无关系。
+mkdirSync(OUT_DIR, { recursive: true })
 const gz = await fetchMirror(`/dists/stable/main/binary-${TERMUX_PKG}/Packages.gz`)
 const { gunzipSync } = await import('node:zlib') // 动态加载避免顶层依赖
 writeFileSync(INDEX_BODY, gunzipSync(gz.buf))
