@@ -36,7 +36,10 @@ internal object SourceMirror {
     USTC("mirrors.ustc.edu.cn", "中科大 USTC", "USTC"),
     ALIYUN("mirrors.aliyun.com", "阿里云", "Alibaba Cloud"),
     SJTU("mirror.sjtu.edu.cn", "上海交大", "SJTU"),
-    NJU("mirror.nju.edu.cn", "南京大学", "Nanjing University"),
+    // 设备实测（0.14.9 真机）：Termux 快照里这份片段叫 mirrors.nju.edu.cn（带 s），
+    // 写成 mirror.nju.edu.cn 会让 fragmentFile 找不到文件，循环到这一档就报
+    // 「运行时里找不到该镜像的配置片段，无法切换」——换源卡死在南京大学这一档。
+    NJU("mirrors.nju.edu.cn", "南京大学", "Nanjing University"),
     ZJU("mirrors.zju.edu.cn", "浙江大学", "Zhejiang University"),
   }
 

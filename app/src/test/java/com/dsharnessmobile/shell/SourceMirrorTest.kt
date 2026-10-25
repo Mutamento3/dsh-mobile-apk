@@ -3,6 +3,7 @@ package com.dsharnessmobile.shell
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -103,6 +104,38 @@ class SourceMirrorTest {
     val found = SourceMirror.fragmentFile(temp.root, SourceMirror.Mirror.TUNA)
     assertTrue("必须定位到分组内的片段", found != null && found.isFile)
     assertNull("缺失的镜像返回 null 而不是造一个路径", SourceMirror.fragmentFile(temp.root, SourceMirror.Mirror.NJU))
+  }
+
+  /**
+   * 真机 bug（0.14.9）：枚举里的文件名必须与 Termux 快照里的片段名逐字一致。
+   *
+   * 南京大学那档曾写成 mirror.nju.edu.cn，而快照里实际是 mirrors.nju.edu.cn（带 s）。
+   * 循环换源走到这一档就报「运行时里找不到该镜像的配置片段，无法切换」，
+   * 再点一下又跳过去，表现为「点几下就报错、换不过去」。
+   *
+   * 这里不硬编码清单，而是用真实快照里出现过的名字逐个建片段：
+   * 任何一项对不上就说明枚举与快照又开始漂了。
+   */
+  @Test
+  fun everyMirrorFileMatchesTheSnapshotFragmentName() {
+    // 2026-10-25 真机 files/usr/etc/termux/mirrors/chinese_mainland/ 的实际内容（含全部六个候选）。
+    val snapshotNames = setOf(
+      "mirrors.tuna.tsinghua.edu.cn",
+      "mirrors.ustc.edu.cn",
+      "mirrors.aliyun.com",
+      "mirror.sjtu.edu.cn",
+      "mirrors.nju.edu.cn",
+      "mirrors.zju.edu.cn",
+    )
+    val dir = File(temp.root, "etc/termux/mirrors/chinese_mainland")
+    dir.mkdirs()
+    for (name in snapshotNames) File(dir, name).writeText("MAIN=\"https://$name/termux/\"\n")
+    for (mirror in SourceMirror.Mirror.entries) {
+      assertNotNull(
+        "枚举值 " + mirror + "（" + mirror.file + "）在快照里找不到同名片段——换源走到这一档必然报「找不到配置片段」",
+        SourceMirror.fragmentFile(temp.root, mirror),
+      )
+    }
   }
 
 

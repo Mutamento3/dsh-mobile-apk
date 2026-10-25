@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -113,6 +114,53 @@ class SourceSettingsTest {
       "认不出的意图不得写坏源文件",
       SourceSettings.sourcesListFile(after).readText().contains("factory.invalid"),
     )
+  }
+
+  /**
+   * 真机 bug（0.14.9）全链路复现：拿**真实快照里的片段名**建 prefix，然后走 nextMirror 的
+   * 实际选段逻辑（fragmentFile + parseMainUrl）逐档切换。
+   *
+   * 与上面那条的区别：那条用 m.file 自己建片段，枚举写错也自洽（永远绿）。这条用外部给定的
+   * 真名，所以「枚举与快照漂移」能被抓到——南京大学写成 mirror.nju.edu.cn 时，
+   * 循环到这一档 fragmentFile 返回 null，switchTo 就会报「找不到配置片段」。
+   */
+  @Test
+  fun everyEnumEntryResolvesAgainstRealSnapshotFragmentNames() {
+    val usr = File(temp.root, "usr")
+    val dir = File(usr, "etc/termux/mirrors/${SourceMirror.GROUP_CHINESE_MAINLAND}")
+    dir.mkdirs()
+    File(usr, "etc/apt").mkdirs()
+    // 2026-10-25 真机与模拟器 files/usr/etc/termux/mirrors/chinese_mainland/ 的实际文件名。
+    val realNames = listOf(
+      "mirrors.tuna.tsinghua.edu.cn",
+      "mirrors.ustc.edu.cn",
+      "mirrors.aliyun.com",
+      "mirror.sjtu.edu.cn",
+      "mirrors.nju.edu.cn",
+      "mirrors.zju.edu.cn",
+    )
+    for (name in realNames) File(dir, name).writeText("WEIGHT=1\nMAIN=\"https://$name/termux/termux-main\"\n")
+    val links = FakeLinks()
+    // 逐档走一遍循环，每一档都必须能定位到片段并解析出地址。
+    for (round in SourceMirror.Mirror.entries.indices) {
+      val target = SourceSettings.nextMirror(usr, links)
+      val fragment = SourceMirror.fragmentFile(usr, target)
+      assertNotNull(
+        "第 " + round + " 轮选到 " + target.name + "（" + target.file + "），快照里没有这个片段名——" +
+          "换源走到这一档就会报「运行时里找不到该镜像的配置片段」",
+        fragment,
+      )
+      assertNotNull(
+        "第 " + round + " 轮选到 " + target.name + " 的片段里没有可解析的 MAIN=",
+        SourceMirror.parseMainUrl(fragment!!.readText()),
+      )
+      // 模拟 switchTo 写回：只有成功写到 chosen_mirrors，下一轮才会从这一档往后走。
+      SourceMirror.writeChosenMirror(usr, target, links)
+      SourceMirror.replaceAtomically(
+        SourceSettings.sourcesListFile(usr),
+        SourceMirror.sourcesListContent("https://${target.file}/termux/termux-main"),
+      )
+    }
   }
 
   @Test
