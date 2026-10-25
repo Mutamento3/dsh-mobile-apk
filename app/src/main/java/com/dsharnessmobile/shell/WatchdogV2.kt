@@ -396,7 +396,8 @@ object WatchdogV2 {
     }
     // ── undo 必须先于熔断锁存（0.14.1 修复的锁存盲区）────────────────────────
     // 缺陷形态（存量，非本迭代引入）：[tripped] 曾排在本分支之前，而它一旦为真即**永久** HOLD，
-    // 只有 HEALTHY 探活或 EngineStartFlow 的唯一一处 `WatchdogV2.reset()` 能解。而熔断在
+    // 只有 HEALTHY 探活能解（[recordProbe] 在健康拍把三个计数清零）。生产面没有任何
+    // `WatchdogV2.reset()` 调用点：那个函数只给 JVM 单测清场用。而熔断在
     // effectiveFailureCount >= 12 时打开（12 拍 x 5s = 60s），却小于 START_COOLDOWN_MS = 90s 的
     // 启动预算——于是「托管子进程仍存活、但 HTTP 永远不健康」（半死引擎 / 插件树挂住）这条路径上，
     // 计数器先撞满 12，本函数此后**再也不会求值 undoReady()**：自动 undo 与自动重启同时永久失效。
