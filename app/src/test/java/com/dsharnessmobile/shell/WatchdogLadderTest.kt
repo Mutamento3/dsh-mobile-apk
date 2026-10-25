@@ -1,7 +1,6 @@
 package com.dsharnessmobile.shell
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -431,12 +430,41 @@ class WatchdogLadderTest {
   fun onlyStrongLogEvidenceJustifiesDestructiveRecovery() {
     assertTrue("EADDRINUSE = 我们自己起不来，等下去不会好", WatchdogV2.strongEvidenceForDestructiveRecovery("Error: listen EADDRINUSE :::3080"))
     assertTrue("插件树装配失败 = 引擎没起来，不自愈", WatchdogV2.strongEvidenceForDestructiveRecovery("plugin tree failed to load"))
-    assertTrue("uncaught = 进程已不可信", WatchdogV2.strongEvidenceForDestructiveRecovery("Uncaught Exception: boom"))
+    assertTrue("uncaught = 进程已不可信", WatchdogV2.strongEvidenceForDestructiveRecovery("UncaughtException: boom"))
+    // 2026-10-26 评审：判据字面量与 logSignatureOf 同一份，不得放宽成「任何含 uncaught 的行」。
+    assertFalse("普通日志里出现 uncaught 字样不得放行", WatchdogV2.strongEvidenceForDestructiveRecovery("plugin log: handled uncaught promise rejection"))
     // 反证：普通日志 / 空 / null 一律**不**构成破坏性动作的理由。
     assertFalse("普通日志不得放行", WatchdogV2.strongEvidenceForDestructiveRecovery("turn started"))
     assertFalse("空串不得放行", WatchdogV2.strongEvidenceForDestructiveRecovery(""))
     assertFalse("null 不得放行", WatchdogV2.strongEvidenceForDestructiveRecovery(null))
     assertFalse("只是慢（无日志证据）不得放行", WatchdogV2.strongEvidenceForDestructiveRecovery("dsh web: listening on 3080"))
+  }
+
+  /**
+   * 纯函数（2026-10-26 评审）：证据只认**上一次 HEALTHY 之后**的字节。
+   *
+   * 真因：同一代日志可以先出现 EADDRINUSE、随后引擎换临时端口重试成功转 HEALTHY（spawn 前
+   * 预探活只有 300ms 快照）；那句 EADDRINUSE 会留在 4KB 窗口里。若此后一次长 turn 让探活
+   * 超时，陈旧证据会把「解除慢探活否决」从 90 秒提前到 30 秒，强杀一个健康但忙的引擎。
+   */
+  @Test
+  fun evidenceWindowStartsAfterTheLastHealthyPoint() {
+    val cap = 4096
+    assertEquals("没有健康点：常规尾部窗口", 1000L, WatchdogV2.tailWindowStart(5096L, cap, 0L))
+    assertEquals("健康点之后的字节才作数", 5000L, WatchdogV2.tailWindowStart(6000L, cap, 5000L))
+    assertEquals("健康点就是文件末尾：没有新字节，窗口为空", 6000L, WatchdogV2.tailWindowStart(6000L, cap, 6000L))
+    assertEquals("水位超过当前长度（轮转/重建）：整份都算新的", 0L, WatchdogV2.tailWindowStart(800L, cap, 5000L))
+    assertEquals("空文件：从 0 读", 0L, WatchdogV2.tailWindowStart(0L, cap, 1234L))
+  }
+
+  /** 纯函数：只有 HEALTHY 抬水位；文件变短（轮转/重建）一律跟到新长度。 */
+  @Test
+  fun healthyMarkAdvancesOnlyOnHealthyAndFollowsRotation() {
+    val healthy = WatchdogV2.ProbeState.HEALTHY
+    val degraded = WatchdogV2.ProbeState.DEGRADED_HTTP
+    assertEquals("健康拍抬到当前长度", 6000L, WatchdogV2.nextHealthyLogMark(healthy, 6000L, 1000L))
+    assertEquals("非健康拍不动水位", 1000L, WatchdogV2.nextHealthyLogMark(degraded, 6000L, 1000L))
+    assertEquals("日志变短（轮转/重建）跟到新长度", 800L, WatchdogV2.nextHealthyLogMark(degraded, 800L, 5000L))
   }
 
   @Test
@@ -509,13 +537,16 @@ class WatchdogLadderTest {
       feedProbe = {},
       consumeMarkers = {},
       refreshWake = {},
-      undoReady = { true },
+      undoReady = { false }, // 生产口径（EngineService.kt: undoReady 恒 false）
     )
-    assertNotEquals(
-      "EADDRINUSE 原文在场时不得再 HOLD（强杀自己起不来的引擎正是唯一出路）",
-      WatchdogV2.TickAction.HOLD,
+    // 生产面无自动 undo，落到的是 RESTART 与 force=true 这条分支——断言必须断到这里，
+    // 否则只断言「不是 HOLD」会被 UNDO 蒙混过关（2026-10-26 评审）。
+    assertEquals(
+      "EADDRINUSE 原文在场时必须直接走受控重启（自己起不来，等下去不会好）",
+      WatchdogV2.TickAction.RESTART,
       plan.action,
     )
+    assertTrue("托管子进程仍在场 ⇒ 必须 force 换进程", plan.force)
   }
 
   /** 接线（F，同上）：插件树装配失败的原文尾同样必须解除慢探活 HOLD。 */
@@ -539,13 +570,14 @@ class WatchdogLadderTest {
       feedProbe = {},
       consumeMarkers = {},
       refreshWake = {},
-      undoReady = { true },
+      undoReady = { false },
     )
-    assertNotEquals(
-      "插件树失败原文在场时不得再 HOLD（引擎没起来且不会自愈）",
-      WatchdogV2.TickAction.HOLD,
+    assertEquals(
+      "插件树失败原文在场时必须直接走受控重启（引擎没起来且不会自愈）",
+      WatchdogV2.TickAction.RESTART,
       plan.action,
     )
+    assertTrue("托管子进程仍在场 ⇒ 必须 force 换进程", plan.force)
   }
 
   /** 反证（F）：端口**由他进程持有**时必须 HOLD —— 重启我们不解决问题。 */
