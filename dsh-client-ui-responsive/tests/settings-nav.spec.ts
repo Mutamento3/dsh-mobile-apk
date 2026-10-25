@@ -394,6 +394,40 @@ describe('逐级返回', () => {
     expect(handle.panel.lastElementChild).toBe(content)
     expect(handle.panel.querySelectorAll('[data-dsh-settings-back]')).toHaveLength(1)
   })
+
+  // 真机 bug（0.14.9）：反复往返时的「串页」。上面的用例每轮进的是**同一个**分区，
+  // 所以看不出来；换成两个不同分区就能暴露 —— 第二遍返回会先弹回上一次打开过的二级页。
+  it('进 A 返回、再进 B 返回：两次都必须直接回首页，不得跳回上一次的分区', async () => {
+    const handle = buildPanel(['通用设置', '关于'], '通用设置')
+    nav = new MobileSettingsNav()
+    nav.attach()
+    handle.rows.get('通用设置')!.click()
+    await settle()
+    back(handle.panel).click()
+    await settle()
+    expect(handle.panel.getAttribute('data-dsh-settings-level')).toBe('home')
+
+    handle.rows.get('关于')!.click()
+    await settle()
+    expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent).toBe('关于')
+    back(handle.panel).click()
+    await settle()
+    expect(handle.panel.getAttribute('data-dsh-settings-level'), '不得弹回上一次的「通用设置」').toBe('home')
+    expect(handle.panel.querySelector('[data-dsh-settings-bar-title]')!.textContent).toBe('设置')
+  })
+
+  it('同一分区连进两轮，第二轮返回也必须直接回首页', async () => {
+    const handle = buildPanel(['通用设置', '关于'], '通用设置')
+    nav = new MobileSettingsNav()
+    nav.attach()
+    for (let round = 0; round < 2; round += 1) {
+      handle.rows.get('通用设置')!.click()
+      await settle()
+      back(handle.panel).click()
+      await settle()
+      expect(handle.panel.getAttribute('data-dsh-settings-level'), '第 ' + (round + 1) + ' 轮').toBe('home')
+    }
+  })
 })
 
 describe('形态与生命周期边界', () => {
