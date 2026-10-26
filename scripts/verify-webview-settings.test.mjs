@@ -9,10 +9,15 @@ const { JSDOM } = require('jsdom');
 const source = readFileSync(new URL('./verify-webview-015.mjs', import.meta.url), 'utf8');
 const declaration = source.split('\n').find(line => line.startsWith('const RESET_BUTTON_PROBE ='));
 const probe = vm.runInNewContext('const MOBILE_FORM_MAX_WIDTH = 767; ' + declaration + '; RESET_BUTTON_PROBE');
+const fileDeclaration = source.split('\n').find(line => line.startsWith('const FILE_BUTTON_PROBE ='));
+const fileProbe = vm.runInNewContext(fileDeclaration + '; FILE_BUTTON_PROBE');
 
-async function exercise({ entry = 'more', control = true, reset = true, disabled = false } = {}) {
+async function exercise({ entry = 'more', control = true, reset = true, disabled = false, locale = 'zh', decoy = false } = {}) {
   const dom = new JSDOM('<body></body>', { runScripts: 'outside-only' });
   const { window: w } = dom;
+  const labels = locale === 'en'
+    ? { control: 'Phone control', reset: 'Reset link', settings: 'Settings', more: 'More', account: 'Account menu' }
+    : { control: '手机控制', reset: '重置链接', settings: '设置', more: '更多', account: '账号菜单' };
   Object.defineProperty(w, 'innerWidth', { value: 1067 });
   w.PointerEvent = w.MouseEvent;
   w.setTimeout = callback => { queueMicrotask(callback); return 0; };
@@ -31,11 +36,11 @@ async function exercise({ entry = 'more', control = true, reset = true, disabled
     settingsOpened++;
     const dialog = w.document.createElement('div');
     dialog.setAttribute('role', 'dialog');
-    if (control) dialog.append(button('手机控制', () => {
+    if (control) dialog.append(button(labels.control, () => {
       const section = w.document.createElement('section');
       section.id = 'dsh-phone-control-title';
       if (reset) {
-        const b = button('重置链接');
+        const b = button(labels.reset);
         b.disabled = disabled;
         section.append(b);
       }
@@ -44,12 +49,13 @@ async function exercise({ entry = 'more', control = true, reset = true, disabled
     w.document.body.append(dialog);
   };
   if (entry === 'direct') {
-    const settings = button('设置', openSettings);
-    settings.setAttribute('aria-label', '设置');
+    const settings = button(labels.settings, openSettings);
+    settings.setAttribute('aria-label', labels.settings);
     w.document.body.append(settings);
   } else if (entry === 'more') {
-    const more = button('更多', () => w.document.body.append(button('设置', openSettings, 'menuitem')));
-    more.setAttribute('aria-label', '账号菜单');
+    if (decoy) w.document.body.append(button(labels.more));
+    const more = button(labels.more, () => w.document.body.append(button(labels.settings, openSettings, 'menuitem')));
+    more.setAttribute('aria-label', labels.account);
     w.document.body.append(more);
   }
   try { return { result: await w.eval(probe), settingsOpened }; }
@@ -80,4 +86,40 @@ test('negative control: missing reset button still fails', async () => {
 });
 test('disabled reset remains disabled in the returned device verdict', async () => {
   assert.equal((await exercise({ disabled: true })).result.disabled, true);
+});
+
+test('English account menu reaches settings despite another More button', async () => {
+  const { result, settingsOpened } = await exercise({ locale: 'en', decoy: true });
+  assert.equal(settingsOpened, 1);
+  assert.equal(result.present, true);
+  assert.deepEqual(Array.from(result.steps), ['more', 'settings', 'tab']);
+});
+
+test('English direct settings entry remains supported', async () => {
+  const { result } = await exercise({ locale: 'en', entry: 'direct' });
+  assert.equal(result.present, true);
+});
+
+test('English missing and disabled reset controls retain their failure verdicts', async () => {
+  assert.equal((await exercise({ locale: 'en', reset: false })).result, 'button-absent');
+  assert.equal((await exercise({ locale: 'en', disabled: true })).result.disabled, true);
+});
+
+for (const label of ['添加文件或调用指令', 'Add files or run commands']) {
+  test('attachment probe accepts the live accessible name: ' + label, async () => {
+    const dom = new JSDOM('<button></button>', { runScripts: 'outside-only' });
+    try {
+      dom.window.document.querySelector('button').setAttribute('aria-label', label);
+      assert.equal(await dom.window.eval(fileProbe), true);
+    } finally { dom.window.close(); }
+  });
+}
+
+test('attachment probe still rejects missing and hidden controls', async () => {
+  const dom = new JSDOM('<button aria-label="Add files or run commands" style="display:none"></button>', { runScripts: 'outside-only' });
+  try {
+    assert.equal(await dom.window.eval(fileProbe), false);
+    dom.window.document.querySelector('button').remove();
+    assert.equal(await dom.window.eval(fileProbe), 'absent');
+  } finally { dom.window.close(); }
 });
