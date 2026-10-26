@@ -1682,6 +1682,8 @@ flowchart TD
 
 ### 构建、门禁与设备验收
 
+Hash-bound build inputs (#597): `.gitattributes` preserves official patches, distributed SDK licenses, the verbatim browser stylesheet, captured fixtures, cross-language screen-scope fixtures and their registry/overlay identity manifests as exact bytes. `scripts/check-upstream-patch-bytes.test.mjs` verifies the registered patch and capture digests against actual files and Git checkout filtering with autocrlf enabled.
+
 FileProvider XML path regression coverage: `scripts/check-manifest-hardening.test.mjs` invokes `scripts/check-manifest-hardening.mjs` against complete fixture trees. Attribute decoding precedes range classification; encoded broad roots must activate the same caller allowlist as literal roots.
 
 #### B01 构建链与快照注入
