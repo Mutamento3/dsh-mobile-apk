@@ -96,6 +96,63 @@ const POLYFILLS = [
   })();`,
   // Array.fromAsync: Chrome 121+；文档/会话分页装配可能用到。
   `if(typeof Array.fromAsync==='undefined'){Array.fromAsync=async function(items,mapFn){var out=[],i=0;for await (var v of items){out.push(mapFn?await mapFn(v,i++):v)}return out}}`,
+
+  // ── ES2023 change-array-by-copy (2026-10-26，用户报障「模型选择不可用」) ──────────────
+  // 现象（Android 应用内 WebView，内核 < Chrome 110）：输入框控件行的模型胶囊不显示，点开 /model
+  // 只有「搜索模型…」+ 红字 groups.toSorted is not a function，没有任何模型行。
+  // 真因：toSorted / toReversed / toSpliced / Array.prototype.with 随 V8 11.0（Chrome/WebView 110）
+  // 发布，旧内核上是 undefined。上游客户端包**在 render 里直接调** toSorted
+  // （ui-model-selection 的模型分组排序、ui-settings-models 设置→模型行排序、ui-schedule 定时任务
+  // 排序），render 抛错被 slot 错误边界吞成空渲染，入口看起来像被下掉了；设置页与定时任务页同族
+  // 调用同样会崩。
+  // 为什么必须补在注入层：这是**运行时内建缺口**，不是语法——check-browser-syntax-floor 的 esbuild
+  // 降级面只看语法，看不见内建是否存在；只有能力存在性判断能挡住它，且补一次覆盖全部调用点与
+  // 后续同名新增（逐个补上游 minified 产物要逐版本重锚，且漏一处就再崩一次）。
+  // 口径 = ECMAScript 规范：ToObject(this) + LengthOfArrayLike，逐个 CreateDataProperty（稀疏洞被
+  // 物化成 undefined 值，与原生一致），原数组绝不被改写，参数校验先于任何拷贝；四方法各自独立判缺
+  // （只缺其一的实现也能补齐）。语义逐例对照原生（稀疏数组 / 比较器非法 / 越界 RangeError）见
+  // scripts/array-copy-polyfills.test.mjs。
+  `(function(){
+    var AP=Array.prototype;
+    if(!AP)return;
+    if(typeof AP.toSorted!=='undefined'&&typeof AP.toReversed!=='undefined'&&typeof AP.toSpliced!=='undefined'&&typeof AP.with!=='undefined')return;
+    var copyOf=function(o){var len=o.length>>>0,out=new Array(len),i=0;for(;i<len;i++){out[i]=o[i]}return out};
+    var checkedCmp=function(cmp){if(cmp!==undefined&&typeof cmp!=='function')throw new TypeError('The comparison function must be either a function or undefined');return cmp};
+    var toInt=function(n){var x=Number(n);if(x!==x)return 0;if(x===Infinity||x===-Infinity)return x;return x<0?Math.ceil(x):Math.floor(x)};
+    if(typeof AP.toSorted==='undefined'){AP.toSorted=function(cmp){checkedCmp(cmp);var out=copyOf(Object(this));return AP.sort.call(out,cmp)}}
+    if(typeof AP.toReversed==='undefined'){AP.toReversed=function(){var src=copyOf(Object(this)),len=src.length,out=new Array(len),i=0;for(;i<len;i++){out[i]=src[len-1-i]}return out}}
+    if(typeof AP.toSpliced==='undefined'){AP.toSpliced=function(){var out=copyOf(Object(this));AP.splice.apply(out,arguments);return out}}
+    if(typeof AP.with==='undefined'){AP.with=function(index,value){var o=Object(this),len=o.length>>>0,rel=toInt(index),actual=rel<0?len+rel:rel;if(actual<0||actual>=len)throw new RangeError('Invalid index');var out=copyOf(o);out[actual]=value;return out}}
+  })();`,
+
+  // ── Array.prototype.findLast / findLastIndex (2026-10-26 同批审计) ─────────────────
+  // ES2022（Chrome 97+），比上一段早一代，但同样在旧内核缺位。**与本批报障的 toSorted 无关**，
+  // 别把两件事混成一条归因：补它是因为同一次审计发现它落在产品声明的支持范围里。
+  // 在售快照（0.2.1-rc.2 树，93 个 client.js）逐文件实测：findLast 命中 ui-chat 6 处、
+  // ui-conversation 3 处、ui-trajectory 1 处、experimental-session-inspector 1 处；findLastIndex
+  // 命中 ui-chat 1 处、ui-trajectory 1 处。调用点都在 render 路径（ui-chat 的 pendingInputs 与
+  // 段查找、responseText 归并；ui-conversation 的节点文本回溯与 lexical 的 getParents().findLast；
+  // ui-trajectory 的 eventNodes.findLastIndex；inspector 的条目查找）。设备负控臂另拍到一处已被
+  // 内联进批组合的调用：client-store 的 LegacySliceBuilder.rebuildPartial 报
+  // 「[...values()].sort(...).findLast is not a function」，表现为 subscriber failed（静默降级）。
+  // 为什么必须补：产品语法下限是 chrome87（scripts/check-browser-syntax-floor.mjs 的 TARGET_LOW），
+  // 也就是说 Chromium 87-96 **在支持范围内**却没有这两个方法，崩法与 toSorted 同型（render 抛错被
+  // slot 错误边界吞成空渲染）。补法同上：能力存在性判断、两个方法各自独立判缺、不改写接收者。
+  // 语义对照见 scripts/array-copy-polyfills.test.mjs（稀疏洞按 undefined 参与、thisArg、非函数
+  // 断言抛 TypeError、泛型接收者）。
+  `(function(){
+    var AP=Array.prototype;
+    if(!AP)return;
+    if(typeof AP.findLast!=='undefined'&&typeof AP.findLastIndex!=='undefined')return;
+    var scan=function(o,predicate,thisArg,wantIndex){
+      var len=o.length>>>0,i=len-1,v;
+      for(;i>=0;i--){v=o[i];if(predicate.call(thisArg,v,i,o))return wantIndex?i:v}
+      return wantIndex?-1:void 0;
+    };
+    var checked=function(predicate){if(typeof predicate!=='function')throw new TypeError('predicate must be a function');return predicate};
+    if(typeof AP.findLast==='undefined'){AP.findLast=function(predicate,thisArg){var o=Object(this);checked(predicate);return scan(o,predicate,thisArg,false)}}
+    if(typeof AP.findLastIndex==='undefined'){AP.findLastIndex=function(predicate,thisArg){var o=Object(this);checked(predicate);return scan(o,predicate,thisArg,true)}}
+  })();`,
 ];
 
 // Boot watchdog (2026-08-17, issue #36): when the page stays on "Loading plugins…" for over 40s,

@@ -164,6 +164,21 @@ const checks = [
   ['polyfill: Array.fromAsync 可用', "typeof Array.fromAsync === 'function'", true],
   ['polyfill: Set.prototype.union 可用', "typeof Set.prototype.union === 'function'", true],
   ['polyfill: Set.prototype.isDisjointFrom 可用', "typeof Set.prototype.isDisjointFrom === 'function'", true],
+  // 0.14.9 追加：ES2023 change-array-by-copy（2026-10-26 用户报障「模型选择不可用」——
+  // 旧内核缺 toSorted，render 抛错被 slot 错误边界吞成空渲染，模型胶囊看起来被下掉了）。
+  // 该组 API **恰好在 Chrome 110 落地，而模拟器 WebView 就是 110**：这四条在本机是原生在应答，
+  // 单看「是函数」证明不了注入层。所以先断言注入文本真的进了页面（送不到即红），再断言能力可用；
+  // 「删掉原生后仍能用」的语义对照在 dsh-host-web-compat/scripts/array-copy-polyfills.test.mjs。
+  ['polyfill: 注入层送达 ES2023 change-array-by-copy 片段（页面内联脚本含 toSorted/with 实现）',
+    "(() => { const rows = [...document.querySelectorAll('script:not([src])')].map(s => s.textContent || ''); return rows.some(t => t.includes('AP.toSorted=function')) && rows.some(t => t.includes('AP.with=function')); })()", true],
+  ['polyfill: Array.prototype.toSorted 可用（缺它即模型胶囊/设置模型行/定时任务排序崩）', "typeof [].toSorted === 'function'", true],
+  ['polyfill: Array.prototype.toReversed 可用', "typeof [].toReversed === 'function'", true],
+  ['polyfill: Array.prototype.toSpliced 可用', "typeof [].toSpliced === 'function'", true],
+  ['polyfill: Array.prototype.with 可用', "typeof [].with === 'function'", true],
+  // 同批审计补的 ES2022 对（Chrome 97+；产品语法下限是 chrome87，87-96 在支持范围内却没有它们）。
+  // 与本批报障的 toSorted 无关，别混成一条归因。
+  ['polyfill: Array.prototype.findLast 可用', "typeof [].findLast === 'function'", true],
+  ['polyfill: Array.prototype.findLastIndex 可用', "typeof [].findLastIndex === 'function'", true],
   ['Iterator 迭代器助手可用（map/toArray 跑通）', "[1,2,3].values().map(v => v * 2).toArray().join(',')", '2,4,6'],
   ['页面内全部内联脚本可解析（装配语法回归）',
     "(() => { const bad = []; for (const s of document.querySelectorAll('script:not([src])')) { const body = s.textContent || ''; if (body.trim() === '') continue; try { new Function(body) } catch (e) { bad.push((body.slice(0, 48).replace(/\\s+/g, ' ')) + ' :: ' + e.message) } } return bad; })()",
