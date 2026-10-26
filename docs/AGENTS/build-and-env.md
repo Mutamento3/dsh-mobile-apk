@@ -14,7 +14,7 @@
 
 ## 2. 构建与验证命令
 
-Build scripts and profiles use LF so POSIX consumers and exact-context tests agree across checkouts. Official patches, captured patch fixtures, the patch registry, the engine overlay manifest and the legacy recovery core retain exact bytes with `-text`. `node --test scripts/check-upstream-patch-bytes.test.mjs` checks actual bytes and checkout filtering with `core.autocrlf=true`; PR CI runs this regression before build gates.
+Build scripts and profiles use LF so POSIX consumers and exact-context tests agree across checkouts. Official patches, captured patch fixtures, the patch registry, the engine overlay manifest, distributed license texts and the legacy recovery core retain exact bytes with `-text`. `node --test scripts/check-upstream-patch-bytes.test.mjs` checks actual bytes and checkout filtering with `core.autocrlf=true`; PR CI runs this regression before build gates.
 
 ```powershell
 # 一键双 ABI（协调仓库根；快照→注入→门禁→gradle→out/）：

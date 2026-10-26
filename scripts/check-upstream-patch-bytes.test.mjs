@@ -25,6 +25,15 @@ const filtered = path => execFileSync('git', ['-c', 'core.autocrlf=true', 'cat-f
   { cwd: root, maxBuffer: 32 * 1024 * 1024 })
 const captured = JSON.parse(readFileSync(join(root, 'scripts/patches/tests/fixtures/manifest.json'), 'utf8'))
 
+test('registered Android SDK license texts retain their digests through checkout filtering', () => {
+  const matrix = JSON.parse(readFileSync(join(root, 'scripts/third-party-licenses.json'), 'utf8'))
+  for (const component of matrix.androidComponents) {
+    const path = 'LICENSES/' + component.licenseText
+    assert.equal(sha256(readFileSync(join(root, path))), component.licenseSha256, path)
+    assert.equal(sha256(filtered(path)), component.licenseSha256, 'autocrlf checkout: ' + path)
+  }
+})
+
 test('captured build input manifests retain their declared identities', () => {
   for (const [path, expected] of [
     ['scripts/patches/registry.json', captured.capture.registrySha256],
