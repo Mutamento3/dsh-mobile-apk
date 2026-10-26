@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
     super.attachBaseContext(AppLanguage.wrap(newBase))
   }
 
+  private var clipboardRead: ClipboardReadController? = null
   internal lateinit var webView: WebView
     private set
   /** Lazily-created untrusted BrowserHost surface, geometrically owned by the Files sidebar stage. */
@@ -943,6 +944,7 @@ class MainActivity : ComponentActivity() {
   }
 
   override fun onPause() {
+    clipboardRead?.cancel()
     // 退后台不继续解码视频（省电、避免后台播放）；回前台且仍在等引擎时续播。
     splashOverlay?.pause()
     pageRecovery.pause()
@@ -1011,6 +1013,7 @@ class MainActivity : ComponentActivity() {
   }
 
   override fun onDestroy() {
+    clipboardRead?.cancel()
     // 视频必须与播放器一起在这里终结；否则 Activity 重建后播放器仍在后台解码。
     finishSplash("destroy", animate = false)
     splashOverlay = null
@@ -1271,6 +1274,7 @@ class MainActivity : ComponentActivity() {
        */
       override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
         super.onPageStarted(view, url, favicon)
+        clipboardRead?.cancel()
         if (isEngineSource(url)) enginePageFailed = false
         // 新文档：上一文档的层栈信号作废（页面插件在新文档里重新推）。
         if (isEngineSource(url)) backGateState.onPageStarted()
@@ -1448,6 +1452,13 @@ class MainActivity : ComponentActivity() {
         onSettingsPathRequest = { engineManager.settingsDocumentPath() },
         onExportSettingsDocument = { engineManager.settingsDocumentExport() },
         onCopyTextRequest = { text -> copyTextNative(text) },
+        onCancelClipboardText = { requestId -> runOnUiThread { clipboardRead?.cancel(requestId) } },
+        onRequestClipboardText = { requestId -> runOnUiThread {
+          val controller = clipboardRead ?: ClipboardReadController(
+            this, { if (::webView.isInitialized) webView else null }, { isEngineSource(it) },
+          ).also { clipboardRead = it }
+          controller.request(requestId)
+        } },
         // 0.14.6：设置页「检查更新」——动作与引导页按钮共用同一状态机（ApkUpdateController）。
         onApkUpdate = { action -> apkUpdate.handleBridgeAction(action) },
         pickToken = pickToken,
