@@ -29,6 +29,7 @@ internal class ClipboardReadController(
     val url = view.url ?: return
     if (!trusted(url) || !activity.hasWindowFocus() || activity.isFinishing || activity.isDestroyed) return
     if (pending != null) {
+      // A busy reply must not replace or invalidate the first consent request.
       reply(view, requestId, JSONObject().put("ok", false).put("reason", "busy"))
       return
     }

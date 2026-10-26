@@ -21,7 +21,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function setup(locale = 'en') {
+async function setup(locale = 'en', onboarding = false) {
   document.documentElement.lang = locale
   const zh = locale === 'zh'
   const host = document.createElement('div')
@@ -31,13 +31,14 @@ async function setup(locale = 'en') {
     const [key, setKey] = useState('')
     const [url, setUrl] = useState('')
     const [models, setModels] = useState(['existing-one', 'existing-two'])
-    return <section data-dsh-settings-dialog=""><div>
+    return <section data-dsh-settings-dialog={onboarding ? undefined : ''}
+      role={onboarding ? 'dialog' : undefined} aria-modal={onboarding ? true : undefined}><div>
       <input aria-label={zh ? 'API 密钥' : 'API key'} type="password" value={key} onChange={e => setKey(e.target.value)} />
       <details><input aria-label={zh ? 'API 地址' : 'Base URL'} value={url} onChange={e => setUrl(e.target.value)} />
         {models.map((model, i) => <input key={i} aria-label={(zh ? '模型 ID ' : 'Model ID ') + (i + 1)} value={model}
           onChange={e => setModels(rows => rows.map((v, n) => n === i ? e.target.value : v))} />)}
       </details>
-      <button onClick={saves}>{zh ? '保存' : 'Apply'}</button>
+      <button onClick={saves}>{onboarding ? (zh ? '保存并继续' : 'Save and continue') : (zh ? '保存' : 'Apply')}</button>
       <output>{JSON.stringify({ key, url, models })}</output>
     </div></section>
   }
@@ -60,6 +61,38 @@ async function setup(locale = 'en') {
 }
 
 describe('clipboard configuration into React drafts', () => {
+  it.each(['en', 'zh'])('supports %s onboarding outside Settings without submitting credentials', async locale => {
+    const ui = await setup(locale, true)
+    expect(ui.host.querySelector('[data-dsh-settings-dialog]')).toBeNull()
+    await ui.click(locale === 'zh' ? '从剪贴板填充' : 'Fill from clipboard')
+    await ui.deliver('fixture-secret')
+    expect(ui.host.querySelector('[data-dsh-clipboard-draft]')!.textContent).not.toContain('fixture-secret')
+    await ui.click(locale === 'zh' ? '填入草稿' : 'Fill draft')
+    expect(ui.state().key).toBe('fixture-secret')
+    expect(ui.saves).not.toHaveBeenCalled()
+  })
+  it('reveals folded model fields during preview and puts filling before saving', async () => {
+    const ui = await setup('zh')
+    const details = ui.host.querySelector('details')!
+    expect(details.open).toBe(false)
+    const panel = ui.host.querySelector('[data-dsh-clipboard-draft]')!
+    const save = [...ui.host.querySelectorAll('button')].find(b => b.textContent === '保存')!
+    expect(panel.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await ui.click('从剪贴板填充')
+    await ui.deliver('{"baseURL":"https://example.test/v1","model":"preview-model"}')
+    expect(details.open).toBe(true)
+    expect(panel.textContent).toContain('地址：https://example.test/v1')
+    expect(panel.textContent).not.toContain('Base URL:')
+    expect(ui.state().models).toEqual(['existing-one', 'existing-two'])
+    expect(ui.saves).not.toHaveBeenCalled()
+  })
+  it('does not attach to unrelated nonmodal content with an API key input', async () => {
+    const ui = await setup('en', true)
+    dispose?.(); dispose = undefined
+    ui.host.querySelector('section')!.removeAttribute('aria-modal')
+    dispose = installClipboardModelDrafts()
+    expect(ui.host.querySelector('[data-dsh-clipboard-draft]')).toBeNull()
+  })
   it('does not read during mount, previews a masked key, then fills only the chosen model without saving', async () => {
     const ui = await setup()
     expect(ui.request).not.toHaveBeenCalled()

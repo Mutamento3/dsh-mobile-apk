@@ -13,6 +13,9 @@ describe('clipboard model configuration drafts', () => {
   it('accepts a plain single-line key', () => {
     expect(parseClipboardModelConfig(' test-key ')).toEqual({ apiKey: 'test-key' })
   })
+  it('trims blank leading and trailing lines around one plain key', () => {
+    expect(parseClipboardModelConfig('\n test-key\r\n')).toEqual({ apiKey: 'test-key' })
+  })
   for (const text of ['{"apiKey":"first","apiKey":"second"}', '{"apiKey":"first","api_key":"second"}',
     '{"apiKey":"first","api\\u004bey":"second"}', 'apiKey=first\nAPI_KEY=second']) {
     it('rejects duplicate or aliased fields: ' + text.replace(/first|second/g, 'redacted'), () => {
