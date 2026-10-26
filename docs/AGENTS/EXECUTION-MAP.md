@@ -727,6 +727,9 @@ Terminal output delivery (#591): `ConsoleSession` sends stripped PTY text throug
   - **不变量 1（不占用主按钮与相位）**：APK 更新只改次级提示/次级按钮，APK 路径上 `applyGuidePhase` / `primaryButton` 引用数 = 0；
     「更新中」不再出现在 APK 路径。反例锚点 `UpdateCheckerTest.kt:393`（`updateNeverHijacksPhaseOrPrimaryButton`）。
   - **不变量 2（收敛由发起方保证）**：超时兜底是发起方责任，`watchdog = Runnable { onTimeout() }`（`ApkUpdateAction.kt:261`）
+
+Metadata checks share UpdateCheckDeadline from acceptance through publication. Each source consumes a bounded child budget across redirects; active connections are disconnected at expiry, and publication rechecks the shared deadline under the epoch lock.
+
     / `armWatchdog`（`:321`）/ `disarmWatchdog`（`:326`）/ `onTimeout`（`:335`）/ `timeoutReason`（纯函数 `:607`）/ `release`（`:344`）；
     check（`:380`）与 download（`:401`）两处都 arm，任何终态必落如实文案。
     反例锚点 `UpdateCheckerTest.kt:364`（`timeoutAlwaysConvergesToHonestTerminalText`）。
@@ -2233,6 +2236,8 @@ app/src/main/java/com/dsharnessmobile/shell/SnapshotUserData.kt
 app/src/main/java/com/dsharnessmobile/shell/SnapshotFileMode.kt
 app/src/main/java/com/dsharnessmobile/shell/UpdateManager.kt
 app/src/main/java/com/dsharnessmobile/shell/UpdateChecker.kt
+app/src/main/java/com/dsharnessmobile/shell/UpdateCheckDeadline.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/UpdateCheckDeadlineDeviceTest.kt
 app/src/main/java/com/dsharnessmobile/shell/DownloadSaver.kt
 app/src/main/java/com/dsharnessmobile/shell/FactoryProfilePatch.kt
 app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt
