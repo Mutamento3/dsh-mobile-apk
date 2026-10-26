@@ -34,6 +34,15 @@ test('registered Android SDK license texts retain their digests through checkout
   }
 })
 
+test('the verbatim browser stylesheet retains its upstream identity through checkout filtering', () => {
+  const directory = 'dsh-client-ui-responsive/src/client/mobile/upstream-browser/'
+  const source = JSON.parse(readFileSync(join(root, directory, 'SOURCE.json'), 'utf8'))
+  const expected = source.files.find(file => file.source.endsWith('/view/Browser.module.css')).sha256
+  const path = directory + 'view/Browser.module.css'
+  assert.equal(sha256(readFileSync(join(root, path))), expected, path)
+  assert.equal(sha256(filtered(path)), expected, 'autocrlf checkout: ' + path)
+})
+
 test('captured build input manifests retain their declared identities', () => {
   for (const [path, expected] of [
     ['scripts/patches/registry.json', captured.capture.registrySha256],

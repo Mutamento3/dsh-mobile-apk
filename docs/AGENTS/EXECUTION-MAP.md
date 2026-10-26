@@ -1672,7 +1672,7 @@ flowchart TD
 
 ### 构建、门禁与设备验收
 
-Hash-bound build inputs (#597): `.gitattributes` preserves official patches, distributed SDK licenses, captured fixtures and their registry/overlay identity manifests as exact bytes. `scripts/check-upstream-patch-bytes.test.mjs` verifies the registered patch and capture digests against actual files and Git checkout filtering with autocrlf enabled.
+Hash-bound build inputs (#597): `.gitattributes` preserves official patches, distributed SDK licenses, the verbatim browser stylesheet, captured fixtures and their registry/overlay identity manifests as exact bytes. `scripts/check-upstream-patch-bytes.test.mjs` verifies the registered patch and capture digests against actual files and Git checkout filtering with autocrlf enabled.
 
 #### B01 构建链与快照注入
 
