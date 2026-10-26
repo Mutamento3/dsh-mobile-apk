@@ -173,7 +173,8 @@ const checks = [
   // 单看「是函数」证明不了注入层。所以先断言注入文本真的进了页面（送不到即红），再断言能力可用；
   // 「删掉原生后仍能用」的语义对照在 dsh-host-web-compat/scripts/array-copy-polyfills.test.mjs。
   ['polyfill: 注入层送达 ES2023 change-array-by-copy 片段（页面内联脚本含 toSorted/with 实现）',
-    "(() => { const rows = [...document.querySelectorAll('script:not([src])')].map(s => s.textContent || ''); return rows.some(t => t.includes('AP.toSorted=function')) && rows.some(t => t.includes('AP.with=function')); })()", true],
+    // 认「不可枚举安装」形态（issue #621）：赋值式安装会让 for...in 多出方法名，判据必须钉住修法本身。
+    "(() => { const rows = [...document.querySelectorAll('script:not([src])')].map(s => s.textContent || ''); return rows.some(t => t.includes(\"defNonEnum('toSorted'\")) && rows.some(t => t.includes(\"defNonEnum('with'\")); })()", true],
   ['polyfill: Array.prototype.toSorted 可用（缺它即模型胶囊/设置模型行/定时任务排序崩）', "typeof [].toSorted === 'function'", true],
   ['polyfill: Array.prototype.toReversed 可用', "typeof [].toReversed === 'function'", true],
   ['polyfill: Array.prototype.toSpliced 可用', "typeof [].toSpliced === 'function'", true],
