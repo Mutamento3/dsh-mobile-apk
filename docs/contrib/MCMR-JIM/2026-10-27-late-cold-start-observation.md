@@ -16,3 +16,8 @@ Validation:
 - Portrait and landscape WebView checks each pass 46 assertions. Both actual console tasks complete backup, modification, restoration, byte comparison and cleanup. Failed input preconditions remain recorded separately; the wide task resumes without recreating the existing directory, and final markers are read back.
 
 The telemetry import error seen in the engine log is a separate observation; this change does not establish or repair its cause and does not promise all cold starts finish inside 90 seconds. UI task inputs do not change with the final late-callback guard; that added race is covered by the final native suite. All packages are local development artifacts, not release candidates.
+
+
+## Main-targeted continuation
+
+The publication parent entered main while its startup child #644 closed without merging. The same startup runtime now continues independently against main. Its runtime blobs match the combined validation source 8184cfc5. That development package passed 14 Android tests (five ownership, five publication and four startup), portrait and landscape WebView checks (46 each), and actual backup/restore/byte-comparison/cleanup tasks in both orientations. The earlier 38 focused startup JVM results and controlled native negative remain valid for the unchanged startup inputs. No full suite or release-candidate rerun is claimed. The publication integration note records exact inputs, failed automation attempts and completed evidence.
