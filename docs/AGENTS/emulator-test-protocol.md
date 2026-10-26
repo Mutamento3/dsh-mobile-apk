@@ -138,6 +138,8 @@ adb -s <serial> logcat -d -s dsh-browser:V AndroidRuntime:E System.err:W
 
 ## 5. A 轨套件与连接
 
+For late cold-start recovery, run only `LateColdStartDeviceTest` with instrumentation's `-e class` filter. Its real-Activity fixture preserves and restores the repair preferences, uses an isolated loopback HTTP endpoint and does not replace engine credentials or the active engine log. Compare the same test APK against the affected shell and the fixed shell: late-page and resume cases must detect the old failure; new repair decisions, including those made during an HTTP request, must remain blocking. Then separately start the actual engine with the historical gate intact, record page readiness and ledger convergence, and perform real portrait/landscape tasks. Fixture HTTP success is not qualification of the actual engine or a release APK.
+
 For console keyboard changes, measure both the visual viewport and the native IME overlap: an edge-to-edge WebView can retain its full layout viewport behind the keyboard. Assert that the command input and Send control stay above the actual keyboard edge and that output retains a nonzero height. Cover portrait, landscape, already-resized native views, keyboard dismissal and a subsequent command.
 
 套件清单与参数约定见 `AGENTS.md` §2 的表（`verify-webview-015` / `verify-state-sync` / `verify-browser-host` / `verify-browser-panel` / `verify-vdisplay-viewer` / `verify-vdisplay-float` / `verify-engine-log-copy`）。

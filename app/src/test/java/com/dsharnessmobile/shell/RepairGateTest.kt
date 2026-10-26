@@ -12,6 +12,13 @@ import org.junit.Test
  * These tests pin both sides so a future "helpful" reset cannot turn retries into a loop.
  */
 class RepairGateTest {
+  @Test fun `passive observation finishes only the authorized cold attempt behind a stale gate`() {
+    assertTrue(mayObserveColdStart(required = false, attemptInFlight = false))
+    assertTrue(mayObserveColdStart(required = false, attemptInFlight = true))
+    assertTrue(mayObserveColdStart(required = true, attemptInFlight = true))
+    assertFalse(mayObserveColdStart(required = true, attemptInFlight = false))
+    assertFalse("Observing must not grant a retry", shouldScheduleAutomaticRetry(true, 2, false))
+  }
   private fun source(name: String): String = listOf(
     File("src/main/java/com/dsharnessmobile/shell", name),
     File("app/src/main/java/com/dsharnessmobile/shell", name),
