@@ -48,7 +48,8 @@ internal class EngineStartFlow(private val activity: MainActivity) {
     override fun run() {
       if (!canRunEngineWork()) return
       if (!activity.pageUiActive || activity.userClosedEngine) return
-      if (RepairState.required(activity) || RepairState.active || RepairState.retryPending) return
+      if (RepairState.active || RepairState.retryPending) return
+      if (!mayObserveColdStart(RepairState.required(activity), RepairState.coldStartAttemptInFlight())) return
       // CONTRACT §4 闸门：插件装配失败 latch 期内整条前台监控都不再动作。
       // 为什么是整条而不是只挡住 showWeb 那一支：latch 的语义是「页面已定性失败，等用户决策」；
       // 放行其余分支就会继续做「引擎未运行 → 自动恢复」的相位切换，把 Error 页顶掉——那是
@@ -70,6 +71,9 @@ internal class EngineStartFlow(private val activity: MainActivity) {
         val portAlive = EngineProbe.portReachable(500)
         activity.runOnUiThread {
           if (generation != monitorGeneration || !activity.pageUiActive || !canRunEngineWork()) return@runOnUiThread
+          // A repair decision made during the HTTP request revokes this observation too.
+          if (RepairState.retryPending ||
+            !mayObserveColdStart(RepairState.required(activity), RepairState.coldStartAttemptInFlight())) return@runOnUiThread
           if (flowOwnership.running) {
             engineMonitorHandler.postDelayed(monitor, 3_000)
             return@runOnUiThread

@@ -780,6 +780,11 @@ class MainActivity : ComponentActivity() {
     super.onResume()
     pageRecovery.resume()
     if (!RepairState.active && RepairState.required(this)) {
+      if (RepairState.coldStartAttemptInFlight()) {
+        // Resume passive observation of the one already authorized attempt. Do not spawn or reset retries.
+        engineFlow.startMonitor()
+        return
+      }
       showGuide()
       applyRepairRequiredGuide()
       return
