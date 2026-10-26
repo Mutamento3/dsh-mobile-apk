@@ -43,6 +43,20 @@ test('the verbatim browser stylesheet retains its upstream identity through chec
   assert.equal(sha256(filtered(path)), expected, 'autocrlf checkout: ' + path)
 })
 
+test('screen-scope fixture copies retain canonical bytes through checkout filtering', () => {
+  const source = readFileSync(join(root, 'plugins/dsh-android-bridge/test/fixtures/screen-scope-cases.json'), 'utf8')
+  const canonical = Buffer.from(JSON.stringify(JSON.parse(source), null, 2) + '\n')
+  for (const path of [
+    'plugins/dsh-android-bridge/test/fixtures/screen-scope-cases.json',
+    'app/src/test/resources/screen-scope/screen-scope-cases.json',
+  ]) {
+    const expected = sha256(path.startsWith('app/') ? canonical :
+      execFileSync('git', ['show', 'HEAD:' + path], { cwd: root }))
+    assert.equal(sha256(readFileSync(join(root, path))), expected, path)
+    assert.equal(sha256(filtered(path)), expected, 'autocrlf checkout: ' + path)
+  }
+})
+
 test('captured build input manifests retain their declared identities', () => {
   for (const [path, expected] of [
     ['scripts/patches/registry.json', captured.capture.registrySha256],
@@ -69,6 +83,7 @@ test('build profiles and exact-context patch inputs retain canonical newline byt
     'scripts/profile-web.cordis.patch.yml',
     'scripts/patches/tests/safe-mode-policy.test.mjs',
     'vendor/dsh-undo-savepoint/lib/core.mjs',
+    'dsh-host-web-compat/lib/index.js',
   ]) {
     const canonical = execFileSync('git', ['show', 'HEAD:' + path], { cwd: root, maxBuffer: 32 * 1024 * 1024 })
     assert.equal(sha256(readFileSync(join(root, path))), sha256(canonical), path)
