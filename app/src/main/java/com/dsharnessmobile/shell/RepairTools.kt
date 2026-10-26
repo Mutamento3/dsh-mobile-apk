@@ -326,9 +326,15 @@ internal class RepairToolsFs(
     if (!file.isFile) throw RepairFailure("not-regular", "目标不是普通文件：" + path)
     val max = limit.coerceIn(1, RepairTools.MAX_READ_LIMIT)
     val size = file.length()
+    // 2026-10-25 审计 M-R2：offset 超出文件大小必须立刻拒绝。旧实现只在 offset < size 时
+    // seek，越界 offset 会静默从文件头读——返回「offset=大值却带着文件头内容」的自相矛盾
+    // 载荷，模型按错位数据做修复判断。offset == size 仍合法（读到空，nextOffset=null 收尾）。
+    if (offset > size) throw RepairFailure("bad-offset", "offset 超出文件大小（offset=$offset size=$size）")
     val buffer = ByteArray(max + 1)
     val read = FileInputStream(file).use { input ->
-      if (offset < size) input.channel.position(offset)
+      // 上层已保证 offset <= size，这里无条件 seek：offset == size 时读到 EOF（空内容收尾），
+      // 旧实现的 `if (offset < size)` 会让 == size 分支同样从文件头读——与越界同族的错位形态。
+      input.channel.position(offset)
       var count = 0
       while (count < buffer.size) {
         val n = input.read(buffer, count, buffer.size - count)
@@ -341,7 +347,6 @@ internal class RepairToolsFs(
     val bytes = buffer.copyOf(if (truncated) max else read)
     val content = LogSanitizer.sanitizeOrNull(String(bytes, Charsets.UTF_8))
       ?: throw RepairFailure("sanitize-failed", "文件内容脱敏失败，已丢弃内容")
-    if (bytes.isEmpty() && offset > size) throw RepairFailure("bad-offset", "offset 超出文件大小")
     return JSONObject()
       .put("ok", true)
       .put("path", file.absolutePath)
@@ -525,8 +530,11 @@ internal class RepairToolsFs(
         throw RepairFailure("apk-protected", "系统分区与 APK 不在允许范围")
       }
     }
-    if (file.name.equals(".credentials.yaml", ignoreCase = true) ||
-      file.name.equals("credentials.yaml", ignoreCase = true)) {
+    // 2026-10-25 审计 I-R1：凭据名判定必须与 list 的 [isProtectedName] 同源（单一真源）。
+    // 旧实现这里只列了两个 yaml 名——deepseek-key.txt / dashscope-key.txt 在 list 里被隐藏，
+    // read/write 却放行（read 靠 LogSanitizer 事后打码兜底；write 可在内容不含凭据形态时
+    // 直接原子覆盖密钥文件），防护面自相矛盾。
+    if (isProtectedName(file.name)) {
       throw RepairFailure("protected-file", "凭据文件不通过修复工具读写")
     }
     val path = file.absolutePath
