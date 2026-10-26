@@ -195,3 +195,5 @@ Harness按固定0.2.0-rc.2源码完成全仓构建；prepare-harness-vendor-over
 ### WSL 调 Windows PowerShell 的可执行扩展名
 
 本轮隔离开发链发现：WSL 派生的 PowerShell 可能继承只有 `.CPL` 的 PATHEXT，导致 node.exe 已在 PATH、`Get-Command node` 仍失败。先读取环境并保留日志；仅在该构建子进程中补上 `.COM;.EXE;.BAT;.CMD`，同时加入 Windows System32、Node 与 JDK 路径。不要修改用户全局环境或把此问题当成缺少 Node 依赖。
+
+Telemetry import failures caused by inherited dependency versions: see docs/contrib/MCMR-JIM/2026-10-27-telemetry-runtime-closure.md for the consumer-local closure contract and archive-gate evidence. A package being present is insufficient when the consumer declares a different exact version.
