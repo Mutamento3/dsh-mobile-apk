@@ -1,7 +1,13 @@
 package com.dsharnessmobile.shell
 
 import java.io.File
-import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
+import java.util.Locale
 
 /**
  * 归一化迁移的**备份纪律**（issue #608）。
@@ -42,7 +48,7 @@ internal object ProfileNormalizeBackup {
    * 长度不同直接短路，避免把大文件整读两遍。
    */
   fun isValid(path: File, original: String): Boolean {
-    if (!path.isFile) return false
+    if (!Files.isRegularFile(path.toPath(), LinkOption.NOFOLLOW_LINKS)) return false
     val bytes = original.toByteArray(Charsets.UTF_8)
     if (path.length() != bytes.size.toLong()) return false
     return try {
@@ -61,18 +67,34 @@ internal object ProfileNormalizeBackup {
    * @return 落盘成功的备份文件。
    * @throws Throwable 写盘失败——调用方必须据此**放弃改写 live**。
    */
-  fun write(target: File, original: String, failed: Boolean, now: Long = System.currentTimeMillis()): File {
+  @Synchronized fun write(target: File, original: String, failed: Boolean, now: Long = System.currentTimeMillis()): File {
     val parent = target.absoluteFile.parentFile ?: error("missing backup parent: " + target.absolutePath)
     val prefix = target.name + ".pre-" + BuildConfig.VERSION_NAME + SEQ_DASH
     val suffix = (if (failed) FAILED_MARK else "") + SUFFIX
     val bytes = original.toByteArray(Charsets.UTF_8)
-    // 直接落到有序名字上：保留策略按文件名字典序裁剪，随机名会让「最近 N 份」无从判断。
-    val ordered = File(parent, prefix + String.format("%013d", now) + suffix)
+    // Advance beyond existing attempts even if the wall clock repeats or moves backwards.
+    val previous = managed(target).maxOfOrNull { sequence(target, it)!! } ?: -1L
+    var next = maxOf(now.coerceAtLeast(0), previous + 1)
+    var reservation: Pair<File, FileChannel>? = null
+    for (attempt in 0 until 1_024) {
+      check(next <= 9_999_999_999_999L) { "backup sequence exhausted" }
+      val candidate = File(parent, prefix + String.format(Locale.ROOT, "%013d", next) + suffix)
+      try {
+        // CREATE_NEW is exclusive for files, directories and even dangling links.
+        val channel = FileChannel.open(candidate.toPath(), StandardOpenOption.CREATE_NEW,
+          StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)
+        reservation = candidate to channel
+        break
+      } catch (_: FileAlreadyExistsException) {
+        next++
+      }
+    }
+    val (ordered, channel) = reservation ?: error("backup namespace is busy")
     try {
-      FileOutputStream(ordered).use { output ->
-        output.write(bytes)
-        output.flush()
-        output.fd.sync()
+      channel.use { output ->
+        val buffer = ByteBuffer.wrap(bytes)
+        while (buffer.hasRemaining()) output.write(buffer)
+        output.force(true)
       }
     } catch (t: Throwable) {
       runCatching { SnapshotFs.deletePath(ordered) }
@@ -84,6 +106,7 @@ internal object ProfileNormalizeBackup {
       error("backup not durable: " + ordered.absolutePath)
     }
     prune(target)
+    check(isValid(ordered, original)) { "backup unavailable after retention" }
     return ordered
   }
 
@@ -93,18 +116,24 @@ internal object ProfileNormalizeBackup {
    * 只动本对象自己命名的文件（`<目标名>.pre-<版本>-<13位序号>[-failed].bak`），
    * `repairProfilePatch` 用 UUID 命名的既有多份备份不受影响。
    */
-  fun prune(target: File) {
+  @Synchronized fun prune(target: File) {
     drop(managed(target).filterNot { isFailed(it) }, KEEP_ATTEMPTS)
     drop(managed(target).filter { isFailed(it) }, KEEP_FAILED_ATTEMPTS)
   }
 
   /** 该目录下本对象管理的成功备份（按时间序，供测试与诊断用）。 */
-  fun successfulBackups(target: File): List<File> = managed(target).filterNot { isFailed(it) }
+  @Synchronized fun successfulBackups(target: File): List<File> = managed(target).filterNot { isFailed(it) }
 
   /** 该目录下本对象管理的失败备份（按时间序）。 */
-  fun failedBackups(target: File): List<File> = managed(target).filter { isFailed(it) }
+  @Synchronized fun failedBackups(target: File): List<File> = managed(target).filter { isFailed(it) }
 
-  private fun isFailed(file: File): Boolean = file.name.contains(FAILED_MARK + SUFFIX, ignoreCase = true)
+  private fun isFailed(file: File): Boolean = file.name.endsWith(FAILED_MARK + SUFFIX)
+
+  private fun sequence(target: File, file: File): Long? {
+    val prefix = target.name + ".pre-" + BuildConfig.VERSION_NAME + SEQ_DASH
+    val pattern = Regex(Regex.escape(prefix) + "([0-9]{13})(?:-failed)?\\.bak")
+    return pattern.matchEntire(file.name)?.groupValues?.get(1)?.toLongOrNull()
+  }
 
   private fun drop(ordered: List<File>, keep: Int) {
     val excess = ordered.size - keep
@@ -115,9 +144,8 @@ internal object ProfileNormalizeBackup {
 
   private fun managed(target: File): List<File> {
     val parent = target.absoluteFile.parentFile ?: return emptyList()
-    val prefix = target.name + ".pre-" + BuildConfig.VERSION_NAME + SEQ_DASH
     return (parent.listFiles() ?: emptyArray())
-      .filter { it.isFile && it.name.startsWith(prefix) && it.name.endsWith(SUFFIX) }
+      .filter { Files.isRegularFile(it.toPath(), LinkOption.NOFOLLOW_LINKS) && sequence(target, it) != null }
       .sortedBy { it.name }
   }
 }
