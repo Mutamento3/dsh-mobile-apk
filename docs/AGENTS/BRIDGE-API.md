@@ -17,6 +17,8 @@
 | androidBridge | 用户设置/授权、目录选择、活动配置、窄BrowserHost与虚拟屏控制、通知、自检、console入口；AI能力由插件注册。 |
 | dshBackBridge | setAvailable/getBackAvailable层栈信号；原生返回决策不接受网页任意Intent。 |
 | consoleBridge | 仅本地console页面的输入/尺寸/退出等契约，不复用BrowserHost网页桥。 |
+
+The native console callback `window.__consoleInsets(top, bottom, ime)` uses CSS pixels. `top` and `bottom` are system-bar insets; `ime` is the keyboard overlap still inside the WebView after native resizing, not the raw keyboard height. The page preserves navigation padding and subtracts only the remaining overlap once. Native geometry and page-layout regressions cover resized and unresized views.
 | 壳↔引擎 | 精确受保护Android路由、控制队列、file-incoming与通知$events；本地HTTP/TCP探针NO_PROXY；回包须lossless JSON。 |
 | 插件↔壳 | androidPrivilege与ControlCarrier/ControlPoller；会话权限和native screen范围在执行点复查，不因UI展示值推断授权。 |
 

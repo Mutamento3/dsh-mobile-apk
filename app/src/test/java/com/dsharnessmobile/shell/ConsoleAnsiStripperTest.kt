@@ -12,6 +12,34 @@ import org.junit.Test
  */
 class ConsoleAnsiStripperTest {
 
+  /** I5（2026-10-25 审计）：真 PTY 的 ONLCR 让每个换行都以 CRLF 输出——必须折叠成单个换行，否则整屏双倍行距。 */
+  @Test
+  fun crlfCollapsesToSingleNewline() {
+    val stripper = ConsoleAnsiStripper()
+    assertEquals("a" + nl + "b" + nl, stripper.feed("a" + crlf + "b" + crlf))
+  }
+
+  /** I5：CR 与 LF 跨块送达（读缓冲边界形态）同样只折一次。
+   *  块尾悬 CR 不产出（等下一字符定折叠）——流式语义的必然代价，控制台是长连接不受影响。 */
+  @Test
+  fun crlfAcrossChunksCollapsesToSingleNewline() {
+    val stripper = ConsoleAnsiStripper()
+    assertEquals("a", stripper.feed("a" + cr))
+    assertEquals(nl + "b", stripper.feed(nl + "b"))
+  }
+
+  /** I5：CR 后不是 LF——CR 折行，后续字符按正文语义重新分发（ESC 引导不被吞）。 */
+  @Test
+  fun bareCrStillFoldsAndRedistributesEscape() {
+    val stripper = ConsoleAnsiStripper()
+    assertEquals("a" + nl + "x", stripper.feed("a" + cr + "" + esc + "[1m" + "x"))
+  }
+
+  private val nl = Char(10).toString()
+  private val cr = Char(13).toString()
+  private val crlf = cr + nl
+  private val esc = Char(27).toString()
+
   @Test
   fun sgrSequenceIsStrippedAndTextSurvives() {
     val s = ConsoleAnsiStripper()

@@ -1,0 +1,3 @@
+# Locale-aware WebView verification
+
+**Locale-specific device selectors report false failures (#600).** The WebView verifier searched only Chinese accessible names while the interface also supports English. Existing Settings and attachment controls were therefore reported absent on a working English device. The probes now accept the supported names and prefer the explicit account-menu label over unrelated More buttons. Twelve regressions cover navigation, both attachment labels, missing controls and disabled reset links; restoring the old selectors fails five cases. The complete 39-check suite passes on Android 15/WebView 124 in portrait and landscape.

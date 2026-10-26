@@ -48,10 +48,7 @@ internal class RepairModelClient {
       else -> completionsBody(connection, outbound, tools, effort)
     }
     val response = postWithOneTransientRetry(connection, endpoint, body)
-    if (response.contains("\"error\"") && !response.contains("\"tool_calls\"")) {
-      val error = runCatching { JSONObject(response).optJSONObject("error")?.optString("message") }.getOrNull()
-      if (!error.isNullOrBlank()) throw RepairModelFailure("模型接口错误：" + error.take(300))
-    }
+    gatewayErrorOf(response, connection.apiKey)?.let { throw RepairModelFailure(it) }
     val parsed = JSONObject(response)
     val result = when (connection.api) {
       "anthropic-messages" -> anthropicResult(parsed)
@@ -214,6 +211,23 @@ internal class RepairModelClient {
     "high" -> 8192
     "xhigh", "max" -> 16384
     else -> 4096
+  }
+
+  /**
+   * 网关错误的结构化判定（2026-10-25 审计 M-R3/M-R4）。null = 不是接口错误。
+   *
+   * - **结构化**而非文本启发：顶层 `error` 键必须是 JSON 对象才算——自建网关常见的
+   *   `{"choices":[...], "error": null}` 或模型正文含 "error" 字样不再被误判（旧实现用
+   *   `contains("\"error\"")`，正常纯文本回答会被当成接口错误）。
+   * - `error.message` 为 null / JSONObject.NULL 时不算错误：`optString` 会把 null 产出成
+   *   `"null"` 字符串，旧实现即误抛「模型接口错误：null」并丢弃正常回答。
+   * - 回显消息与 [post] 的 HTTP 错误路径同口径替换 apiKey，防网关错误回显凭据。
+   */
+  internal fun gatewayErrorOf(response: String, apiKey: String): String? {
+    val errorObject = runCatching { JSONObject(response).optJSONObject("error") }.getOrNull() ?: return null
+    if (response.contains("\"tool_calls\"")) return null
+    val message = (errorObject.opt("message") as? String)?.takeIf { it.isNotBlank() } ?: return null
+    return "模型接口错误：" + message.replace(apiKey, "***").take(300)
   }
 
   private fun post(connection: RepairModelConnection, endpoint: String, body: String): String {
