@@ -2132,9 +2132,12 @@ app/src/test/java/com/dsharnessmobile/shell/ProfileNormalizeBackupTest.kt
 app/src/test/java/com/dsharnessmobile/shell/ProfileBackupOwnershipTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/ProfileBackupOwnershipDeviceTest.kt
 app/src/test/java/com/dsharnessmobile/shell/SafeModeInsertBoundaryTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/SafeModeMigrationDeviceTest.kt
 -->
 
 设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
+
+`SafeModeMigrationDeviceTest` exercises the Android filesystem through `SafeMode.status/enter/exit`: identical duplicate markers converge, conflicting or non-regular markers remain untouched, and column-zero comments and complete originals survive an actual enter/exit round trip. Its isolated cache profile uses the production web path layout; it never changes the user's active profile.
 
 <!-- COVERAGE
 dsh-client-ui-responsive/src/client/mobile/incoming-runtime.ts
