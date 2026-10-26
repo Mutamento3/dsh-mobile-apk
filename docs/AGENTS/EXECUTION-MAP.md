@@ -2126,18 +2126,23 @@ app/src/androidTest/java/com/dsharnessmobile/shell/BrowserRendererServiceTest.kt
 app/src/main/java/com/dsharnessmobile/shell/CapturePipeDrain.kt
 app/src/test/java/com/dsharnessmobile/shell/CapturePipeDrainTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/RendererCapturePipeTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/RendererCapturePipeDeviceTest.kt
 app/src/main/java/com/dsharnessmobile/shell/ProfileNormalizeBackup.kt
 app/src/test/java/com/dsharnessmobile/shell/ProfileNormalizeBackupTest.kt
 app/src/main/java/com/dsharnessmobile/shell/ProfileNormalizationPublication.kt
 app/src/test/java/com/dsharnessmobile/shell/ProfileNormalizationPublicationTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/ProfilePublicationDeviceTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/LateColdStartDeviceTest.kt
+app/src/test/java/com/dsharnessmobile/shell/ProfileBackupOwnershipTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/ProfileBackupOwnershipDeviceTest.kt
 app/src/test/java/com/dsharnessmobile/shell/SafeModeInsertBoundaryTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/SafeModeMigrationDeviceTest.kt
 -->
 
 设置页设备导航：verify-webview-015 在桌面形态经账号菜单进入设置与手机控制，仍要求真实重置按钮存在、启用且有尺寸；缺少入口、页签或按钮的负控均判红。
 
 Normalization publication protects an original before touching live state. `ProfileNormalizationPublication.publish` settles the successful or failed retention group only after the callback outcome; settlement failure keeps its pending original. `ProfilePublicationDeviceTest` exercises the actual EngineManager entry with full quotas, blocked temporary publication and unavailable backup storage.
+`SafeModeMigrationDeviceTest` exercises the Android filesystem through `SafeMode.status/enter/exit`: identical duplicate markers converge, conflicting or non-regular markers remain untouched, and column-zero comments and complete originals survive an actual enter/exit round trip. Its isolated cache profile uses the production web path layout; it never changes the user's active profile.
 
 An authorized cold-start attempt may continue passive foreground health observation behind a historical repair gate. `mayObserveColdStart` grants no spawn or retry authority. `MainActivity.onResume` resumes that observation without replacing its in-flight phase or restarting the engine. `LateColdStartDeviceTest` covers late health, pause/resume, preserved retry counts and newly armed repair rejection.
 
