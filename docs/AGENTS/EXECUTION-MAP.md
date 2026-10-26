@@ -2126,11 +2126,14 @@ app/src/androidTest/java/com/dsharnessmobile/shell/BrowserRendererServiceTest.kt
 app/src/main/java/com/dsharnessmobile/shell/CapturePipeDrain.kt
 app/src/test/java/com/dsharnessmobile/shell/CapturePipeDrainTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/RendererCapturePipeTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/RendererCapturePipeDeviceTest.kt
 app/src/main/java/com/dsharnessmobile/shell/ProfileNormalizeBackup.kt
 app/src/test/java/com/dsharnessmobile/shell/ProfileNormalizeBackupTest.kt
 app/src/main/java/com/dsharnessmobile/shell/ProfileNormalizationPublication.kt
 app/src/test/java/com/dsharnessmobile/shell/ProfileNormalizationPublicationTest.kt
 app/src/androidTest/java/com/dsharnessmobile/shell/ProfilePublicationDeviceTest.kt
+app/src/test/java/com/dsharnessmobile/shell/ProfileBackupOwnershipTest.kt
+app/src/androidTest/java/com/dsharnessmobile/shell/ProfileBackupOwnershipDeviceTest.kt
 app/src/test/java/com/dsharnessmobile/shell/SafeModeInsertBoundaryTest.kt
 -->
 
