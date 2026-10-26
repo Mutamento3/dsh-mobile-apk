@@ -17,3 +17,18 @@ Validation:
 - The final package is rebuilt and installed after the logging-only refinement below; all five Android cases pass again. The test package is unchanged. Evidence files use the `profile-publication-` prefix, including full-build, final-device, WebView and console logs.
 
 The final logging-only refinement says the original is protected, rather than asserting a backup exists when pending creation itself failed. Local development packages are not release candidates. UI task evidence covers unchanged UI and publication behavior, not release packaging or physical-device qualification.
+
+
+## Ownership and startup integration qualification
+
+After #641 entered main, the publication branch incorporated its allocator and the updated gate scripts. The three focused JVM suites passed 24 tests with zero failures, errors or skips. This was a focused run, not a repeat of the earlier full suite.
+
+A separate local validation branch combined that parent with the still-unmerged #644 startup fix. Its development APK (SHA-256 61dfa1078d199f01f69fcc729205a99b71c8bb4c6bdc7e999fccbbf993666197) ran 14 actual Android tests: five ownership, five publication and four late-start cases, all passing. Six relevant runtime blobs match the synchronized child; the parent's three backup runtime blobs match this validation source. The validation branch is never a merge candidate.
+
+Portrait and landscape WebView checks each passed 46 assertions. Actual ADB console tasks in both orientations created a private fixture directory, backed up an original, changed it, restored and compared bytes, then removed the files and directory. Both receipts reported BACKUP_OK and CLEAN; separate filesystem checks confirmed both directories absent. Per-command screenshots and command records are retained. Rotation preferences were restored.
+
+Initial input truncation was rejected before submission. A private driver edit had a syntax error, and a subsequent Back action exited the console; those attempts are retained as failures. The completed portrait continuation preserved the existing shell and resumed without recreating its directory. The wide task initially rejected an unfocused input during rotation, then completed after the settled layout was inspected. No production code was changed for these automation errors.
+
+Evidence: profile-combined-focused.log, profile-combined-build.log, profile-combined-device.log, profile-combined-runtime-inputs.json, profile-combined-webview-portrait.log, profile-combined-webview-wide.log, profile-combined-console-portrait-continued.log, profile-combined-console-wide-ready.log and profile-combined-console-{p,w}.json. Final screenshots are profile-combined-console-portrait-complete.png and profile-combined-console-wide-complete.png. Earlier startup black-screen observations are retained; eventual readiness is not a claim that every launch meets its startup budget. This remains development qualification, not a release candidate or physical-device result.
+
+#644 still requires another collaborator's formal approval and merge into this parent. Integration validation does not substitute for that review or authorize merging the validation branch.
