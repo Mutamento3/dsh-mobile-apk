@@ -167,6 +167,19 @@ internal class BrowserHost(
   /** 远端页面事件 → 本地 Tab 状态（主线程；generation 采用远端计数器的单调值）。 */
   private fun applyRendererEvent(remoteId: String, event: JSONObject) {
     if (remoteId.isEmpty()) {
+      if (event.optString("type") == "rendererConnected") {
+        // #13（2026-10-25 审计）：渲染进程回来了（BIND_AUTO_CREATE 自动重启 + 重新投递
+        // onServiceConnected）。断线时烙下的降级标记必须清掉，否则自动恢复的绑定也救不回
+        // 已降级的面板——用户只能重启应用。**只清我们烙的那一枚**：真实 profile 错误
+        // （browser-not-created 等）另有着落，不得顺手抹掉。tab.remoteCreated 已在断线时清零，
+        // 下一次 ensureSurface/命令会按需重建远端 tab。
+        for (workspace in workspaces.values) {
+          if (workspace.profileError == "browser-renderer-unavailable") workspace.profileError = ""
+        }
+        lastError = ""
+        applyVisibility()
+        return
+      }
       // 渲染进程断线：全部工作台显式降级，面板/模型立即看到 browser-renderer-unavailable。
       for (workspace in workspaces.values) {
         if (workspace.profileError.isEmpty()) workspace.profileError = "browser-renderer-unavailable"
@@ -174,6 +187,12 @@ internal class BrowserHost(
       }
       lastError = "browser-renderer-unavailable"
       applyVisibility()
+      // #13 兜底：多数 ROM 会在 BIND_AUTO_CREATE 下自动重启服务并重新投递 onServiceConnected
+      // （届时上面的 rendererConnected 分支会清降级）；对不重启的 OEM 电池管理器场景，延迟重绑
+      // 一次——connect() 自带 renderer!=null/binding 早退，恢复中重入是安全的 no-op。
+      main.postDelayed({
+        if (remote != null && remote?.ready != true) remote?.connect { remote?.refreshEndpoint() }
+      }, 5_000L)
       return
     }
     val slash = remoteId.indexOf('/')

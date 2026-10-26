@@ -580,23 +580,83 @@ object UpdateChecker {
     return runChain(attempts, abis, abiFrom(abis), currentVersion())
   }
 
-  /** 取一档文本（不做镜像回退：每档就是一个明确 URL，回退由 [runChain] 的顺序负责）。 */
+  /** 元数据读取上限（#10）：MANIFEST/releases.json 都是 KB 级；超过它的一定不是元数据（防无上限读 OOM/拖死）。 */
+  internal const val METADATA_MAX_BYTES = 1 shl 20
+
+  /** 元数据重定向跳数上限（#10）：合法链路 1-2 跳；再多就是环或被劫持。 */
+  internal const val METADATA_MAX_REDIRECTS = 3
+
+  /**
+   * 元数据 302 的合法落点域（#10）。摘要权威源（MANIFEST/releases.json 里的 sha256）决定 169MB
+   * 载荷的可信度，不能被镜像方 302 到**任意**主机——那等于把校验值的签发权交出去。
+   * 同域跳转（镜像自身的路径调整）恒允许；跨域只放行 GitHub 官方资产域（release 下载的
+   * 既有落点）。白名单外的目标按数据错误拒绝（isDataError → PARSE 分档）。
+   */
+  internal val METADATA_REDIRECT_HOSTS = setOf(
+    "github.com", "api.github.com", "codeload.github.com",
+    "objects.githubusercontent.com", "release-assets.githubusercontent.com",
+    "raw.githubusercontent.com",
+  )
+
+  internal fun metadataRedirectAllowed(fromHost: String, toHost: String): Boolean =
+    toHost == fromHost || METADATA_REDIRECT_HOSTS.contains(toHost)
+
+  /**
+   * 取一档文本（不做镜像回退：每档就是一个明确 URL，回退由 [runChain] 的顺序负责）。
+   *
+   * #10（2026-10-25 审计）：重定向改为**手工限域跟随**（同域或 GitHub 官方域、仅 https、
+   * ≤[METADATA_MAX_REDIRECTS] 跳），读取加上限——旧实现 `instanceFollowRedirects = true`
+   * 盲跟任意 302 + `readBytes()` 无上限，镜像方一条 302 就能把摘要权威源劫到任意主机并
+   * 无限流式输出。
+   */
   private fun fetchText(url: String, timeoutMs: Int, accept: String?): String {
-    val conn = URL(url).openConnection(Proxy.NO_PROXY) as HttpURLConnection
-    try {
-      conn.connectTimeout = timeoutMs
-      conn.readTimeout = timeoutMs
-      conn.instanceFollowRedirects = true
-      accept?.let { conn.setRequestProperty("Accept", it) }
-      val code = conn.responseCode
-      if (code != 200) {
-        // 把限流响应头一起带出去：旧实现靠它们区分"配额耗尽（等一会儿再来）"与"普通 403（换网络也没用）"，
-        // 丢掉这两个头等于把两种完全不同的处置方式压成同一条建议。
-        throw HttpStatusException(code, url, conn.getHeaderField("x-ratelimit-remaining"), conn.getHeaderField("retry-after"))
+    var current = url
+    var hops = 0
+    while (true) {
+      val conn = URL(current).openConnection(Proxy.NO_PROXY) as HttpURLConnection
+      try {
+        conn.connectTimeout = timeoutMs
+        conn.readTimeout = timeoutMs
+        conn.instanceFollowRedirects = false
+        accept?.let { conn.setRequestProperty("Accept", it) }
+        val code = conn.responseCode
+        if (code in 300..399 && code != 304) {
+          val location = conn.getHeaderField("Location")
+            ?: throw HttpStatusException(code, url, conn.getHeaderField("x-ratelimit-remaining"), conn.getHeaderField("retry-after"))
+          val next = URL(URL(current), location)
+          if (next.protocol != "https") {
+            throw IllegalStateException("元数据重定向降级到非 https：" + next.protocol)
+          }
+          if (++hops > METADATA_MAX_REDIRECTS) {
+            throw IllegalStateException("元数据重定向超过 " + METADATA_MAX_REDIRECTS + " 跳")
+          }
+          if (!metadataRedirectAllowed(URL(current).host, next.host)) {
+            throw IllegalStateException("元数据重定向目标不在发布链白名单：" + next.host)
+          }
+          current = next.toString()
+          continue
+        }
+        if (code != 200) {
+          // 把限流响应头一起带出去：旧实现靠它们区分"配额耗尽（等一会儿再来）"与"普通 403（换网络也没用）"，
+          // 丢掉这两个头等于把两种完全不同的处置方式压成同一条建议。
+          throw HttpStatusException(code, url, conn.getHeaderField("x-ratelimit-remaining"), conn.getHeaderField("retry-after"))
+        }
+        return conn.inputStream.use { input ->
+          val buf = java.io.ByteArrayOutputStream()
+          val chunk = ByteArray(8 * 1024)
+          while (true) {
+            val n = input.read(chunk)
+            if (n < 0) break
+            if (buf.size() + n > METADATA_MAX_BYTES) {
+              throw IllegalStateException("元数据超过 " + METADATA_MAX_BYTES + " 字节上限（不是合法的 MANIFEST/releases.json）")
+            }
+            buf.write(chunk, 0, n)
+          }
+          buf.toString(Charsets.UTF_8)
+        }
+      } finally {
+        runCatching { conn.disconnect() }
       }
-      return conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-    } finally {
-      runCatching { conn.disconnect() }
     }
   }
 
@@ -722,27 +782,45 @@ object UpdateChecker {
    *
    * @param allowMirrors false = 只允许官方直连（#513：元数据缺 sha256 时，第三方镜像产物
    *   无摘要可校验、直通安装器——fail-closed，宁可下载失败也不裸奔）。
+   * @param isActive stops an invalidated attempt before further reads or publication.
+   * @param publishIfActive serializes the final move with the owner's generation change.
+   * @param connectionFactory transport test seam; production uses verified redirects.
    */
-  fun download(url: String, dest: File, onProgress: (percent: Int) -> Unit, allowMirrors: Boolean = true): String? {
+  fun download(
+    url: String,
+    dest: File,
+    onProgress: (percent: Int) -> Unit,
+    allowMirrors: Boolean = true,
+    isActive: () -> Boolean = { true },
+    publishIfActive: (() -> Unit) -> Boolean = { publish -> publish(); true },
+    connectionFactory: (String) -> HttpURLConnection? = ::openRedirectVerified,
+  ): String? {
     val path = url.removePrefix("https://github.com/")
     val prefixes = if (allowMirrors) MIRROR_PREFIXES else listOf(MIRROR_PREFIXES[0])
     for (mirror in prefixes) {
+      if (!isActive()) return null
       val candidate = if (mirror == MIRROR_PREFIXES[0]) url else mirror + path
+      var conn: HttpURLConnection? = null
+      var ownedTemporary: File? = null
       try {
-        val conn = openRedirectVerified(candidate)
-        if (conn == null) { continue }
-        if (conn.responseCode != 200) { conn.disconnect(); continue }
+        conn = connectionFactory(candidate) ?: continue
+        if (conn.responseCode != 200) continue
         val total = conn.contentLengthLong
-        dest.parentFile?.mkdirs()
-        val tmp = File(dest.parentFile, dest.name + ".tmp")
+        val parent = dest.absoluteFile.parentFile
+        parent.mkdirs()
+        // A failed or cancelled attempt owns only this unique staging file.
+        val tmp = File.createTempFile("dsh-apk-" + dest.name + ".", ".tmp", parent)
+        ownedTemporary = tmp
         tmp.outputStream().use { out ->
           conn.inputStream.use { input ->
             val buf = ByteArray(128 * 1024)
             var read = 0L
             var lastPct = -1
             while (true) {
+              if (!isActive()) return null
               val n = input.read(buf)
               if (n < 0) break
+              if (!isActive()) return null
               out.write(buf, 0, n)
               read += n
               if (total > 0) {
@@ -752,13 +830,17 @@ object UpdateChecker {
             }
           }
         }
-        if (dest.exists()) dest.delete()
-        if (!tmp.renameTo(dest)) { tmp.copyTo(dest, overwrite = true); tmp.delete() }
-        conn.disconnect()
+        if (!isActive()) return null
+        // The owner serializes this publication with invalidation of its generation.
+        if (!publishIfActive {
+          if (!AtomicFileReplace.publish(tmp, dest)) throw java.io.IOException("APK publication failed")
+        }) return null
         return candidate
       } catch (e: Exception) {
         android.util.Log.w(TAG, "download via $mirror failed: " + (e.message ?: e.javaClass.simpleName))
-        File(dest.parentFile, dest.name + ".tmp").delete()
+      } finally {
+        runCatching { conn?.disconnect() }
+        ownedTemporary?.delete()
       }
     }
     return null

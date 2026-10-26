@@ -101,11 +101,15 @@ internal class ApkUpdateState {
 
   /**
    * 是否处于「不能并发再发起」的相位（check 与 start 共用这一判据）。
-   * 含 [STATE_INSTALLING]：系统安装器已拉起时也不再受理新动作——那期间换状态会让用户
-   * 看到的状态与真实安装流程脱节。
+   *
+   * #12（2026-10-25 审计）：**不再含 [STATE_INSTALLING]**。INSTALLING 是「控制权已交给系统安装器」
+   * 的相位：用户在系统侧**取消安装器**后没有任一路径能把状态推走，而旧 busy 含它 ⇒
+   * `beginCheck` 永久拒绝——引导页却在 INSTALLING 态把检查按钮渲染为**可点**（渲染层注释
+   * 「恢复可检查」），按钮点了恒无响应，更新面死锁到杀应用。取消安装器的事实出路就是再查一轮：
+   * 安装器已拿到 APK，重新 check 不丢任何载荷。与 [inFlight] 的分工见该函数注释。
    */
   fun busy(): Boolean = synchronized(lock) {
-    state == STATE_CHECKING || state == STATE_DOWNLOADING || state == STATE_INSTALLING
+    state == STATE_CHECKING || state == STATE_DOWNLOADING
   }
 
   /**
@@ -294,6 +298,24 @@ internal class ApkUpdateController(private val activity: Activity) {
   private val watchdog = Runnable { onTimeout() }
 
   /**
+   * 会话代次（#9，2026-10-25 审计）：每次**受理**新动作 +1；超时/释放等非属主终态也 +1。
+   * 后台线程（check / download）带着发起时的代次回写，代次不符即整条作废——否则超时把状态
+   * 判成 FAILED 之后，迟到的网络结果还会把 FAILED 覆盖成 AVAILABLE/INSTALLING；最坏形态是
+   * 旧下载线程未被取消、用户重试后两个线程并发写同一个目标文件。
+   */
+  private val epoch = java.util.concurrent.atomic.AtomicInteger(0)
+  private val publicationLock = Any()
+
+  private fun advanceEpoch(): Int = synchronized(publicationLock) { epoch.incrementAndGet() }
+
+  private fun isCurrentEpoch(e: Int): Boolean = epoch.get() == e
+
+  /** 作废一切在途回写（超时、界面销毁等非属主终态调用）。 */
+  private fun invalidateInFlight() {
+    advanceEpoch()
+  }
+
+  /**
    * 状态与私有载荷的一致性不变量（纯读，供测试逐相位钉住）。
    *
    * 存在理由：两个字段表示同一件事（「有没有一个可下载的新版」）是 0.14.6 那个死循环的温床。
@@ -376,8 +398,9 @@ internal class ApkUpdateController(private val activity: Activity) {
    * `hasReadyArtifact` 每个相位都发、恒为布尔：页面据此决定失败态要不要露出「重试安装」。
    * 若缺席，页面只能按旁证猜——那会把按钮摆在点了必然被拒的相位上。
    */
-  private fun snapshotObject(ok: Boolean = true): JSONObject =
+  private fun snapshotObject(ok: Boolean = true): JSONObject = synchronized(publicationLock) {
     JSONObject(state.snapshotJson(ok, hasReadyArtifact()))
+  }
 
   /**
    * 只读当前状态 JSON（不发起任何网络/安装动作）。唯一消费方是桥面 `status` 动作。
@@ -402,8 +425,10 @@ internal class ApkUpdateController(private val activity: Activity) {
    * 只对**进行中**相位生效（终态已被别的路径报过就不再覆盖，避免把「真实失败原因」换成超时文案）。
    */
   private fun onTimeout() {
-    val text = timeoutReason(state.stateName()) ?: return
-    fail(text, ApkUpdateState.KIND_TIMEOUT)
+    synchronized(publicationLock) {
+      val text = timeoutReason(state.stateName()) ?: return
+      fail(text, ApkUpdateState.KIND_TIMEOUT)
+    }
   }
 
   /**
@@ -411,12 +436,15 @@ internal class ApkUpdateController(private val activity: Activity) {
    * （否则用户切回来会看到一个永远不会动的「更新中」）。
    */
   fun release() {
-    disarmWatchdog()
-    observers.clear()
-    if (!state.busy()) return
-    // 载荷与相位成对作废（同 fail()）：不变量在任何退出路径上都成立。
-    currentResult = null
-    state.onFailed("更新已中断（应用界面已关闭）——请重新打开后重试")
+    synchronized(publicationLock) {
+      disarmWatchdog()
+      observers.clear()
+      invalidateInFlight() // #9：销毁后仍在跑的网络线程不得再回写状态。
+      if (!state.busy()) return
+      // 载荷与相位成对作废（同 fail()）：不变量在任何退出路径上都成立。
+      currentResult = null
+      state.onFailed("更新已中断（应用界面已关闭）——请重新打开后重试")
+    }
   }
 
   /**
@@ -441,15 +469,18 @@ internal class ApkUpdateController(private val activity: Activity) {
    * 页面重新加载后（回调已丢）据此重水合，不必新增只读方法。
    */
   fun check(): String {
-    if (!state.beginCheck()) {
-      // beginCheck 只在真有在途动作（checking/downloading/installing）时拒绝 => busy 是**事实**，不是兜底话术。
-      return reject("busy", "上一次更新动作仍在进行中，请稍候")
+    synchronized(publicationLock) {
+      if (!state.beginCheck()) {
+        // beginCheck 只在真有在途动作（checking/downloading）时拒绝 => busy 是**事实**，不是兜底话术。
+        return reject("busy", "上一次更新动作仍在进行中，请稍候")
+      }
+      val e = advanceEpoch()
+      currentResult = null // 进入 checking：旧载荷（若有）立即作废，避免与新一轮检查的结果混用
+      armWatchdog(CHECK_TIMEOUT_MS)
+      notifyChanged()
+      Thread({ runCheck(e) }, "dsh-apk-update-check").start()
+      return snapshotObject().put("code", "accepted").toString()
     }
-    currentResult = null // 进入 checking：旧载荷（若有）立即作废，避免与新一轮检查的结果混用
-    armWatchdog(CHECK_TIMEOUT_MS)
-    notifyChanged()
-    Thread({ runCheck() }, "dsh-apk-update-check").start()
-    return snapshotObject().put("code", "accepted").toString()
   }
 
   /**
@@ -461,20 +492,23 @@ internal class ApkUpdateController(private val activity: Activity) {
    *  · 没有待装新版 → `no-pending`；· 确实在途 → `busy`；· 其余（如 failed/up-to-date）→ `not-available`。
    */
   fun start(): String {
-    // 「下载」这个动作不是只有一种含义：包已经下好并校验通过、只等授权或重试安装时，
-    // 它走的是续继链（载荷是 readyToInstall，不是 currentResult）。页面上的「授权后继续安装」
-    // 与原生下载按钮发的是同一个动作，此处不先看续继链，那条路就只有原生一侧能走通。
-    if (readyToInstall != null || state.awaitingPermission()) return onDownloadPressed()
-    val pending = currentResult
-    if (pending == null) return reject("no-pending", "没有待安装的新版本，请先点「检查更新」")
-    if (!state.beginDownload()) {
-      return if (state.busy()) reject("busy", "上一次更新动作仍在进行中，请稍候")
-      else reject("not-available", "当前状态（" + state.stateName() + "）不能开始下载，请先点「检查更新」")
+    synchronized(publicationLock) {
+      // 「下载」这个动作不是只有一种含义：包已经下好并校验通过、只等授权或重试安装时，
+      // 它走的是续继链（载荷是 readyToInstall，不是 currentResult）。页面上的「授权后继续安装」
+      // 与原生下载按钮发的是同一个动作，此处不先看续继链，那条路就只有原生一侧能走通。
+      if (readyToInstall != null || state.awaitingPermission()) return onDownloadPressed()
+      val pending = currentResult
+      if (pending == null) return reject("no-pending", "没有待安装的新版本，请先点「检查更新」")
+      if (!state.beginDownload()) {
+        return if (state.busy()) reject("busy", "上一次更新动作仍在进行中，请稍候")
+        else reject("not-available", "当前状态（" + state.stateName() + "）不能开始下载，请先点「检查更新」")
+      }
+      armWatchdog(downloadTimeoutMs(pending.sizeBytes))
+      val e = advanceEpoch()
+      settle() // 页面立刻看到 downloading（两段式：受理 + 轮询读状态面）
+      Thread({ downloadAndInstall(pending, e) }, "dsh-apk-update-download").start()
+      return snapshotObject().put("code", "accepted").toString()
     }
-    armWatchdog(downloadTimeoutMs(pending.sizeBytes))
-    settle() // 页面立刻看到 downloading（两段式：受理 + 轮询读状态面）
-    Thread({ downloadAndInstall(pending) }, "dsh-apk-update-download").start()
-    return snapshotObject().put("code", "accepted").toString()
   }
 
   /**
@@ -510,35 +544,45 @@ internal class ApkUpdateController(private val activity: Activity) {
    * 桥面若自己另写一套受理条件，两条面迟早给出不同答案。
    */
   fun onDownloadPressed(): String {
-    if (state.busy()) return reject("busy", "上一次更新动作仍在进行中，请稍候")
-    return when {
-      readyToInstall != null || state.awaitingPermission() -> {
-        continueInstallIfPermitted()
-        snapshotObject().put("code", "accepted").toString()
+    synchronized(publicationLock) {
+      if (state.busy()) return reject("busy", "上一次更新动作仍在进行中，请稍候")
+      return when {
+        readyToInstall != null || state.awaitingPermission() -> {
+          continueInstallIfPermitted()
+          snapshotObject().put("code", "accepted").toString()
+        }
+        state.stateName() == ApkUpdateState.STATE_AVAILABLE -> start()
+        // 剩余相位（idle / up-to-date / 没有待装包的 failed）本来就没有可下载的东西。
+        // 这里不能说「受理了」：回执要如实，页面才不会按一个不会发生的事实去渲染。
+        else -> reject("not-available", "当前状态（" + state.stateName() + "）没有可下载的新版本，请先点「检查更新」")
       }
-      state.stateName() == ApkUpdateState.STATE_AVAILABLE -> start()
-      // 剩余相位（idle / up-to-date / 没有待装包的 failed）本来就没有可下载的东西。
-      // 这里不能说「受理了」：回执要如实，页面才不会按一个不会发生的事实去渲染。
-      else -> reject("not-available", "当前状态（" + state.stateName() + "）没有可下载的新版本，请先点「检查更新」")
     }
   }
 
   // ── 内部推进 ────────────────────────────────────────────────────────────────
 
-  private fun runCheck() {
+  private fun runCheck(e: Int) {
     val r = try {
       UpdateChecker.checkLatest()
     } catch (t: Throwable) {
       android.util.Log.w(TAG, "check threw: " + (t.message ?: t.javaClass.simpleName))
       UpdateChecker.CheckResult.Failed("检查更新未完成（详细原因已写入日志）——可重试，或复制日志反馈")
     }
-    if (r is UpdateChecker.CheckResult.Available) currentResult = r else currentResult = null
-    state.onCheckResult(r, UpdateChecker.currentVersion())
-    settle()
+    publishCheckResult(r, e)
+  }
+
+  /** Publish the generation check and its result as one operation. */
+  internal fun publishCheckResult(r: UpdateChecker.CheckResult, e: Int) {
+    synchronized(publicationLock) {
+      if (!isCurrentEpoch(e)) return
+      if (r is UpdateChecker.CheckResult.Available) currentResult = r else currentResult = null
+      state.onCheckResult(r, UpdateChecker.currentVersion())
+      settle()
+    }
   }
 
   /** 下载 → 校验 → 安装（复用既有下载链与 [verifyApkArtifact]，判定强度与旧引导页路径完全一致）。 */
-  private fun downloadAndInstall(r: UpdateChecker.CheckResult.Available) {
+  private fun downloadAndInstall(r: UpdateChecker.CheckResult.Available, e: Int) {
     val dest = File(UpdateChecker.updatesDir(activity), r.name)
     var reused = false
     try {
@@ -556,85 +600,116 @@ internal class ApkUpdateController(private val activity: Activity) {
         reused = true // 上次下完但没装成（授权中断/安装取消）→ 复用已验证的包，不重复拉 169MB
       } else {
         // #513：元数据缺 sha256 时第三方镜像产物无摘要可校验——只允许官方直连（fail-closed）。
-        val used = UpdateChecker.download(r.apkUrl, dest, { pct -> onDownloadProgress(pct) }, allowMirrors = expectedSha != null)
+        val used = UpdateChecker.download(
+          r.apkUrl, dest,
+          { pct -> onDownloadProgress(pct, e) },
+          allowMirrors = expectedSha != null,
+          isActive = { isCurrentEpoch(e) },
+          publishIfActive = { publish ->
+            synchronized(publicationLock) {
+              if (!isCurrentEpoch(e)) false else {
+                publish()
+                true
+              }
+            }
+          },
+        )
         if (used == null) {
-          failDownload("下载失败：镜像链全部不可用（直连与加速镜像均失败）——请稍后重试", ApkUpdateState.KIND_DOWNLOAD_FAILED)
+          failDownload("下载失败：镜像链全部不可用（直连与加速镜像均失败）——请稍后重试", ApkUpdateState.KIND_DOWNLOAD_FAILED, e)
           return
         }
+        // #9：下载期间若已换代（超时/重试），不再碰状态与 dest——新的会话自己会重下/校验。
+        if (!isCurrentEpoch(e)) return
         when (val verdict = artifactVerdict()) {
           is ApkArtifactVerdict.Accept -> Unit
-          is ApkArtifactVerdict.Reject -> {
+          is ApkArtifactVerdict.Reject -> synchronized(publicationLock) {
+            if (!isCurrentEpoch(e)) return
             dest.delete()
-            failDownload("下载失败：" + verdict.reason + "（文件已删除，请重试）", ApkUpdateState.KIND_ARTIFACT_REJECTED)
+            failDownload("下载失败：" + verdict.reason + "（文件已删除，请重试）", ApkUpdateState.KIND_ARTIFACT_REJECTED, e)
             return
           }
         }
       }
     } catch (t: Throwable) {
       android.util.Log.w(TAG, "apk download threw: " + (t.message ?: t.javaClass.simpleName))
-      failDownload("下载失败：" + (t.message ?: "未知原因") + "——请稍后重试", ApkUpdateState.KIND_DOWNLOAD_FAILED)
+      failDownload("下载失败：" + (t.message ?: "未知原因") + "——请稍后重试", ApkUpdateState.KIND_DOWNLOAD_FAILED, e)
       return
     }
     val reusedFlag = reused
     // 注意：此处**不**清载荷——install() 在 UI 线程跑且可能落到「需授权」相位，而那一刻才离开
     // downloading。载荷的清零与相位切换成对发生（见 install/failDownload），不变量因此始终成立。
-    activity.runOnUiThread { install(dest, reusedFlag) }
+    activity.runOnUiThread {
+      synchronized(publicationLock) { if (isCurrentEpoch(e)) install(dest, reusedFlag) }
+    }
   }
 
-  private fun onDownloadProgress(pct: Int) {
-    state.onDownloadProgress(pct)
-    notifyChanged()
+  private fun onDownloadProgress(pct: Int, e: Int) {
+    synchronized(publicationLock) {
+      if (!isCurrentEpoch(e)) return
+      state.onDownloadProgress(pct)
+      notifyChanged()
+    }
   }
 
-  private fun failDownload(text: String, kind: String) {
-    // 载荷随相位一起作废：失败后的重试路径是 check（重新取元数据），不再复用它。
-    currentResult = null
-    state.onDownloadFailed(text, kind)
-    settle()
+  private fun failDownload(text: String, kind: String, e: Int) {
+    synchronized(publicationLock) {
+      // #9：作废会话的失败不落盘（它的超时文案已由 watchdog 写过；再写会把新一轮的状态盖掉）。
+      if (!isCurrentEpoch(e)) return
+      // 载荷随相位一起作废：失败后的重试路径是 check（重新取元数据），不再复用它。
+      currentResult = null
+      state.onDownloadFailed(text, kind)
+      settle()
+    }
   }
 
   /** 安装步骤必须在 UI 线程（拉起授权页/安装器都是 Activity 动作）。 */
   private fun install(dest: File, reused: Boolean) {
-    if (activity.isFinishing || activity.isDestroyed) {
-      fail("应用界面已关闭，安装已取消——请重新检查更新", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
-      return
-    }
-    if (!dest.exists()) {
-      fail("安装包已不存在（可能被清理）——请重新检查更新", ApkUpdateState.KIND_ARTIFACT_REJECTED)
-      return
-    }
-    if (!UpdateChecker.canInstall(activity)) {
-      // 续继链靠 readyToInstall（**不**靠 currentResult）：载荷已消费完，清掉以满足不变量。
-      readyToInstall = dest
-      currentResult = null
-      val opened = UpdateChecker.requestInstallPermission(activity)
-      if (opened) {
-        state.onNeedPermission()
+    synchronized(publicationLock) {
+      if (activity.isFinishing || activity.isDestroyed) {
+        fail("应用界面已关闭，安装已取消——请重新检查更新", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
+        return
+      }
+      if (!dest.exists()) {
+        fail("安装包已不存在（可能被清理）——请重新检查更新", ApkUpdateState.KIND_ARTIFACT_REJECTED)
+        return
+      }
+      if (!UpdateChecker.canInstall(activity)) {
+        // 续继链靠 readyToInstall（**不**靠 currentResult）：载荷已消费完，清掉以满足不变量。
+        readyToInstall = dest
+        currentResult = null
+        val opened = UpdateChecker.requestInstallPermission(activity)
+        if (opened) {
+          state.onNeedPermission()
+          settle()
+        } else {
+          fail(
+            "这个系统没有「安装未知应用」授权页（未能打开）——请在系统设置里手动允许本应用安装应用后重试",
+            ApkUpdateState.KIND_INSTALLER_UNAVAILABLE,
+          )
+        }
+        return
+      }
+      if (UpdateChecker.invokeInstaller(activity, dest)) {
+        readyToInstall = null
+        currentResult = null
+        state.onInstalling(reused)
         settle()
       } else {
-        fail(
-          "这个系统没有「安装未知应用」授权页（未能打开）——请在系统设置里手动允许本应用安装应用后重试",
-          ApkUpdateState.KIND_INSTALLER_UNAVAILABLE,
-        )
+        readyToInstall = dest
+        fail("安装器拉起失败，请再点「下载并安装」重试", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
       }
-      return
-    }
-    if (UpdateChecker.invokeInstaller(activity, dest)) {
-      readyToInstall = null
-      currentResult = null
-      state.onInstalling(reused)
-      settle()
-    } else {
-      readyToInstall = dest
-      fail("安装器拉起失败，请再点「下载并安装」重试", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
     }
   }
 
   private fun fail(text: String, kind: String) {
-    // 载荷与相位成对：进入 FAILED 即作废（重试路径是 check / readyToInstall 续继，都不用它）。
-    currentResult = null
-    state.onFailed(text, kind)
-    settle()
+    synchronized(publicationLock) {
+      // #9：非属主终态（超时/安装失败/界面关闭）一律作废在途回写，防迟到线程复活本会话。
+      invalidateInFlight()
+      // 载荷与相位成对：进入 FAILED 即作废（重试路径是 check / readyToInstall 续继，都不用它）。
+      currentResult = null
+      state.onFailed(text, kind)
+      settle()
+    }
   }
 
   /**
@@ -642,26 +717,30 @@ internal class ApkUpdateController(private val activity: Activity) {
    * 与旧 [GuidePageRenderer.settlePendingInstall] 同一闭环——两入口都不会卡在「等一个不会来的页面」。
    */
   fun settleAfterResume() {
-    if (!state.awaitingPermission()) return
-    val dest = readyToInstall ?: return
-    if (activity.isFinishing || activity.isDestroyed) return
-    if (UpdateChecker.canInstall(activity)) install(dest, false)
-    else fail("尚未获得「安装未知应用」权限——请在系统设置里授权后再试", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
+    synchronized(publicationLock) {
+      if (!state.awaitingPermission()) return
+      val dest = readyToInstall ?: return
+      if (activity.isFinishing || activity.isDestroyed) return
+      if (UpdateChecker.canInstall(activity)) install(dest, false)
+      else fail("尚未获得「安装未知应用」权限——请在系统设置里授权后再试", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
+    }
   }
 
   /** 用户再点按钮时：停在「需授权」且已授权则立刻续继安装。 */
   private fun continueInstallIfPermitted() {
-    val dest = readyToInstall ?: return
-    if (activity.isFinishing || activity.isDestroyed) return
-    if (UpdateChecker.canInstall(activity)) install(dest, false)
-    else {
-      // 仍未授权：再拉一次授权页并如实回执（旧实现此处只改 hint，按钮可点但点了没反应）。
-      val opened = UpdateChecker.requestInstallPermission(activity)
-      if (opened) {
-        state.onNeedPermission()
-        settle()
-      } else {
-        fail("这个系统没有「安装未知应用」授权页（未能打开）——请在系统设置里手动允许后重试", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
+    synchronized(publicationLock) {
+      val dest = readyToInstall ?: return
+      if (activity.isFinishing || activity.isDestroyed) return
+      if (UpdateChecker.canInstall(activity)) install(dest, false)
+      else {
+        // 仍未授权：再拉一次授权页并如实回执（旧实现此处只改 hint，按钮可点但点了没反应）。
+        val opened = UpdateChecker.requestInstallPermission(activity)
+        if (opened) {
+          state.onNeedPermission()
+          settle()
+        } else {
+          fail("这个系统没有「安装未知应用」授权页（未能打开）——请在系统设置里手动允许后重试", ApkUpdateState.KIND_INSTALLER_UNAVAILABLE)
+        }
       }
     }
   }
@@ -709,8 +788,12 @@ internal class ApkUpdateController(private val activity: Activity) {
       else -> null
     }
 
-    /** 元数据检查上限：API 连接 10s + 读取 15s，另有排队与重试余量。 */
-    const val CHECK_TIMEOUT_MS = 30_000L
+    /**
+     * 元数据检查上限。M-s1（2026-10-25 审计）：必须**覆盖确认链的最坏耗时**——六档串行、
+     * 每档连接+读取双超时（8+15+15+8+30+15 秒档位），加上排队与重试余量约 2 分钟；旧值 30s
+     * 会在链路还在正常推进时就把检查判成超时失败（慢网下必然误杀）。
+     */
+    const val CHECK_TIMEOUT_MS = 120_000L
     /** 下载上限下限（小包也不会秒判超时）。 */
     const val DOWNLOAD_TIMEOUT_MIN_MS = 3 * 60_000L
     /** 下载上限上限（169MB 在慢网上也不至于被误判）。 */

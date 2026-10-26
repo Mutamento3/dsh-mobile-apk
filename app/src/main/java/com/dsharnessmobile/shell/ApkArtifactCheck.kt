@@ -28,6 +28,11 @@ internal fun verifyApkArtifact(
   sha256Matches: (String) -> Boolean,
 ): ApkArtifactVerdict {
   if (!fileExists) return ApkArtifactVerdict.Reject("安装包不存在")
+  // M-s5（2026-10-25 审计）：元数据**一项校验依据都不给**（无大小、无摘要）时必须拒绝——
+  // 旧实现「双缺席 ⇒ 跳过全部检查 ⇒ Accept」会把任意截断包/错误页放行进安装器。
+  if (expectedBytes <= 0 && expectedSha256 == null) {
+    return ApkArtifactVerdict.Reject("元数据既没有大小也没有 sha256，无法校验产物（拒绝放行）")
+  }
   if (expectedBytes > 0 && actualBytes != expectedBytes) {
     return ApkArtifactVerdict.Reject("大小不符（期望 ${expectedBytes} 字节，实际 ${actualBytes} 字节）")
   }
