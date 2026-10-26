@@ -14,6 +14,10 @@
 
 ## 2. 构建与验证命令
 
+FileProvider path classification decodes XML attribute references exactly once before normalization. Decimal and hexadecimal representations of `.` or `..` retain the same broad-path policy as literal characters. `node --test scripts/check-manifest-hardening.test.mjs` exercises the complete gate with encoded broad paths, registered and unregistered callers, and narrow-path controls; it also runs in PR CI.
+
+**FileProvider 宽映射调用点门禁**：`scripts/check-manifest-hardening.mjs` 从 manifest 的 `FILE_PROVIDER_PATHS` metadata 读取实际 paths XML；当任一路径映射回到 provider 基目录、越出基目录或使用 `root-path` 时，递归扫描 Java/Kotlin 源码，并要求 `getUriForFile` 标识符命中的相对路径与数量逐项匹配登记表。源码注释或字符串中的示例也计入命中数。移动、增加或删除调用点时，更新脚本中的清单和用途说明。PR CI 先跑 `node scripts/check-manifest-hardening.mjs --self-test`，再跑真实树判据 `node scripts/check-manifest-hardening.mjs`。
+
 ```powershell
 # 一键双 ABI（协调仓库根；快照→注入→门禁→gradle→out/）：
 pwsh -File scripts\build-apk-013.ps1 -Suffix ""          # 产物 out\v<版本>\dsh-mobile-apk-v<ver>-<abi>.apk
@@ -173,6 +177,7 @@ Harness按固定0.2.0-rc.2源码完成全仓构建；prepare-harness-vendor-over
 
 | 日期 | 版本 | 内容 | 更新者 |
 |---|---|---|---|
+| 2026-10-26 | 未发版 | manifest hardening 门禁按实际 FileProvider paths resource 识别宽映射，并锁定 URI 创建源码位置与引用数。 | Codex |
 | 2026-10-05 | 0.14.5 | 标明当前重构真值入口和 APK 版本码；记录三签门禁与 release 版本后缀解析规则。 | Codex |
 | 2026-10-05 | 0.14.5 | 补充冷启动预算日志的来源要求与 `loopP99Ms=-1` 哨兵判定；详见坑 251。 | Codex |
 

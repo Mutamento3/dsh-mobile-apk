@@ -128,6 +128,8 @@ jobs:
       - name: 壳侧加固与有界读门禁
         if: always()
         run: |
+          node scripts/check-manifest-hardening.mjs --self-test
+          node --test scripts/check-manifest-hardening.test.mjs
           node scripts/check-manifest-hardening.mjs
           node scripts/check-bounded-io.mjs
           node scripts/check-api-route-auth.mjs
