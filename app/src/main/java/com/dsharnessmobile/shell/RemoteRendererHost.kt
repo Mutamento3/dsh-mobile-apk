@@ -62,7 +62,13 @@ internal class RemoteRendererHost(
   @Volatile var binding = false
     private set
   private var connection: ServiceConnection? = null
-  private val bindLatch = CountDownLatch(1)
+
+  /**
+   * 绑定就绪闸门。M-r1（2026-10-25 审计）：**每次 connect 重建**——CountDownLatch 是一次性的，
+   * 旧实现首个实例 countDown 之后永远敞开，此后 disconnect→connect 的 awaitBound 会立即
+   * 返回 true（哪怕新一次 bindService 失败），把「没绑上」谎报成「绑上了」。
+   */
+  @Volatile private var bindLatch = CountDownLatch(1)
 
   /** tabId → 最新投影句柄（远端每次 ensureTab/relayout 后刷新）。 */
   val surfacePackages = ConcurrentHashMap<String, SurfaceControlViewHost.SurfacePackage>()
@@ -83,6 +89,11 @@ internal class RemoteRendererHost(
   @Synchronized fun connect(onBound: () -> Unit = {}) {
     if (renderer != null || binding) return
     binding = true
+    // M-r1：新一次绑定使用新闸门（旧闸门可能已被上一轮 countDown 永久敞开）。
+    bindLatch = CountDownLatch(1)
+    // #13（2026-10-25 审计）：若上一条 ServiceConnection 仍在（重连/竞态路径），先解绑再建新
+    // 连接——否则每次重连泄漏一条旧绑定，且服务重启时旧回调会再次投递。
+    connection?.let { stale -> runCatching { appContext.unbindService(stale) } }
     val conn = object : ServiceConnection {
       override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
         renderer = IBrowserRenderer.Stub.asInterface(service)
@@ -91,12 +102,16 @@ internal class RemoteRendererHost(
         runCatching {
           renderer?.start(this@RemoteRendererHost, startConfig())
         }
+        // #13：BIND_AUTO_CREATE 下渲染进程死亡后系统会重启服务并**重新投递本回调**——
+        // 把「回来了」的事实播报给宿主，让它清掉断线时烙下的降级标记；没有这一条，
+        // 自动恢复的绑定也救不回已降级的面板（直到重启应用）。
+        listener.onRendererEvent("", JSONObject().put("type", "rendererConnected"))
         onBound()
       }
 
       override fun onServiceDisconnected(name: ComponentName?) {
         renderer = null
-        surfacePackages.clear()
+        releaseSurfacePackages()
         projectionSizes.clear()
         listener.onRendererEvent("", JSONObject().put("type", "rendererDisconnected"))
       }
@@ -111,6 +126,18 @@ internal class RemoteRendererHost(
       binding = false
       connection = null
     }
+  }
+
+  /**
+   * 丢弃全部投影句柄。M-r2（2026-10-25 审计）：SurfacePackage 持有跨进程 Surface 资源，
+   * 旧实现只 `clear()` 表——native 句柄不释放，渲染进程侧的 buffer 生产者也停不下来
+   * （直到 GC 玄学回收）。API 33+ 有显式 [SurfaceControlViewHost.SurfacePackage.release]。
+   */
+  private fun releaseSurfacePackages() {
+    if (Build.VERSION.SDK_INT >= 33) {
+      for (pkg in surfacePackages.values) runCatching { pkg.release() }
+    }
+    surfacePackages.clear()
   }
 
   /** 引擎换代/首绑时下发受保护端口快照（未确认=0，渲染进程将拒绝一切引擎端口回环）。 */
@@ -129,7 +156,7 @@ internal class RemoteRendererHost(
     connection?.let { runCatching { appContext.unbindService(it) } }
     connection = null
     renderer = null
-    surfacePackages.clear()
+    releaseSurfacePackages()
     projectionSizes.clear()
   }
 

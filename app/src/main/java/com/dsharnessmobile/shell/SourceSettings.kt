@@ -76,6 +76,14 @@ internal object SourceSettings {
    * @return 结果；失败时若已回滚，old 源原样保留。
    */
   fun switchTo(context: Context, mirror: SourceMirror.Mirror): Result {
+    // #11（2026-10-25 审计）：换源是对 usr/etc 的双写（sources.list + chosen_mirrors），与快照刷新
+    // 的整树 swap 并发时，两次写会横跨 swap 边界（一次落旧树、一次落新树）或被换树直接吞掉。
+    // 三个真源判据全查：进程级刷新 CAS / 在线更新 CAS / 跨进程事务 journal。在场即拒绝，不动任何文件。
+    if (EngineManager.snapshotRefreshing.get() || EngineManager.onlineUpdateActive.get() ||
+      SnapshotTransaction.readMarker(context.filesDir) != null
+    ) {
+      return Result(false, "运行时正在更新（快照刷新中），请等它完成后再切换软件源")
+    }
     val engine = EngineManager(context, EngineManager.ensurePickToken())
     val prefix = engine.usrDir
     val fragment = SourceMirror.fragmentFile(prefix, mirror)
@@ -86,8 +94,11 @@ internal object SourceSettings {
     val target = sourcesListFile(prefix)
     val backup = backupFile(prefix)
     // 备份必须在任何写入之前完成：崩溃窗口内用户至少还有旧源可还原。
+    // #8（2026-10-25 审计）：备份必须**每次切换前刷新到当前源**。旧实现只在备份缺席时写
+    // 备份——第二次及以后的切换沿用第一次的备份，失败回滚会把用户从 A 源回到出厂源（而非 A），
+    // 且与 chosen_mirrors（按本次切换前的真实值回滚）不配对。备份的语义是「本次切换前的状态」。
     val hadPrevious = target.isFile
-    if (hadPrevious && !backup.isFile) {
+    if (hadPrevious) {
       runCatching { backup.writeText(target.readText()) }
         .onFailure { return Result(false, "无法备份当前软件源，已中止（未做任何修改）") }
     }
@@ -105,12 +116,14 @@ internal object SourceSettings {
       if (verify == null) {
         Result(true, "已切换到" + mirror.labelZh + "，索引已刷新")
       } else {
-        rollback(target, backup, hadPrevious, prefix, previousChosen)
-        Result(false, verify, rolledBack = true)
+        // M-s4（2026-10-25 审计）：rolledBack 必须反映 rollback 的**真实结果**——旧实现
+        // 无条件报 true，回滚半失败（备份读不出等）时用户被告知「已回滚」而实际停留在坏源。
+        val restored = rollback(target, backup, hadPrevious, prefix, previousChosen)
+        Result(false, if (restored) verify else verify + "（回滚未完全成功，见日志）", rolledBack = restored)
       }
     } catch (t: Throwable) {
-      rollback(target, backup, hadPrevious, prefix, previousChosen)
-      Result(false, "切换失败：" + (t.message ?: t.javaClass.simpleName), rolledBack = true)
+      val restored = rollback(target, backup, hadPrevious, prefix, previousChosen)
+      Result(false, "切换失败：" + (t.message ?: t.javaClass.simpleName), rolledBack = restored)
     }
   }
 
@@ -144,9 +157,11 @@ internal object SourceSettings {
       if (fragment == null || mainUrl == null) {
         false
       } else {
+        // M-s3（2026-10-25 审计）：chosen_mirrors 写失败不得谎报成功——重放的语义是
+        // 「双写都还原」，链接缺失时 pkg 的下一次 update 会把 sources.list 又改回去，
+        // 上一次快照刷新正是这么漂移的（replay 失败仍报 true 掩盖了它）。
         SourceMirror.replaceAtomically(sourcesListFile(prefix), SourceMirror.sourcesListContent(mainUrl))
-        runCatching { SourceMirror.writeChosenMirror(prefix, mirror, links) }
-        true
+        runCatching { SourceMirror.writeChosenMirror(prefix, mirror, links) }.isSuccess
       }
     }.onFailure { Log.w(TAG, "源重放失败（不影响刷新结果）: " + it.message) }.getOrDefault(false)
   }
@@ -238,7 +253,17 @@ internal object SourceSettings {
     "Could not get lock",
   )
 
-  private fun rollback(target: File, backup: File, hadPrevious: Boolean, prefix: File? = null, previousChosen: String? = null) {
+  /**
+   * 还原到备份的源。
+   *
+   * M-s4（2026-10-25 审计）：返回**真实还原结果**（任一步失败即 false，由调用方如实回执）。
+   * M-s2：chosen_mirrors 为**普通文件**（非符号链接、且不是本次切换创建的形态）时不删——
+   * 旧实现「previousChosen==null ⇒ 删文件」会把用户手工放的普通文件 chosen 一并误删。
+   *
+   * @return 是否完整还原（sources.list 与 chosen_mirrors 两步都成）。
+   */
+  private fun rollback(target: File, backup: File, hadPrevious: Boolean, prefix: File? = null, previousChosen: String? = null): Boolean {
+    var restored = true
     runCatching {
       if (hadPrevious && backup.isFile) {
         SourceMirror.replaceAtomically(target, backup.readText())
@@ -251,11 +276,24 @@ internal object SourceSettings {
       if (prefix != null) {
         if (previousChosen != null) {
           runCatching { SourceMirror.writeChosenTarget(prefix, previousChosen) }
-            .onFailure { Log.w(TAG, "chosen_mirrors 回滚失败: " + it.message) }
+            .onFailure {
+              restored = false
+              Log.w(TAG, "chosen_mirrors 回滚失败: " + it.message)
+            }
         } else {
-          File(prefix, "etc/termux/chosen_mirrors").delete()
+          // 只删「本次切换可能创建的符号链接形态」：普通文件不是我们的笔迹，留着。
+          val chosen = File(prefix, "etc/termux/chosen_mirrors")
+          if (chosen.exists() && !java.nio.file.Files.isSymbolicLink(chosen.toPath())) {
+            Log.w(TAG, "chosen_mirrors 是非链接的既有文件，回滚不动它: " + chosen.absolutePath)
+          } else {
+            chosen.delete()
+          }
         }
       }
-    }.onFailure { Log.e(TAG, "回滚失败: " + it.message) }
+    }.onFailure {
+      restored = false
+      Log.e(TAG, "回滚失败: " + it.message)
+    }
+    return restored
   }
 }

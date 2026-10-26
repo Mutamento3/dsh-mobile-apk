@@ -845,7 +845,11 @@ class UpdateCheckerTest {
     val j = JSONObject(s.snapshotJson())
     assertTrue("复用已下载包必须如实标记", j.getBoolean("reused"))
     assertFalse("安装器已拉起：本进程不再有可超时的动作（定时器必须解除）", s.inFlight())
-    assertTrue("安装器已拉起期间仍不受理新动作（避免状态与真实安装流程脱节）", s.busy())
+    // #12（#579 台账，2026-10-25）：INSTALLING 不再算 busy——旧口径下用户在系统侧取消安装器后
+    // 没有任何路径能把状态推走，而引导页在 INSTALLING 态把检查按钮渲染为可点（「恢复可检查」），
+    // 按钮点了恒无响应，更新面死锁到杀应用。取消安装器的事实出路就是再查一轮。
+    assertFalse("INSTALLING 不得算 busy（取消安装器后必须能重新检查）", s.busy())
+    assertTrue("INSTALLING 下必须受理新检查", s.beginCheck())
   }
 
   // ── 0.14.6 缺陷修复（下载失败后重试死循环）：canStart 必须与真实受理条件一致 ─────────

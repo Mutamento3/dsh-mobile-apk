@@ -30,7 +30,8 @@ class ApkArtifactCheckTest {
       Case(true, 101L, 100L, null, true),        // 多写
       Case(true, 100L, 100L, "abc", false),      // sha 不符
       Case(true, 100L, 100L, "abc", true),       // sha 符合
-      Case(true, 100L, 0L, null, true),          // 元数据无大小 → 跳过大小步
+      Case(true, 100L, 0L, "abc", true),         // 无大小 → sha-only 校验仍可判定
+      Case(true, 100L, 0L, null, true),          // M-s5：无大小也无 sha → 拒收（不再放行）
       Case(false, 0L, 100L, null, true),         // 文件不存在
     )
     for (c in cases) {
@@ -57,8 +58,16 @@ class ApkArtifactCheckTest {
 
   @Test
   fun missingSizeMetadataStillLetsShaDecide() {
-    assertTrue(verifyApkArtifact(true, 123L, 0L, null) { true } is ApkArtifactVerdict.Accept)
+    assertTrue(verifyApkArtifact(true, 123L, 0L, "x") { true } is ApkArtifactVerdict.Accept)
     assertTrue(verifyApkArtifact(true, 123L, 0L, "x") { false } is ApkArtifactVerdict.Reject)
+  }
+
+  /** M-s5（2026-10-25 审计）：元数据一项校验依据都不给（无大小、无 sha）时必须拒收。 */
+  @Test
+  fun metadataWithoutAnyEvidenceIsRejected() {
+    val v = verifyApkArtifact(true, 123L, 0L, null) { true }
+    assertTrue(v is ApkArtifactVerdict.Reject)
+    assertTrue((v as ApkArtifactVerdict.Reject).reason.contains("无法校验"))
   }
 
   @Test
