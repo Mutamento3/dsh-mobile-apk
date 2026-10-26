@@ -411,11 +411,18 @@ object NotifyCenter {
   @Synchronized
   fun channelFor(context: Context, face: Face): String? {
     val app = context.applicationContext
-    selectedCache[face.category]?.let { return it.ifEmpty { null } }
+    // 2026-10-25 审计 M-N4：用户在系统设置删除渠道后（删除即撤销，同 ID 重建即恢复默认），
+    // manager.notify 会静默丢弃（No channel found）。因此缓存与 prefs 命中**都必须验存在性**——
+    // 只验一侧的话，同进程存活期间缓存会把已删渠道继续喂给 notify。已删/判定失败一律回落
+    // resolveChannel（同 ID 重建合法），否则该类目通知永久静默且无自愈。
+    selectedCache[face.category]?.let { cached ->
+      if (cached.isNotEmpty() && channelExists(app, cached)) return cached
+      selectedCache.remove(face.category)
+    }
     val p = prefs(app)
     if (p.getBoolean(KEY_CHANNELS_INITIALIZED, false)) {
       val stored = p.getString(KEY_SELECTED_PREFIX + face.category, null)
-      if (stored != null) {
+      if (stored != null && channelExists(app, stored)) {
         selectedCache[face.category] = stored
         return stored.ifEmpty { null }
       }
@@ -423,6 +430,14 @@ object NotifyCenter {
     val id = resolveChannel(app, face)
     selectedCache[face.category] = id ?: ""
     return id
+  }
+
+  private fun channelExists(app: Context, channelId: String): Boolean = try {
+    val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    manager.getNotificationChannel(channelId) != null
+  } catch (_: Throwable) {
+    // 判定失败按「渠道不在」处理：回落 resolveChannel（它自己会重建同 ID 渠道）。
+    false
   }
 
   /** 解析（必要时创建）一个信道的渠道 ID；结果落 prefs（投递路径一律读映射，不硬编码）。 */
