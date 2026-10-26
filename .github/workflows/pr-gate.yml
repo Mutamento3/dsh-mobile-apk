@@ -22,6 +22,9 @@ jobs:
         with: { node-version: '24' }
       # APK assembly/version/signature contracts are small Node-only regressions; run them on every PR
       # instead of waiting for a manual local build or the release workflow to exercise them.
+      - name: Console keyboard layout regressions
+        if: always()
+        run: node --test scripts/console-keyboard-layout.test.mjs
       - name: APK 组装、版本与签名回归
         if: always()
         run: node --test scripts/check-apk-signatures.test.mjs scripts/resolve-version-suffix.test.mjs scripts/build-apk-engine.test.mjs scripts/check-third-party.test.mjs

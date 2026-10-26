@@ -138,6 +138,8 @@ adb -s <serial> logcat -d -s dsh-browser:V AndroidRuntime:E System.err:W
 
 ## 5. A 轨套件与连接
 
+For console keyboard changes, measure both the visual viewport and the native IME overlap: an edge-to-edge WebView can retain its full layout viewport behind the keyboard. Assert that the command input and Send control stay above the actual keyboard edge and that output retains a nonzero height. Cover portrait, landscape, already-resized native views, keyboard dismissal and a subsequent command.
+
 套件清单与参数约定见 `AGENTS.md` §2 的表（`verify-webview-015` / `verify-state-sync` / `verify-browser-host` / `verify-browser-panel` / `verify-vdisplay-viewer` / `verify-vdisplay-float` / `verify-engine-log-copy`）。
 
 硬性约束（违反会**静默连错目标**）：

@@ -21,7 +21,7 @@ package com.dsharnessmobile.shell
  */
 internal class ConsoleAnsiStripper {
 
-  private enum class State { TEXT, ESC, ESC_PENDING, CSI, OSC, STRING }
+  private enum class State { TEXT, ESC, ESC_PENDING, CSI, OSC, STRING, CR }
 
   /**
    * ESC 双字符引导符（`ESC ( X`、`ESC ) X`、`ESC * X`、`ESC + X`、`ESC # X`）：
@@ -49,12 +49,21 @@ internal class ConsoleAnsiStripper {
       when (state) {
         State.TEXT -> when {
           ch == '\u001b' -> state = State.ESC
-          // CR 在真 PTY 里是「回到行首重绘」。没有渲染器时重绘结果只会堆叠，
-          // 折成换行更接近用户对「逐行输出」的预期（既有实现就是这个口径）。
-          ch == '\r' -> out.append('\n')
+          // CR 先挂起到 CR 态：真 PTY 的行规程开着 ONLCR，每个换行都以 CRLF 输出——
+          // 直接把 CR 折成换行会让紧随的 LF 再折一次，整屏双倍行距（2026-10-25 审计 I5）。
+          ch == '\r' -> state = State.CR
           // 其余 C0 控制字符（BEL 等）一律丢弃：它们没有可见语义，只会进 UI 噪声。
           ch < ' ' && ch != '\n' && ch != '\t' -> Unit
           else -> out.append(ch)
+        }
+        // CR 的下一个字符决定折叠：LF 只算一个换行；其他字符则 CR 折行、字符按正文
+        // 语义重新分发（ESC 引导/控制字符丢弃/普通字符输出——与 TEXT 态逐分支等价）。
+        State.CR -> when {
+          ch == '\n' -> { out.append('\n'); state = State.TEXT }
+          ch == '\r' -> out.append('\n')
+          ch == '\u001b' -> { out.append('\n'); state = State.ESC }
+          ch < ' ' && ch != '\t' -> { out.append('\n'); state = State.TEXT }
+          else -> { out.append('\n'); out.append(ch); state = State.TEXT }
         }
         State.ESC -> when {
           ch == '[' -> state = State.CSI

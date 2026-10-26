@@ -684,6 +684,8 @@ sequenceDiagram
 
 ### 壳侧（Kotlin，app/src/main/java/com/dsharnessmobile/shell/）
 
+Terminal output delivery (#591): `ConsoleSession` sends stripped PTY text through `ConsoleOutputBatcher`, which emits at the size threshold or an independently scheduled deadline. Ready/error/exit frames force a flush, and the reader's `finally` closes the batcher so EOF and exceptions release its scheduler. `ConsoleOutputBatcherTest` covers idle prompts, ordering, deadline cancellation and final draining.
+
 #### K01 启动与引导面
 
 原生插件页先探测引擎：OFFLINE 正常引导 → 用户显式启动（复用主操作）→ STARTING 轮询 → ONLINE 读库存；FAILED 提示恢复，离页取消轮询。控制台仍由独立 ConsoleActivity 承载原 bash 会话。
@@ -2200,6 +2202,7 @@ app/src/main/java/com/dsharnessmobile/shell/WebUiChrome.kt
 app/src/main/java/com/dsharnessmobile/shell/WebViewShim.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleActivity.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleSession.kt
+app/src/main/java/com/dsharnessmobile/shell/ConsoleOutputBatcher.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsolePty.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleKeyCodec.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleTerminalEnv.kt
@@ -2495,3 +2498,8 @@ app/src/main/java/com/dsharnessmobile/shell/ApkUpdateAction.kt
 - [B02] 漂移：`历史 BRIDGE-API 副本（当前契约见§6 K04）` 说聚合入口「`--list` 现数，当前 17 项」，源码 `scripts/check-release-gates.mjs:28`（`GATES` 数组）是 27 项（同仓 `docs/AGENTS/build-and-env.md:48` 写的是 27 项，两份文档自相矛盾）。
 - [B02] 漂移：5 个门禁脚本的两仓副本行尾不同（协调仓 CRLF、apk 仓 LF），`cmp` 字节不等、归一化后内容一致：`scripts/check-boot-budget.mjs`、`scripts/check-browser-syntax-floor.mjs`、`scripts/check-build-parallel-cap.mjs`、`scripts/check-snapshot-builder-output.mjs`、`scripts/check-tool-output-schema.mjs`；镜像门禁只按「仅行尾差异」告警放行（`scripts/check-patch-mirror.mjs:339`）——「逐字节镜像」在行尾层不成立。
 - [B02] 漂移：`scripts/check-code-map.mjs` 只在 apk 仓存在（协调仓 `scripts/` 无此文件），且未被列进 `scripts/check-patch-mirror.mjs:160` 起的 `MIRROR_TOP` → 这条新门禁自身没有镜像守护。
+
+[B03] Console keyboard geometry (#602): ConsoleActivity.refreshInsets compares the screen-relative WebView bottom and visible window frame, then consoleImeOverlap removes already-resized space. app/src/main/assets/console.html separates navigation padding from IME occlusion and compacts controls for short usable viewports. ConsoleImeOverlapTest covers resized, unresized and positioned views; scripts/console-keyboard-layout.test.mjs covers page state, resize and keyboard restoration.
+Console input admission (#599): ConsoleSession.completePtyHandshake validates the relay generation and replays pending input under the same lock used by writeRaw and protocol-frame writes. Readiness is published after replay; failed replay stays unavailable. ConsoleInputHandshakeTest exercises ready/admission overlap, replay order, stale handshakes, literal fallback input and replay failure.
+
+Console reader settlement (#606): ConsoleSession.start sends initial status before starting its reader. ConsoleSession.readOutput drains and closes the output batcher, clears current PTY readiness and reports EOF unless an explicit exit frame already notified the listener. ConsoleReaderExitTest drives the production reader through controlled process streams and stale generations.

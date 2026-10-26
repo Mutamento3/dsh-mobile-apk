@@ -3,6 +3,7 @@ package com.dsharnessmobile.shell
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -26,6 +27,9 @@ class ConsoleActivity : ComponentActivity() {
   private val session = ConsoleSession(this)
   private val handler = android.os.Handler(android.os.Looper.getMainLooper())
   private var sessionStarted = false
+
+  /** M-c4（2026-10-25 审计）：start/restart 已挪后台线程——此标记防 onStart 与桥 restart 重入双启。 */
+  @Volatile private var sessionStarting = false
   private var pageReady = false
   private var pendingTopInset = 0f
   private var pendingBottomInset = 0f
@@ -37,11 +41,19 @@ class ConsoleActivity : ComponentActivity() {
   /** S1-18：与 lastStatus 配对的状态，页面重放时同样按状态判就绪。 */
   private var lastState: ConsoleSession.State = ConsoleSession.State.STARTING
 
+  /**
+   * 页面脚本派发（M-c2，2026-10-25 审计）：onDestroy 后 WebView 已销毁，迟到的输出/状态推送
+   * 再调 evaluateJavascript 会在部分内核上抛 IllegalStateException——这里统一守卫，
+   * 排队中的投递也由 onDestroy 的 removeCallbacksAndMessages 兜底清空。
+   */
+  private fun evalPage(script: String) {
+    if (isFinishing || isDestroyed) return
+    webView.evaluateJavascript(script, null)
+  }
+
   private val sessionListener = object : ConsoleSession.Listener {
     override fun onOutput(text: String) {
-      handler.post {
-        webView.evaluateJavascript("window.__consoleAppend(" + jsString(text) + ")", null)
-      }
+      handler.post { evalPage("window.__consoleAppend(" + jsString(text) + ")") }
     }
 
     override fun onStatus(state: ConsoleSession.State, text: String) {
@@ -64,18 +76,29 @@ class ConsoleActivity : ComponentActivity() {
    * 做子串正则（措辞一变就静默错判）。
    */
   private fun pushStatus(state: ConsoleSession.State, text: String) {
-    webView.evaluateJavascript(
-      "window.__consoleState && window.__consoleState(" + jsString(state.wire) + "," + jsString(text) + ")",
-      null,
-    )
+    evalPage("window.__consoleState && window.__consoleState(" + jsString(state.wire) + "," + jsString(text) + ")")
   }
 
   private fun pushInsets() {
     if (!pageReady || !::webView.isInitialized) return
-    webView.evaluateJavascript(
-      "window.__consoleInsets && window.__consoleInsets($pendingTopInset,$pendingBottomInset,$pendingImeInset)",
-      null,
-    )
+    evalPage("window.__consoleInsets && window.__consoleInsets($pendingTopInset,$pendingBottomInset,$pendingImeInset)")
+  }
+
+  /** Forward only the IME overlap still inside the WebView after native resizing. */
+  private fun refreshInsets() {
+    if (!::webView.isInitialized || isDestroyed) return
+    val insets = ViewCompat.getRootWindowInsets(webView) ?: return
+    val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+    val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+    val density = resources.displayMetrics.density
+    val visible = Rect()
+    window.decorView.getWindowVisibleDisplayFrame(visible)
+    val location = IntArray(2)
+    webView.getLocationOnScreen(location)
+    pendingTopInset = bars.top / density
+    pendingBottomInset = bars.bottom / density
+    pendingImeInset = consoleImeOverlap(location[1] + webView.height, visible.bottom, ime.bottom) / density
+    pushInsets()
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,25 +135,32 @@ class ConsoleActivity : ComponentActivity() {
     webView.addJavascriptInterface(ConsoleBridge(), "consoleBridge")
     setContentView(webView)
     ViewCompat.setOnApplyWindowInsetsListener(webView) { _, insets ->
-      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-      val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-      val density = resources.displayMetrics.density
-      pendingTopInset = bars.top / density
-      pendingBottomInset = bars.bottom / density
-      pendingImeInset = ime.bottom / density
-      pushInsets()
+      // Visible frames and the WebView bounds settle after the inset dispatch.
+      webView.post { refreshInsets() }
       insets
     }
+    webView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshInsets() }
     webView.loadUrl("file:///android_asset/console.html")
   }
 
   override fun onStart() {
     super.onStart()
-    if (sessionStarted) return
-    sessionStarted = session.start(sessionListener)
+    if (sessionStarted || sessionStarting) return
+    // M-c4（2026-10-25 审计）：start 全程是文件 IO（bash 存在性、relay 解包、spawn）——旧实现
+    // 在主线程跑，慢盘上 onStart 直接卡帧。挪后台线程；状态经 handler 回主线程照常上屏。
+    sessionStarting = true
+    Thread {
+      val ok = session.start(sessionListener)
+      handler.post {
+        sessionStarted = ok
+        sessionStarting = false
+      }
+    }.apply { isDaemon = true; name = "dsh-console-start" }.start()
   }
 
   override fun onDestroy() {
+    // M-c2：先清排队中的输出/状态投递，再拆会话——迟到的 evaluateJavascript 不再打到已销毁的 WebView。
+    handler.removeCallbacksAndMessages(null)
     session.destroy()
     webView.destroy()
     super.onDestroy()
@@ -145,9 +175,11 @@ class ConsoleActivity : ComponentActivity() {
       // 且引擎已死时控制台仍可用，正是这条口令存在的理由。
       val action = parseSafeCommand(command)
       if (action == null) {
-        // 同样不能带裸换行过桥（见 [writeKeys]）：命令本身来自输入框，可能含换行，
-        // 直接拼 "\n" 会让整次调用静默消失，于是提交命令失效。
-        session.writeRaw(ConsoleKeyCodec.decode(command) + "\n")
+        // I1（2026-10-25 审计）：输入框是 <input type="text">，不可能含换行——旧注释的前提
+        // 不成立；而对原文跑 decode 会二次转义：含反斜杠的命令被改写甚至拆分执行
+        // （echo 'C:\new' 拆成两条命令、grep '\d\+' 变 'd+'）。submit 直传原文，
+        // decode 只服务 writeKeys 的 data-send 编码键序列。
+        session.writeCommand(command)
         return
       }
       val engine = EngineManager(this@ConsoleActivity)
@@ -185,7 +217,16 @@ class ConsoleActivity : ComponentActivity() {
     @JavascriptInterface
     fun restart() {
       handler.post {
-        sessionStarted = session.restart(sessionListener)
+        if (sessionStarting) return@post
+        sessionStarting = true
+        // M-c4：restart 内含 destroy+start（整段文件 IO），同样离主线程。
+        Thread {
+          val ok = session.restart(sessionListener)
+          handler.post {
+            sessionStarted = ok
+            sessionStarting = false
+          }
+        }.apply { isDaemon = true; name = "dsh-console-restart" }.start()
       }
     }
 
@@ -248,4 +289,10 @@ class ConsoleActivity : ComponentActivity() {
     @JavascriptInterface
     fun hasPty(): Boolean = session.hasPty()
   }
+}
+
+/** All arguments are screen-relative physical pixels; missing frames are not occlusion. */
+internal fun consoleImeOverlap(viewBottom: Int, visibleBottom: Int, imeBottom: Int): Int {
+  if (viewBottom <= 0 || visibleBottom <= 0 || imeBottom <= 0) return 0
+  return minOf(imeBottom, (viewBottom - visibleBottom).coerceAtLeast(0))
 }
