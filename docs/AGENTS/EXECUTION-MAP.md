@@ -684,6 +684,8 @@ sequenceDiagram
 
 ### 壳侧（Kotlin，app/src/main/java/com/dsharnessmobile/shell/）
 
+Terminal output delivery (#591): `ConsoleSession` sends stripped PTY text through `ConsoleOutputBatcher`, which emits at the size threshold or an independently scheduled deadline. Ready/error/exit frames force a flush, and the reader's `finally` closes the batcher so EOF and exceptions release its scheduler. `ConsoleOutputBatcherTest` covers idle prompts, ordering, deadline cancellation and final draining.
+
 #### K01 启动与引导面
 
 原生插件页先探测引擎：OFFLINE 正常引导 → 用户显式启动（复用主操作）→ STARTING 轮询 → ONLINE 读库存；FAILED 提示恢复，离页取消轮询。控制台仍由独立 ConsoleActivity 承载原 bash 会话。
@@ -1674,6 +1676,8 @@ flowchart TD
 
 ### 构建、门禁与设备验收
 
+FileProvider XML path regression coverage: `scripts/check-manifest-hardening.test.mjs` invokes `scripts/check-manifest-hardening.mjs` against complete fixture trees. Attribute decoding precedes range classification; encoded broad roots must activate the same caller allowlist as literal roots.
+
 #### B01 构建链与快照注入
 
 - **0.14.3当前**：官方639ed015/0.2.0-rc.2、pi-ai0.87.1；PTC A1 host/child及官方streaming020六provider在registry/runner，G2 requires streaming020、A1 requires L1。source reconcile展开additionalTargets、exact verifier后同步同包pnpm物理副本，最终source snapshot复用。普通snapshot post-apply已统一runner --check复核companion/exact verifier（streaming描述marker不当产物literal）；新runtime assets、组件lib/镜像与双ABI tester构建/hash仍待父任务，不填造测量。见 [补丁台账](<dsh-mobile-apk/docs/AGENTS/RUNTIME-PATCHES.md>)。
@@ -2200,6 +2204,7 @@ app/src/main/java/com/dsharnessmobile/shell/WebUiChrome.kt
 app/src/main/java/com/dsharnessmobile/shell/WebViewShim.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleActivity.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleSession.kt
+app/src/main/java/com/dsharnessmobile/shell/ConsoleOutputBatcher.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsolePty.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleKeyCodec.kt
 app/src/main/java/com/dsharnessmobile/shell/ConsoleTerminalEnv.kt
@@ -2495,3 +2500,8 @@ app/src/main/java/com/dsharnessmobile/shell/ApkUpdateAction.kt
 - [B02] 漂移：`历史 BRIDGE-API 副本（当前契约见§6 K04）` 说聚合入口「`--list` 现数，当前 17 项」，源码 `scripts/check-release-gates.mjs:28`（`GATES` 数组）是 27 项（同仓 `docs/AGENTS/build-and-env.md:48` 写的是 27 项，两份文档自相矛盾）。
 - [B02] 漂移：5 个门禁脚本的两仓副本行尾不同（协调仓 CRLF、apk 仓 LF），`cmp` 字节不等、归一化后内容一致：`scripts/check-boot-budget.mjs`、`scripts/check-browser-syntax-floor.mjs`、`scripts/check-build-parallel-cap.mjs`、`scripts/check-snapshot-builder-output.mjs`、`scripts/check-tool-output-schema.mjs`；镜像门禁只按「仅行尾差异」告警放行（`scripts/check-patch-mirror.mjs:339`）——「逐字节镜像」在行尾层不成立。
 - [B02] 漂移：`scripts/check-code-map.mjs` 只在 apk 仓存在（协调仓 `scripts/` 无此文件），且未被列进 `scripts/check-patch-mirror.mjs:160` 起的 `MIRROR_TOP` → 这条新门禁自身没有镜像守护。
+
+[B03] Console keyboard geometry (#602): ConsoleActivity.refreshInsets compares the screen-relative WebView bottom and visible window frame, then consoleImeOverlap removes already-resized space. app/src/main/assets/console.html separates navigation padding from IME occlusion and compacts controls for short usable viewports. ConsoleImeOverlapTest covers resized, unresized and positioned views; scripts/console-keyboard-layout.test.mjs covers page state, resize and keyboard restoration.
+Console input admission (#599): ConsoleSession.completePtyHandshake validates the relay generation and replays pending input under the same lock used by writeRaw and protocol-frame writes. Readiness is published after replay; failed replay stays unavailable. ConsoleInputHandshakeTest exercises ready/admission overlap, replay order, stale handshakes, literal fallback input and replay failure.
+
+Console reader settlement (#606): ConsoleSession.start sends initial status before starting its reader. ConsoleSession.readOutput drains and closes the output batcher, clears current PTY readiness and reports EOF unless an explicit exit frame already notified the listener. ConsoleReaderExitTest drives the production reader through controlled process streams and stale generations.

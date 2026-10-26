@@ -24,6 +24,7 @@
     --ds-ease: cubic-bezier(0.32, 0.72, 0, 1);
     --inset-top: env(safe-area-inset-top, 0px);
     --inset-bottom: env(safe-area-inset-bottom, 0px);
+    --ime-occlusion: 0px;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -45,6 +46,7 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; }
   body {
+    height: calc(100% - var(--ime-occlusion));
     background: var(--ds-bg);
     color: var(--ds-text-primary);
     font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -97,6 +99,22 @@
   #wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
   #engineHint { padding: 7px 9px; margin-top: 7px; border-radius: var(--ds-radius); background: var(--ds-chip); font-size: 11px; line-height: 1.4; color: var(--ds-text-secondary); }
   #enginePill[role=button] { cursor: pointer; }
+  /* Keep editing and terminal output reachable above a landscape keyboard. */
+  :root[data-console-compact] #top { display: flex; align-items: center; gap: 8px; padding: calc(4px + var(--inset-top)) 12px 4px; }
+  :root[data-console-compact] #statusbar { flex: 1; min-width: 0; min-height: 44px; }
+  :root[data-console-compact] #statusbar .title,
+  :root[data-console-compact] #enginePill,
+  :root[data-console-compact] #chips { display: none; }
+  :root[data-console-compact] #tools { flex: none; margin: 0; gap: 4px; }
+  :root[data-console-compact] #close,
+  :root[data-console-compact] .ghost { min-width: 44px; min-height: 44px; }
+  :root[data-console-compact] #dock { display: flex; align-items: stretch; gap: 8px; padding: 4px 12px calc(4px + var(--inset-bottom)); }
+  :root[data-console-compact] #ctlrow { width: 220px; max-width: 40vw; padding: 0; gap: 4px; }
+  :root[data-console-compact] #ctlrow .ctl { min-height: 44px; }
+  :root[data-console-compact] #inputrow { flex: 1; min-width: 0; }
+  :root[data-console-compact] #cmd { padding: 10px 12px; min-height: 44px; }
+  :root[data-console-compact] #send { min-height: 44px; }
+  :root[data-console-compact] #output { padding: 4px 10px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -244,10 +262,22 @@
     else setReady(false, t, state);   // failed / exited / missing
   };
 
+  var consoleBottomInset = 0;
+  var consoleImeOverlap = 0;
+  function updateConsoleLayout() {
+    var root = document.documentElement;
+    root.style.setProperty('--inset-bottom', consoleBottomInset + 'px');
+    // Navigation padding already reserves its part of the keyboard overlap.
+    root.style.setProperty('--ime-occlusion', Math.max(0, consoleImeOverlap - consoleBottomInset) + 'px');
+    root.toggleAttribute('data-console-compact', window.innerHeight - Math.max(consoleBottomInset, consoleImeOverlap) < 320);
+  }
   window.__consoleInsets = function (top, bottom, ime) {
+    consoleBottomInset = Math.max(0, bottom || 0);
+    consoleImeOverlap = Math.max(0, ime || 0);
     document.documentElement.style.setProperty('--inset-top', (top || 0) + 'px');
-    document.documentElement.style.setProperty('--inset-bottom', Math.max(bottom || 0, ime || 0) + 'px');
+    updateConsoleLayout();
   };
+  window.addEventListener('resize', updateConsoleLayout);
 
   /** 引擎栏下方的说明行（S1-17：只报状态不给动作，等于让用户自己猜下一步）。 */
   function setEngineHint(text) {
@@ -362,13 +392,27 @@
     return hasPty;
   }
   // 就绪之后再问一次：会话是异步拉起的，页面脚本比 session.start() 早执行。
-  var ptyPoll = setInterval(function () {
-    if (syncCtlAvailability()) clearInterval(ptyPoll);
-  }, 500);
+  // M-c5（2026-10-25 审计）：轮询有上限（无 PTY 的降级会话下，500ms×∞ 的桥轮询会陪跑整个
+  // Activity 生命周期）；到顶即收手，重连时由 restart 按钮重新挂一轮。
+  var ptyPoll = null;
+  var ptyPollAttempts = 0;
+  function armPtyPoll() {
+    if (ptyPoll) clearInterval(ptyPoll);
+    ptyPollAttempts = 0;
+    ptyPoll = setInterval(function () {
+      if (syncCtlAvailability() || ++ptyPollAttempts >= 120) clearInterval(ptyPoll);
+    }, 500);
+  }
+  armPtyPoll();
   setTimeout(function () { if (!syncCtlAvailability()) setTimeout(syncCtlAvailability, 2000); }, 0);
 
   window.addEventListener('resize', pushSize);
   window.addEventListener('orientationchange', function () { setTimeout(pushSize, 120); });
+  // M-c5：edge-to-edge 下软键盘弹出**不触发 window resize**（布局视口不动，动的只有
+  // visualViewport）——键盘开着时行数不重测，vim/top 按旧高度排版即花屏。补听视觉视口。
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function () { setTimeout(pushSize, 60); });
+  }
   setTimeout(pushSize, 0);
 
   // 按键条：直接把控制字符写进 PTY（不经 submit，不追加换行）。
@@ -432,6 +476,7 @@
       return;
     }
     setReady(false, '正在重连…');
+    armPtyPoll();
     try { window.consoleBridge.restart(); } catch (e) {}
   });
   // S1-17：引擎栏可点 = 立即重试探活（离线时不再只是「报个状态」，而是给一个动作）。

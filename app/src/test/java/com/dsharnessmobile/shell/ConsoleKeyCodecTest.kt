@@ -67,4 +67,19 @@ class ConsoleKeyCodecTest {
     // 关键是**不静默删除用户输入**（路径里出现反斜杠时不能少字符）。
     assertEquals("xZZ", decode("\\xZZ"))
   }
+
+  /** M-c3（2026-10-25 审计）：\xHH 是**原始字节**——连续的合法 UTF-8 多字节序列必须整体还原。 */
+  @Test
+  fun highByteSequenceDecodesAsRawUtf8Bytes() {
+    // "你" 的 UTF-8 = E4 BD A0。旧实现 code.toChar() 造出三个 Latin-1 字符，
+    // writeRaw 再按 UTF-8 编码成 6 个垃圾字节。
+    assertEquals("你", decode("\\xE4\\xBD\\xA0"))
+    assertEquals("a中b", decode("a\\xE4\\xB8\\xADb"))
+  }
+
+  /** M-c3 反面：孤立的非法高字节不吞输入——退替换符（尽力而为）。 */
+  @Test
+  fun loneInvalidHighByteDegradesToReplacement() {
+    assertEquals("a\ufffdb", decode("a\\x80b"))
+  }
 }
