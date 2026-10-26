@@ -789,7 +789,9 @@ internal class ApkUpdateController(private val activity: Activity) {
      */
     fun timeoutReason(stateName: String): String? = when (stateName) {
       ApkUpdateState.STATE_CHECKING ->
-        "检查更新超时（30 秒内没有拿到结果）——请检查网络后重试；这不是本机架构的问题"
+        // 秒数取自 [CHECK_TIMEOUT_MS]，避免预算改动后文案继续写死旧值（曾写死「30 秒」，
+        // 而实际预算已从 120 秒抬到 200 秒——用户按文案判断"超时不对劲"时会被误导）。
+        "检查更新超时（" + (CHECK_TIMEOUT_MS / 1000) + " 秒内没有拿到结果）——请检查网络后重试；这不是本机架构的问题"
       ApkUpdateState.STATE_DOWNLOADING ->
         "下载超时——网络过慢或已中断，本次已放弃；可稍后重试（不会安装未完成或未校验通过的包）"
       else -> null

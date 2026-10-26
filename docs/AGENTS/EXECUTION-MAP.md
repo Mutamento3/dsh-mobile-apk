@@ -727,12 +727,15 @@ Terminal output delivery (#591): `ConsoleSession` sends stripped PTY text throug
   - **不变量 1（不占用主按钮与相位）**：APK 更新只改次级提示/次级按钮，APK 路径上 `applyGuidePhase` / `primaryButton` 引用数 = 0；
     「更新中」不再出现在 APK 路径。反例锚点 `UpdateCheckerTest.kt:393`（`updateNeverHijacksPhaseOrPrimaryButton`）。
   - **不变量 2（收敛由发起方保证）**：超时兜底是发起方责任，`watchdog = Runnable { onTimeout() }`（`ApkUpdateAction.kt:261`）
-
-Metadata checks share UpdateCheckDeadline from acceptance through publication. Each source consumes a bounded child budget across redirects; active connections are disconnected at expiry, and publication rechecks the shared deadline under the epoch lock.
-
     / `armWatchdog`（`:321`）/ `disarmWatchdog`（`:326`）/ `onTimeout`（`:335`）/ `timeoutReason`（纯函数 `:607`）/ `release`（`:344`）；
     check（`:380`）与 download（`:401`）两处都 arm，任何终态必落如实文案。
     反例锚点 `UpdateCheckerTest.kt:364`（`timeoutAlwaysConvergesToHonestTerminalText`）。
+  - **不变量 2a（元数据检查共用同一条期限）**：`UpdateCheckDeadline` 从受理贯穿到结果发布——
+    六档来源共用一条单调时钟总期限（`UpdateCheckDeadline.TOTAL_MS` = 200 秒，覆盖六档 182 秒的
+    连接/读取子预算），每档子期限跨重定向不刷新、连接与读取都从中扣；到期由 `metadataTimers`
+    主动断开阻塞连接，发布侧在 epoch 锁内再查一次期限（`ApkUpdateAction.kt:578-589`）。
+    因此"迟到的有效兜底结果"不会作废，"超时"也不会被一条迟到的成功结果伪造成成功。
+    正/负控：`UpdateCheckDeadlineTest`（10 例，把 `TOTAL_MS` 改回 120 秒即判红）。
   - **不变量 2b（单一真源：`canStart` 与受理判据必须同表达式）**：`canStart` 直接由 state 派生
     （`snapshotJson` 的 `state == STATE_AVAILABLE`，`:71`），与 `beginDownload()`（`:140`）的受理判据**同一表达式**。
     旧实现把 `canStart` 绑在一个独立的「有没有待装新版」字段上，其语义**弱于**真实受理条件（`state == available` **且** 该字段非空），
