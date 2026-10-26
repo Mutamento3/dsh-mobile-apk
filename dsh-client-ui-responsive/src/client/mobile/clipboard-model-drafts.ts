@@ -6,6 +6,8 @@ interface DraftTarget { input: HTMLInputElement; value: string; before: string }
 const KEY = 'input[aria-label="API key"],input[aria-label="API 密钥"]'
 const BASE = 'input[aria-label="Base URL"],input[aria-label="API 地址"]'
 const MODEL = 'input[aria-label^="Model ID "],input[aria-label^="模型 ID "]'
+const EDITOR_SCOPE = '[data-dsh-settings-dialog],[role="dialog"][aria-modal="true"]'
+const SAVE_LABEL = /^(Apply|保存|Save and continue|保存并继续)$/
 
 /** A mounted editor can still be hidden by the mobile settings layer. */
 function visible(owner: HTMLElement): boolean {
@@ -42,7 +44,10 @@ function attachEditor(owner: HTMLElement, key: HTMLInputElement): () => void {
   notice.style.cssText = 'margin:0;font-size:0.9em'
   const preview = document.createElement('div')
   panel.append(read, notice, preview)
-  owner.append(panel)
+  const save = [...owner.querySelectorAll('button')].find(b => SAVE_LABEL.test((b.textContent || '').trim()))!
+  let actions: HTMLElement = save
+  while (actions.parentElement !== owner) actions = actions.parentElement!
+  owner.insertBefore(panel, actions)
   let release: (() => void) | undefined
   let clearPreview: (() => void) | undefined
 
@@ -53,7 +58,7 @@ function attachEditor(owner: HTMLElement, key: HTMLInputElement): () => void {
     heading.textContent = tr('确认填入此提供商的草稿；完成后请自行保存。', 'Review this provider draft, then save it yourself when ready.')
     const summary = document.createElement('p')
     summary.textContent = [config.apiKey === undefined ? '' : tr('API 密钥：已隐藏', 'API key: hidden'),
-      config.baseURL === undefined ? '' : 'Base URL: ' + config.baseURL,
+      config.baseURL === undefined ? '' : tr('地址：', 'Base URL: ') + config.baseURL,
       config.model === undefined ? '' : tr('模型：', 'Model: ') + config.model].filter(Boolean).join('\n')
     summary.style.whiteSpace = 'pre-wrap'
     const targets: DraftTarget[] = []
@@ -72,6 +77,10 @@ function attachEditor(owner: HTMLElement, key: HTMLInputElement): () => void {
     empty.textContent = tr('选择要填充的模型字段', 'Choose the model field to fill')
     choose.append(empty)
     const models = [...owner.querySelectorAll<HTMLInputElement>(MODEL)]
+    if (config.model !== undefined) {
+      // Reveal the actual fields before asking the user to choose a model row.
+      models.forEach(input => input.closest('details')?.setAttribute('open', ''))
+    }
     models.forEach((input, index) => {
       const option = document.createElement('option')
       option.value = String(index)
@@ -88,7 +97,10 @@ function attachEditor(owner: HTMLElement, key: HTMLInputElement): () => void {
     for (const button of [fill, cancel]) button.style.cssText = read.style.cssText
     choose.style.cssText = 'min-height:44px;max-width:100%;font:inherit;color:inherit;background:transparent'
     const update = () => { fill.disabled = !available || (config.model !== undefined && choose.value === '') }
-    choose.onchange = update
+    choose.onchange = () => {
+      update()
+      models[Number(choose.value)]?.scrollIntoView?.({ block: 'nearest' })
+    }
     if (models.length === 1) choose.value = '0'
     update()
     if (!available || (config.model !== undefined && models.length === 0)) {
@@ -158,18 +170,19 @@ function attachEditor(owner: HTMLElement, key: HTMLInputElement): () => void {
   return () => { release?.(); clearPreview?.(); panel.remove() }
 }
 
-/** Observe only provider editors inside Settings; remove listeners on detach/remount. */
+/** Observe provider editors in Settings or onboarding; native confirmation still gates reads. */
 export function installClipboardModelDrafts(): () => void {
   const editors = new Map<HTMLElement, () => void>()
   const scan = () => {
     for (const [owner, dispose] of editors) if (!visible(owner)) { dispose(); editors.delete(owner) }
-    for (const key of document.querySelectorAll<HTMLInputElement>('[data-dsh-settings-dialog] ' + KEY.split(',').join(',[data-dsh-settings-dialog] '))) {
+    for (const key of document.querySelectorAll<HTMLInputElement>(KEY)) {
+      if (!key.closest(EDITOR_SCOPE)) continue
       let owner = key.parentElement
       while (owner) {
-        if ([...owner.querySelectorAll('button')].some(b => /^(Apply|保存)$/.test((b.textContent || '').trim()))) break
+        if ([...owner.querySelectorAll('button')].some(b => SAVE_LABEL.test((b.textContent || '').trim()))) break
         owner = owner.parentElement
       }
-      if (!owner || !visible(owner) || !owner.closest('[data-dsh-settings-dialog]') || owner.querySelectorAll(KEY).length !== 1 || editors.has(owner)) continue
+      if (!owner || !visible(owner) || !owner.closest(EDITOR_SCOPE) || owner.querySelectorAll(KEY).length !== 1 || editors.has(owner)) continue
       editors.set(owner, attachEditor(owner, key))
     }
   }
