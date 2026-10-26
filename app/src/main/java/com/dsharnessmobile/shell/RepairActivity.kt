@@ -54,9 +54,12 @@ class RepairActivity : Activity() {
   private var connections: List<RepairModelConnection> = emptyList()
   private var selectedModel = 0
   private var selectedEffort: String? = null
-  private var worker: Thread? = null
-  private var client: RepairModelClient? = null
-  private var alive = true
+  // 2026-10-25 审计 M-RA1：三者均为跨线程字段（worker 线程写 client、主线程 cancelWork 读；
+  // onDestroy 主线程写 alive、worker 循环读）——无 @Volatile 时取消窗口内的可见性延迟会让
+  // client?.cancel() 拿到旧 null，该次 HTTP 请求只能等 180s readTimeout 兜底。
+  @Volatile private var worker: Thread? = null
+  @Volatile private var client: RepairModelClient? = null
+  @Volatile private var alive = true
   private var report: File? = null
   private var pendingActivity: LinearLayout? = null
   private var activeConnection: RepairModelConnection? = null

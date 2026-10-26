@@ -89,6 +89,32 @@ class RepairToolsTest {
     assertEquals("outside-scope", failure { fs.read(systemNamed.absolutePath, 0, 10) }.getString("error"))
   }
 
+  /** I-R1（2026-10-25 审计）：list 隐藏的 4 个凭据名必须与 read/write 拦截同源——旧实现漏了两个 key.txt。 */
+  @Test
+  fun keyTextFilesAreNeverReadOrWritten() {
+    for (name in listOf("deepseek-key.txt", "dashscope-key.txt")) {
+      val file = File(runtime, "home/$name")
+      file.parentFile.mkdirs()
+      file.writeText("sk-test")
+      assertEquals(name + " read", "protected-file", failure { fs.read(file.absolutePath, 0, 64) }.getString("error"))
+      assertEquals(name + " write", "protected-file", failure { fs.write(file.absolutePath, "x") }.getString("error"))
+      assertEquals("密钥文件不得被覆盖", "sk-test", file.readText())
+    }
+  }
+
+  /** M-R2：offset 越界必须拒绝——旧实现静默返回文件头内容冒充 offset 处的数据。 */
+  @Test
+  fun readBeyondFileSizeIsRejectedInsteadOfReturningTheFileHead() {
+    val file = File(runtime, "engine.log")
+    file.writeText("0123456789")
+    assertEquals("越界 offset 必须拒绝", "bad-offset", failure { fs.read(file.absolutePath, 11, 4) }.getString("error"))
+    // offset == size 仍合法：读到空并收尾（nextOffset=null）
+    val tail = fs.read(file.absolutePath, 10, 4)
+    assertTrue(tail.getBoolean("ok"))
+    assertEquals("", tail.getString("content"))
+    assertTrue(tail.isNull("nextOffset"))
+  }
+
   @Test
   fun credentialsAreNeverReadOrWritten() {
     val credential = File(runtime, "home/.dsh/.credentials.yaml")
