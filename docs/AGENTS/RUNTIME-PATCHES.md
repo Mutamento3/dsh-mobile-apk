@@ -332,7 +332,7 @@ unlink ENOENT 容忍），与 attachment 资产逐字节同源——此前这三
 `@xterm/addon-serialize` **0.14.0**（嵌套段 `nested` 仍 5 条，`packages` 313 条）；
 许可清单 `engine-overlay-licenses.json` 41 → **59** 条（新增项全部非 copyleft：MIT/Apache-2.0）。
 
-**profile 显式禁用上游 `office-to-pdf` 行**（`scripts/profile-web.cordis.patch.yml:167`，
+**profile 显式禁用上游 `office-to-pdf` 行**（`scripts/profile-web.cordis.patch.yml` 中 `- id: office-to-pdf` 段，
 `- id: office-to-pdf` + `disabled: true`）：rc.1 的 web-app bundle 新增该行（0.1.5 零命中），它运行时依赖
 `@deepseek-ai/libreoffice-kit`，而该依赖在本平台**无条件不可用**——`platformTarget()` 只认
 darwin/win32/linux-glibc，Android 下 `process.platform` 为 android ⇒ `resolveEngine()` 落到

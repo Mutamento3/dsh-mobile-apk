@@ -144,7 +144,7 @@
 
 68. **部署默认写面档位不是能力门（#172 实锤，0.13.8 修复）**：`dsh-android-bridge` 的
     `gateFor/gateFacts/controlDecision` 三处曾叠 `&& st.tier !== 'T0'`——出厂装配
-    `writeMode: workspace-write`（profile-web.cordis.patch.yml:23）使 `tier` 恒 T0，
+    `writeMode: workspace-write`（`scripts/profile-web.cordis.patch.yml` 的 `shell-termux.config` 段）使 `tier` 恒 T0，
     ADB 通道**恒判未就绪**（`android_adb_shell_exec` 永不返回 via:'adb'），且设置页显示
     「未授权（T0）」——坑 29「勿把部署默认当死锁」的活体复刻。修复 = 三处删 tier 条件，
     能力门 = 引擎级三道门 + 会话档位实时 resolve；`tier` 降级为部署视图字段
