@@ -151,9 +151,17 @@ class Issue309StartRecoveryTest {
       "闸门 A 拒启路径直到取证为止不得 spawn（否则互锁的成因就变了）",
       gateA.contains("startWithArgs("),
     )
-    // 且整段拒启必须 return false（不得放行到后面的 spawn 段）。
+    // 且整段拒启必须**立即返回**（不得放行到后面的 spawn 段）。
+    //
+    // 判据曾写成 `refusalTail.contains("return false")`——那锁的是字面 token，不是语义。
+    // issue #657 把这条出口收口成 `return refuse(...)`（统一落盘）后，语义完全等价、
+    // 拒启仍然立即返回，旧断言却判红。这正是「源码形态断言在重构时制造假红」的典型：
+    // 守的是写法，不是行为。现改为「拒启段必须 return」，两种写法都算数。
     val refusalTail = between(manager, "lastStartRefusalEvidence = liveRuntimeEvidence(missing, confirmed)", "val now = System.currentTimeMillis()")
-    assertTrue("拒启必须 return false", refusalTail.contains("return false"))
+    assertTrue(
+      "拒启必须立即 return（不得续跑到 spawn 段）",
+      refusalTail.contains("return false") || refusalTail.contains("return refuse("),
+    )
     assertTrue("闸门 A 必须在 return 之前给出结构化原因码", gateA.contains("REFUSAL_LIVE_RUNTIME_INCOMPLETE"))
   }
 

@@ -835,6 +835,12 @@ internal class EngineStartFlow(private val activity: MainActivity) {
       // There is no separate UI retry state that can resolve it: the assistant
       // reads the actual archive and profile through native tools.
       if (activity.engineManager.lastStartRefusalCode == EngineManager.REFUSAL_HARD_BUNDLE_SELECTION) {
+        // issue #657：这条 early return 此前跳过了下面的失败落盘，于是「Hard 清单缺失」
+        // 这种用户无法自行诊断的拒启，成了唯一不在 boot-fail.log 留痕的启动失败。
+        //
+        // 落盘已**下沉**到 EngineManager.startEngine() 的统一收口 refuse()（7 条出口全走它），
+        // 所以这里不再重复写——设备实测过重复版本会一次拒启写两条同 stage 记录，
+        // 反而让 boot-fail.log 的条数失真。此处只保留「转交原生修复」这层语义。
         requireNativeRepair()
         return@Thread
       }
