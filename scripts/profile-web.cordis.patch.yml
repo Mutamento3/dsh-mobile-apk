@@ -1,8 +1,8 @@
 # gateway/client 由继承的 base/typert-gateway 唯一行提供，不在此重复 insert。
 # 0.14.7 的 host-fiber 时序适配随 client-registry-scan-C4 注入；controllers 全部保留。
 # Android adaptation (M1.1 final form): dsh-shell-termux replaces the temporary patch v2.
-# Protection boundary = Termux app domain (SELinux u0_aXXX) + approval flow;
-# sandboxMode explicitly declares workspace-write (permission-presets mount prerequisite), enforcement honestly reported as partial.
+# Protection boundary = app domain (SELinux u0_aXXX) + approval flow; enforcement honestly reported as partial.
+# sandboxMode declares workspace-write: that fences ONLY fs tools (workspaceRoot). bash is NOT fenced by it.
 - id: bash-sandbox
   disabled: true
 - insert:
@@ -19,9 +19,9 @@
         cwd: /data/data/com.dsharnessmobile.shell/files/home
         timeoutMs: 120000
         maxTimeoutMs: 600000
-        # 写面栅栏（0.13.0 D21）：默认档位仅工作区与选定共享目录；danger-full-access 为完全访问档位
-        # （开放共享存储全域，仍限应用域沙盒）。workspaceRoot/sharedDirs 为全局单一实例，
-        # 由 dsh-android-linux-env 插件在设置页动态维护（此处的初始值仅出厂基线）。
+        # 写面栅栏（0.13.0 D21）：workspace-write 只约束 fs 工具（workspaceRoot 内 containment），
+        # bash 不受约束——命令在应用域执行，真实边界是 SELinux + 审批，壳侧固定上报 enforcement: partial
+        # （见 dsh-shell-termux/src/index.ts:211-213）。danger-full-access 开放共享存储全域，仍限应用域沙盒。
         writeMode: workspace-write
         workspaceRoot: /data/data/com.dsharnessmobile.shell/files/home/.dsh/workspaces
         sharedDirs: []
@@ -142,7 +142,7 @@
 
 # 侧栏 AI 浏览器（0.13.8 新插件 @dsh-android/dsh-android-browser）：宿主半——tier 判定、面板数据契约、
 # 壳桥 op 名（BROWSER_OPS，见其 src/contract.ts）。**browser\* 不进 A11Y_OPS**（方案 §4.5）。
-# 本轮壳侧尚未实现壳桥分支，op 名先冻结在契约里（未挂载 = 引擎不加载，故此处先挂载）。
+# 壳侧执行位已落地（BrowserHost.kt:809-820、DeviceControlService.kt:664-678），op 名与此处一致。
 - insert:
     - id: android-browser
       name: '@dsh-android/dsh-android-browser'
