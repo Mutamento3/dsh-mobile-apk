@@ -340,6 +340,21 @@ try {
   // → 纯白无字。判据 = 真实解析器 AST + esbuild 双 arm 逐字节差分（禁 grep），扫全清单。
   log('门禁：浏览器语法下限（AST + 双 arm 差分）…')
   run('node', [gate('check-browser-syntax-floor.mjs'), '--scan', snapIn])
+  // 快照包名一致性（2026-10-27，issue #154 / apk #480 第 1 条）：注入进各装配 profile 的
+  // cordis.patch.yml 里，shell 路径（bashPath/prefix/home/cwd）必须与 app/build.gradle.kts 的
+  // applicationId 同源。改包名时漏改 patch，APK 装得上但引擎起不来（路径指向不存在的
+  // /data/user/0/<旧包名>）。历史缺口：该门禁自存在起**从未被任何链调用**（apk #480 实测），
+  // 只能在 CI 工作流里手动跑。
+  //
+  // 为什么是 python 而非 node：它是纯标准库的 tar 流式扫描（ELF 架构 + 机密 + 插件哈希 +
+  // 逐 profile patch 比对），与 CI 的 ci-verify-snapshot.py 是**同一份实现**；PYTHON 常量已在
+  // :26 定义（win32 → python，其余 → python3），与 build-snapshot-013.mjs 口径一致。
+  //
+  // 为什么**不**登记进 GATE_SCRIPTS（:64）：那个数组只收 .mjs，check-gate-skips.mjs:40 的正则
+  // 也只解析 .mjs 形态的条目——把 .py 塞进去既不会被解析到，还会污染 :163 的「门禁集(N)」计数。
+  // 「是否真的接线」改由 check-build-chain-abort.mjs 的静态断言守（断言本调用点必须在场）。
+  log('门禁：快照包名一致性（applicationId vs 各 profile patch）…')
+  run(PYTHON, [gate('ci-verify-snapshot.py'), snapIn, ABI, ...pluginDirs])
   // 模型面工具 wire 预算（0.14.0 §4.1）：注册集（解锁后上限）+ 初始可见集（模型第一眼）双口径。
   // 前置于本步的插件 npm build 已产出 plugins/*/lib，门禁真跑各插件 apply() 采集工具定义。
   log('门禁：模型面工具 wire 预算（注册集 + 初始可见集）…')
