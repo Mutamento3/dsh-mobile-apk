@@ -435,6 +435,20 @@ foreach ($abi in @('arm64', 'x86_64')) {
     Write-Host "== 快照机密门禁（$abi，严格）=="
     node (Join-Path $Root "scripts\check-snapshot-secrets.mjs") $snapIn --require 2>&1
     if ($LASTEXITCODE -ne 0) { Deny-Abi $abi "SNAPSHOT_SECRET_CHECK_FAILED：快照含机密或归档不可读"; continue }
+    # 快照包名一致性（2026-10-27，issue #154 / apk #480 第 1 条）：注入进各装配 profile 的
+    # cordis.patch.yml 里，shell 路径（bashPath/prefix/home/cwd）必须与 app/build.gradle.kts 的
+    # applicationId 同源。改包名时漏改 patch，APK 装得上但引擎起不来。历史缺口：该门禁自存在起
+    # **从未被任何链调用**（apk #480 实测）。云端链 build-apk.mjs 调用同一份实现，差集必须为 0。
+    #
+    # 雷点（不要「统一风格」改成管道）：下面这行末尾的 2>&1 是**把 stderr 并进 stdout 供日志
+    # 收集**，不是管道。一旦写成 python ... 2>&1 | Select-Object -First N，$LASTEXITCODE 会变成
+    # 管道末端 cmdlet 的退出码，门禁判红会被静默吞成 0——「接了但等于没接」。
+    # check-build-chain-abort.mjs 的判据 C（:13）对此有明文规定：不得管道直连 Select-Object 吞掉
+    # $LASTEXITCODE。实测坑（2026-10-27）：python ... 2>&1 | Select-Object -First 20 显示 exit 0，
+    # 实际门禁返回 1。
+    Write-Host "== 快照包名一致性门禁（$abi）=="
+    python (Join-Path $Root "scripts\ci-verify-snapshot.py") $snapIn $abi @pluginDirs 2>&1
+    if ($LASTEXITCODE -ne 0) { Deny-Abi $abi "SNAPSHOT_PKG_NAME_MISMATCH：快照内 profile patch 的包名与 applicationId 不一致（或被检查项不通过）"; continue }
     # 本段只是**可观测性打印**（数一遍关键可执行与常规文件条数），不参与任何判据；
     # 真正的判据是下面的 check-snapshot-secrets / elf-check / 运行时补丁资产门禁。
     # 非 Windows runner 无 wsl（GitHub ubuntu-latest 实测：The term 'wsl' is not recognized）⇒

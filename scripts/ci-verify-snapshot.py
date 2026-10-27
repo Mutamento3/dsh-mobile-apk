@@ -135,6 +135,26 @@ def elf_machine(data: bytes) -> str:
 
 
 def scan(snapshot: str, expect: str, plugin_dirs):
+    # 输入前置校验（2026-10-27，issue #154 C2）。本门禁被接进两条构建链后是**硬阻断点**，
+    # 输入缺失时必须给出「一眼能分清是环境问题还是真判红」的信息，不能抛 Python traceback
+    # ——构建者看到 FileNotFoundError 栈看不出「我忘了先跑 build-snapshot-013.mjs」。
+    # 约定：exit 2 = 环境/用法错误（区别于 exit 1 = 判据不通过）。两仓逐字节同源。
+    if expect not in ('aarch64', 'x86_64'):
+        print('SNAPSHOT_GATE_ERROR: 未知 ABI "' + str(expect) + '"（只接受 aarch64 | x86_64）')
+        sys.exit(2)
+    if not os.path.isfile(snapshot):
+        print('SNAPSHOT_GATE_ERROR: 快照文件不存在: ' + str(snapshot))
+        print('  → 先跑 node scripts/build-snapshot-013.mjs <abi> 产出快照，或检查 --snapshot 路径')
+        sys.exit(2)
+    if not plugin_dirs:
+        print('SNAPSHOT_GATE_ERROR: 未提供任何插件目录（至少要给一个 plugins/<name>）')
+        sys.exit(2)
+    missing_dirs = [d for d in plugin_dirs if not os.path.isdir(d)]
+    if missing_dirs:
+        print('SNAPSHOT_GATE_ERROR: 插件目录不存在: ' + ', '.join(missing_dirs))
+        print('  → 插件 lib/ 需先 npm run build；目录名拼写也要核对')
+        sys.exit(2)
+
     fail = []
     checked_elf = False
     # profile -> set(注入包名)：插件必须在**每个**装配 profile 里在场

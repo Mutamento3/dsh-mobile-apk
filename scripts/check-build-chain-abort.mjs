@@ -98,6 +98,55 @@ if (!mjsRel) { check('云端链脚本在场: dsh-mobile-apk/scripts/build-apk.mj
   check('云端链失败路径抛错/非 0 退出', /throw new Error|process\.exit\(1\)/.test(text))
 }
 
+// ── D2. 快照包名一致性门禁（ci-verify-snapshot.py）必须真接线 ────────────────
+// 背景（2026-10-27，issue #154 / apk #480 第 1 条）：该门禁自存在起从未被任何链调用，只能在 CI
+// 工作流里手动跑——与 :56 记的 check-dead-tokens「只登记未接线」是同型缺陷。接线之后必须有人守，
+// 否则下一个人删掉那行调用不会有任何东西报警，直接退回原始状态。
+//
+// 判据取「调用点 + 快照变量」两个要素，且只认**真实调用形态**（不认注释、不认声明数组字符串）：
+//   - 调用点：没出现 = 线被拆了；
+//   - 快照变量：调用必须把「本次构建的快照路径」作为实参传进去（ps1 的 $snapIn / mjs 的 snapIn）。
+//     否则有人传常量或空串也能「通过」，门禁等于没验本次产物。
+// 两个仓同一份脚本，故 ps1 侧判据在协调仓（本仓）与 apk 仓都适用；mjs 侧按 resolveRepoPath 解析。
+{
+  // 注意：不要用跨行块注释正则去「净���」整个文件——本仓 build-apk.mjs 第 25 行有 /** ... */,
+  // 贪婪跨行匹配会把中间整段（含真实调用行）一起吞掉，断言会假红。改成只剔除以 // 开头的整行注释。
+  const dropLineComments = (text) => text.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n')
+  // ps1：python (Join-Path $Root "scripts\ci-verify-snapshot.py") $snapIn $abi @pluginDirs
+  // 反引号/引号内是脚本名，实参紧随其后；要求同一行里既有脚本名又有 $snapIn。
+  const ps1Call = ps1Text
+    .split('\n')
+    .filter((l) => !/^\s*#/.test(l))
+    .filter((l) => /ci-verify-snapshot\.py/.test(l))
+  const ps1Wired = ps1Call.filter((l) => /\$snapIn\b/.test(l))
+  check('本地链真调用快照包名门禁（ci-verify-snapshot.py + $snapIn 实参）',
+    ps1Wired.length === 1,
+    ps1Call.length === 0 ? '未找到调用行（门禁未接线或调用被删）'
+      : (ps1Wired.length === 0 ? '调用行未传 $snapIn（验的不是本次快照）: ' + ps1Call[0].trim()
+        : '调用点应恰好 1 处，实得 ' + ps1Wired.length + ' 处'))
+  // 云端链文件在三类布局下的位置不同：apk 仓根（云端）/ 协调仓根 + 嵌套 dsh-mobile-apk / 只有本仓。
+  // resolveRepoPath 已按这两条候选解析；解析不到就说明两侧都没这个文件（不是「未接线」，要分开报）。
+  const mjsRelCands = ['dsh-mobile-apk/scripts/build-apk.mjs', 'scripts/build-apk.mjs']
+  const mjsRelResolved = mjsRelCands.find((c) => existsSync(join(ROOT, c))) ?? null
+  if (!mjsRelResolved) {
+    check('云端链脚本在场（dsh-mobile-apk/scripts/build-apk.mjs 或 scripts/build-apk.mjs）', false)
+  } else {
+    const mjsText = dropLineComments(readFileSync(join(ROOT, mjsRelResolved), 'utf8'))
+    const mjsCall = mjsText
+      .split('\n')
+      .filter((l) => !/^\s*\/\//.test(l))
+      .filter((l) => /ci-verify-snapshot\.py/.test(l))
+      // 真实执行形态：run(PYTHON, [gate('ci-verify-snapshot.py'), snapIn, ABI, ...pluginDirs])
+      .filter((l) => /\brun\s*\(/.test(l))
+    const mjsWired = mjsCall.filter((l) => /\bsnapIn\b/.test(l) && /\bABI\b/.test(l))
+    check('云端链真调用快照包名门禁（run(ci-verify-snapshot.py, snapIn, ABI, ...)）',
+      mjsWired.length === 1,
+      mjsCall.length === 0 ? '未找到 run(...) 调用行（门禁未接线或调用被删）'
+        : (mjsWired.length === 0 ? '调用行未同时传 snapIn 与 ABI: ' + mjsCall[0].trim()
+          : '调用点应恰好 1 处，实得 ' + mjsWired.length + ' 处'))
+  }
+}
+
 // ── E. 动态自检 ──────────────────────────────────────────────────────────────
 if (!argv.includes('--self-test')) {
   console.log('（默认模式：仅静态断言；动态自检用 --self-test）')
