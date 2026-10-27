@@ -321,10 +321,20 @@ const CAPS_PROBE_TTL_MS = 10_000
 export interface ControlGateFacts {
   a11yEnabled: boolean
   /**
-   * ST-23：无障碍在线判定的**来源标注**——queue=控制队列取活心跳新鲜，heartbeat=壳侧独立
-   * 心跳线程新鲜（慢建树场景），off=两条都不新鲜。两口径并存时靠它区分，不再只能看一个布尔。
+   * 无障碍在线判定的**来源标注**——heartbeat=壳侧独立心跳线程新鲜，off=不新鲜。
+   *
+   * #648：旧口径里还有一个 `queue`（控制队列取活新鲜即判在线），已删除——轮询设计上就是
+   * a11y 关着也能跑，用它当 a11y 证据会把「服务已死但轮询还活着」误报成可用。轮询新鲜度
+   * 改由下方的 {@link polling} 单独暴露。
    */
-  a11ySource: 'queue' | 'heartbeat' | 'off'
+  a11ySource: 'heartbeat' | 'off'
+  /**
+   * #648：壳侧控制轮询的存活事实（**不是**无障碍证据，两者相互独立）。
+   *
+   * `active` = 最近一次取活在 20s 窗口内；`ageMs` 是距今毫秒数，从未轮询过则为 null。
+   * 排障时用它回答「壳侧轮询还在不在跑」，用 a11yEnabled 回答「无障碍开没开」。
+   */
+  polling: { active: boolean; ageMs: number | null }
   fullAccess: boolean
   allowSwitch: boolean
   paired: boolean
@@ -835,6 +845,7 @@ export class AndroidPrivilegeService {
     const gates: ControlGateFacts = {
       a11yEnabled: a11y,
       a11ySource,
+      polling: this.pollingFacts(),
       fullAccess: st.fullAccess === true,
       allowSwitch: st.allowSwitchOn === true,
       paired: st.paired === true,
@@ -892,17 +903,27 @@ export class AndroidPrivilegeService {
   }
 
   /**
-   * ST-23：无障碍在线的**判定来源**。prefs 的 a11yEnabled 会在进程被 force-stop 后变成僵尸
-   * true（onDestroy 不保证执行），所以叠加两类心跳，同一个 20s 新鲜窗口：
-   *  - queue：控制队列最近一次取活（pollAgeMs）新鲜——慢建树的轮次里队列可能长时间没取活；
-   *  - heartbeat：壳侧独立心跳线程写的 live prefs 键 controlHeartbeat 新鲜（防慢建树被误判掉线）；
-   *  - off：都不新鲜 / prefs 未声明 a11yEnabled（fail-closed）。
-   * 两条口径并存时必须能看出走的哪条，故对外同时暴露 {@link a11ySource}。
+   * 无障碍在线的**判定来源**。prefs 的 a11yEnabled 会在进程被 force-stop 后变成僵尸
+   * true（onDestroy 不保证执行），所以必须再叠一层新鲜心跳：
+   *  - heartbeat：壳侧独立心跳线程写的 live prefs 键 controlHeartbeat 新鲜；
+   *  - off：心跳不新鲜 / prefs 未声明 a11yEnabled（fail-closed）。
+   *
+   * **#648 修正：控制队列的 pollAgeMs 已从本判定中移除。**
+   * 旧实现还有一条 `queue`：pollAgeMs 新鲜即判在线。那是误报源——轮询与无障碍是两条
+   * 独立的生命线，而且轮询**设计上就是 a11y 关着也能跑**：
+   *  - `ControlCarrier` 由 `EngineService.kt:63` 启动，与 a11y 服务无关（0.14.0 承载拆离，
+   *    `ControlCarrier.kt:8` 原文「把长轮询从无障碍服务拆出——a11y 关着也能跑」）；
+   *  - 心跳写端有 a11y 守卫（`ControlCarrier.kt:84`：`if (a11y != null) heartbeat(...)`），
+   *    轮询写端没有（`control-queue.ts:170` 每轮无条件刷新 lastTakeAt）。
+   * 于是 a11y 服务死掉后轮询照旧新鲜，旧判定把「轮询活着」当成「a11y 活着」，报 queue →
+   * a11yEnabled=true，而实际每条 a11y op 都返回 a11y-unavailable（#648 现场）。
+   *
+   * 轮询新鲜度本身是有用的诊断事实，但它是**另一件事**，现以 {@link ControlGateFacts.polling}
+   * 单独暴露，不再冒充无障碍证据。
    */
-  a11ySource(): 'queue' | 'heartbeat' | 'off' {
+  a11ySource(): 'heartbeat' | 'off' {
     const live = readShellAdbState()
     if (live?.a11yEnabled !== true) return 'off'
-    if (this.#controlQueue && this.#controlQueue.pollAgeMs() < A11Y_FRESH_MS) return 'queue'
     const heartbeat = live.controlHeartbeat
     if (typeof heartbeat === 'number' && Number.isFinite(heartbeat) && Date.now() - heartbeat < A11Y_FRESH_MS) {
       return 'heartbeat'
@@ -910,9 +931,21 @@ export class AndroidPrivilegeService {
     return 'off'
   }
 
-  /** 0.13.5 W4：无障碍服务是否**真的活着**（ST-23：队列心跳或独立心跳任一新鲜即可）。 */
+  /** 0.13.5 W4：无障碍服务是否**真的活着**（只认 prefs 声明 + 新鲜心跳）。 */
   a11yEnabled(): boolean {
     return this.a11ySource() !== 'off'
+  }
+
+  /**
+   * 壳侧控制轮询的存活事实（#648 从 a11ySource 里拆出来的独立诊断面）。
+   *
+   * 它回答的是「壳侧长轮询还在不在跑」，**不是**「无障碍服务开着没」。两者可以同时为真、
+   * 也可以轮询在跑而 a11y 已死（那正是 #648 的现场），所以不能互相推断。
+   */
+  pollingFacts(): { active: boolean; ageMs: number | null } {
+    const age = this.#controlQueue?.pollAgeMs() ?? Number.POSITIVE_INFINITY
+    const finite = Number.isFinite(age)
+    return { active: finite && age < A11Y_FRESH_MS, ageMs: finite ? age : null }
   }
 
   /** 0.13.5 W4：结构化授权事实（两条通道各自的门）。 */
@@ -924,6 +957,7 @@ export class AndroidPrivilegeService {
     return {
       a11yEnabled: a11ySource !== 'off',
       a11ySource,
+      polling: this.pollingFacts(),
       fullAccess: st.fullAccess === true,
       allowSwitch: st.allowSwitchOn === true,
       paired: st.paired === true,
@@ -1395,9 +1429,16 @@ function tools(svc: AndroidPrivilegeService, shellFace?: { resolve?(spec: Record
         // schema 静态类型放宽为 json 根后，渲染侧自行收窄（运行期结构由 schema 校验保证）。
         const v = value as Record<string, unknown>
         const gates = v.gates as ControlGateFacts | undefined
-        const control = v.control as { tokenConfigured?: boolean; queue?: { lastTakeAt?: number } } | undefined
-        const queueFresh = typeof control?.queue?.lastTakeAt === 'number' && control.queue.lastTakeAt > 0
-          && Date.now() - control.queue.lastTakeAt < 20_000
+        const control = v.control as { tokenConfigured?: boolean } | undefined
+        // #648：轮询新鲜度与无障碍是两条独立的生命线，**必须分两行渲染**。
+        // 旧实现把「壳侧轮询在线」挂在「无障碍通道」这一行上，看起来像是无障碍也可用的佐证，
+        // 而 a11y 已死时轮询照样在线——那正是 #648 让调用方误判的原因。
+        const polling = gates?.polling
+        const pollingLine = polling === undefined
+          ? '壳侧轮询：未知'
+          : polling.active
+            ? '壳侧轮询：在线' + (typeof polling.ageMs === 'number' ? '（' + Math.round(polling.ageMs / 1000) + 's 前取活）' : '')
+            : '壳侧轮询：离线' + (typeof polling.ageMs === 'number' ? '（' + Math.round(polling.ageMs / 1000) + 's 未取活）' : '')
         return [{
           type: 'text',
           text: [
@@ -1405,8 +1446,8 @@ function tools(svc: AndroidPrivilegeService, shellFace?: { resolve?(spec: Record
             '无障碍通道：' + (gates?.a11yEnabled
               ? '已开启（可用·来源 ' + String(gates?.a11ySource ?? 'unknown') + '）'
               : '未开启')
-              + (control?.tokenConfigured === true ? ' · 令牌已配置' : '')
-              + `${queueFresh ? ' · 壳侧轮询在线' : ' · 壳侧轮询离线'}`,
+              + (control?.tokenConfigured === true ? ' · 令牌已配置' : ''),
+            pollingLine,
             `ADB 通道：${gates?.adbReady ? '已就绪' : `未就绪（完全访问=${String(gates?.fullAccess)} 允许访问=${String(gates?.allowSwitch)} 配对=${String(gates?.paired)} 无线调试=${String(gates?.wirelessDebug)}）`}`,
             // A2（0.14.1 缺陷）：Shizuku 事实必须有**自己的行**。旧实现只按 adbReady 三选一，
             // 并把 Shizuku 的 message 挂在「ADB 提示：」标签下——唯一用来诊断通道的工具却把
