@@ -1356,14 +1356,32 @@ class EngineManager(private val context: Context, private val pickToken: String?
     lastStartRefusal = null
     lastStartRefusalCode = null
     lastStartRefusalConfirmed = emptyList()
+    // issue #657：本函数的**每一条** return false 都必须落 boot-fail.log。
+    //
+    // 缺陷形态：7 条失败出口原先没有一条写盘。其中 hard-bundle-selection 两条是被调用方
+    // 的 early return 跳过了写盘，另外几条则是从来没写过。于是「引擎为什么没起来」在
+    // boot-fail.log 里查不到——而这个文件正是诊断包与控制台唯一读的入口，用户无法自行诊断。
+    //
+    // 判据为什么放在这里而不是散在 7 处：失败出口的边界不清晰（同一个人数两次得到 5 和 7），
+    // 逐处手写必然再漏。统一收口到一个函数，新增出口只要走它就不可能忘记。
+    fun refuse(code: String?, reason: String): Boolean {
+      if (code != null) lastStartRefusalCode = code
+      if (reason.isNotEmpty()) lastStartRefusal = reason
+      Log.e(TAG, "engine start refused: " + (lastStartRefusal ?: lastStartRefusalCode ?: "未归类原因"))
+      val record = startRefusalBootFailRecord(
+        lastStartRefusalCode,
+        lastStartRefusal,
+        lastStartRefusalConfirmed,
+      )
+      LogCollector.writeBootFail(context, record.first, record.second)
+      return false
+    }
     // 启动时按系统语言落一次具体 locale：「跟随系统」不再是设置页里的可见选项。
     // 非中文一律 en（zh / zh-CN / zh-HK / zh-TW 等 zh-* 都算中文）；显式选过语言的用户
     // 由 dshLocale 的 mode 分支返回自己的选择，这里不会覆盖。
     AppLanguage.syncDshLocale(context)
     snapshotFingerprintProblem()?.let { problem ->
-      lastStartRefusalCode = REFUSAL_RUNTIME_UNAVAILABLE
-      lastStartRefusal = problem.failureCode + ": " + problem.detail
-      return false
+      return refuse(REFUSAL_RUNTIME_UNAVAILABLE, problem.failureCode + ": " + problem.detail)
     }
     // 快照刷新进行中禁止拉起（看门狗旁路闸门）：主流程刷新完成后自会启动；期间拉起只会
     // 起在半新半旧的运行时上。返回 true = 「无需再启动」（与冷却窗语义一致，5s 后看门狗复检）。
@@ -1376,10 +1394,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
     // before starting and fail loudly if absent.
     val preload = File(usrDir, "lib/libtermux-exec-ld-preload.so")
     if (!preload.exists()) {
-      Log.e(TAG, "engine start failed: termux-exec preload missing at " + preload.absolutePath)
-      lastStartRefusalCode = REFUSAL_RUNTIME_UNAVAILABLE
-      lastStartRefusal = "termux-exec 预载库缺失（" + preload.absolutePath + "）"
-      return false
+      return refuse(REFUSAL_RUNTIME_UNAVAILABLE, "termux-exec 预载库缺失（" + preload.absolutePath + "）")
     }
     // ── issue #271 ④：刷新失败后的**半搬态**不得再走 spawn ─────────────────────────────
     //
@@ -1412,10 +1427,9 @@ class EngineManager(private val context: Context, private val pickToken: String?
       val confirmed = RuntimeTree.confirmedDamage(missing)
       lastStartRefusalConfirmed = confirmed
       lastStartRefusalEvidence = liveRuntimeEvidence(missing, confirmed)
-      Log.e(TAG, "engine start refused: live runtime incomplete — " + lastStartRefusal)
       Log.e(TAG, "live runtime evidence: " + lastStartRefusalEvidence)
-      LogCollector.log(TAG, "engine start refused (live runtime incomplete) evidence=" + lastStartRefusalEvidence)
-      return false
+      // 这条出口原本只走 LogCollector.log（默认关闭的采集器）——等同于没落盘。
+      return refuse(null, lastStartRefusal ?: "运行时快照不完整")
     }
     // Persisted profile state can predate the current Hard manifest (for example, a bundle
     // selection missing from an older migration). Reconcile before *every* spawn decision, even
@@ -1423,10 +1437,10 @@ class EngineManager(private val context: Context, private val pickToken: String?
     // from the trusted manifest may be added; user Soft selections and pins remain intact.
     val hard = PluginMounts.ensureHard(context, PluginMounts.currentFingerprint(context))
     if (hard == null) {
-      lastStartRefusalCode = REFUSAL_HARD_BUNDLE_SELECTION
-      lastStartRefusal = "当前版本 Hard 插件清单缺失或与运行时快照不匹配；拒绝启动引擎，profile 未修改"
-      Log.e(TAG, "engine start refused: " + lastStartRefusal)
-      return false
+      return refuse(
+        REFUSAL_HARD_BUNDLE_SELECTION,
+        "当前版本 Hard 插件清单缺失或与运行时快照不匹配；拒绝启动引擎，profile 未修改",
+      )
     }
     val hardBundleRepair = PluginMounts.ensureHardBundlesSelected(
       File(homeDir, ".dsh/profiles/web/package.json"),
@@ -1438,10 +1452,10 @@ class EngineManager(private val context: Context, private val pickToken: String?
       LogCollector.writeBootFail(context, "factory-bundle-identity-drift", warning)
     }
     if (hardBundleRepair.failure != null) {
-      lastStartRefusalCode = REFUSAL_HARD_BUNDLE_SELECTION
-      lastStartRefusal = "Hard bundle profile 校验/修复失败；拒绝启动引擎，" + hardBundleRepair.failure
-      Log.e(TAG, "engine start refused: " + lastStartRefusal)
-      return false
+      return refuse(
+        REFUSAL_HARD_BUNDLE_SELECTION,
+        "Hard bundle profile 校验/修复失败；拒绝启动引擎，" + hardBundleRepair.failure,
+      )
     }
     if (hardBundleRepair.changed) {
       LogCollector.log(TAG, "required Hard factory bundles added to web profile; engine restart required")
@@ -1469,10 +1483,8 @@ class EngineManager(private val context: Context, private val pickToken: String?
       return true
     }
     if ((force || restartForHardBundleRepair || degradedHttp) && availability == EngineProbe.EngineAvailability.OUR_HTTP && !managedProcessAlive) {
-      lastStartRefusal = "引擎 HTTP 响应可归属，但本壳没有可安全停止的子进程句柄；拒绝盲目重启"
-      LogCollector.log(TAG, "engine restart refused (owned HTTP without tracked process handle)")
       STARTING.set(false)
-      return false
+      return refuse(null, "引擎 HTTP 响应可归属，但本壳没有可安全停止的子进程句柄；拒绝盲目重启")
     }
     if (withinCooldown) {
       LogCollector.log(TAG, "engine start retrying after the tracked child exited during cooldown")
@@ -1481,8 +1493,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       // 只停止持有句柄的本壳子进程；未归属监听器绝不通过名称匹配清理。
       if (managedProcessAlive && !killExistingEngine()) {
         if (engineProcess?.isAlive == true) {
-          lastStartRefusal = "本壳旧引擎未停止，拒绝重复启动"
-          return false
+          return refuse(null, "本壳旧引擎未停止，拒绝重复启动")
         }
         // The owned child exited but another listener won the old port. Never touch it.
         bindPort = 0
@@ -1538,8 +1549,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       if (!started.isAlive) {
         engineProcess = null
         EngineEndpoint.invalidate()
-        lastStartRefusal = "引擎进程在监听前退出，请查看本轮 engine.log"
-        return false
+        return refuse(null, "引擎进程在监听前退出，请查看本轮 engine.log")
       }
       // The cooldown is written only after a real start: failure paths don't consume the window (retry is immediate).
       EngineManager.lastStartAttemptAt = now
@@ -1547,10 +1557,18 @@ class EngineManager(private val context: Context, private val pickToken: String?
       true
     } catch (t: Throwable) {
       lastStartRefusalCode = startupExceptionCode(t)
+      lastStartRefusal = "spawn 抛出异常：" + t.javaClass.simpleName + ": " + (t.message ?: "无消息")
       Log.e(TAG, "engine start failed", t)
       LogCollector.log(TAG, "engine start FAILED: " + (t.message ?: t.javaClass.simpleName))
       // 0.13.1 W3：失败现场镜像到共享目录（此前 engine.log 只在私有域，外界拿不到）。
       mirrorDiagnosticsToShared("engine-spawn-failed")
+      // issue #657：spawn 异常同样必须进 boot-fail.log（此前只有 logcat 与镜像目录）。
+      LogCollector.writeBootFail(
+        context,
+        lastStartRefusalCode ?: "engine-spawn-failed",
+        "EngineManager.startEngine() spawn 阶段抛出异常：" + lastStartRefusal,
+        t,
+      )
       false
     } finally {
       STARTING.set(false)
@@ -2580,6 +2598,29 @@ description: 手机操控纪律：无障碍语义树优先、ref 语义点击/�
  * 提到顶层是为了可断言——shellEnv() 需要 Context，JVM 单测拿不到；这里只锁「值」这一半，
  * 「注入进 shellEnv()」那一半由 W3ShellContractTest 的源码扫描锁定。
  */
+/**
+ * issue #657：把拒启落盘的**内容决策**抽成纯函数，让 JVM 单测能覆盖「每个出口都留痕」。
+ *
+ * 为什么必须抽出来：原实现把组装与写盘压在一个需要 `Context` 的局部函数里，单测根本无法
+ * 调用——于是「负控」只能退化成「再调一次 `LogCollector.writeBootFailTo`」，那测的是
+ * LogCollector 而不是收口逻辑，删掉落盘调用测试照样绿（假绿）。这是本次修复踩到的坑，
+ * 记在此处避免后人重犯：**测不到生产分支的负控等于没有负控。**
+ *
+ * @return (stage, detail)，非空 stage 保证不会写出 `stage= ` 这种无法归属的行。
+ */
+internal fun startRefusalBootFailRecord(
+  refusalCode: String?,
+  refusal: String?,
+  confirmed: List<String>,
+): Pair<String, String> {
+  val stage = refusalCode?.takeIf { it.isNotBlank() } ?: "engine-start-refused"
+  val reasonPart = refusal?.takeIf { it.isNotBlank() } ?: "无 refusal 文案"
+  val confirmedPart =
+    confirmed.takeIf { it.isNotEmpty() }?.let { "；confirmed=" + it.joinToString(",") } ?: ""
+  val detail = "EngineManager.startEngine() 拒启（未拉起引擎进程）：" + reasonPart + confirmedPart
+  return stage to detail
+}
+
 internal fun uvThreadPoolSize(cores: Int): Int = minOf(8, cores.coerceAtLeast(1))
 
 /** 引擎 V8 老生代上限的**下限**（MB）。低于此值时引擎连 boot 期的模块图都可能堆爆。 */
