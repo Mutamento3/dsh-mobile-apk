@@ -249,6 +249,35 @@ class DeviceControlService : AccessibilityService() {
       return fresh
     }
 
+    /**
+     * #648 自愈：把 prefs 的 a11yEnabled 显式回写成 false（并删掉心跳键）。
+     *
+     * 调用方只有一个：`ControlCarrier.handle` 在**无障碍处理器引用为 null**（服务未绑定）
+     * 时触发。那里的判据是「服务不在场」这个确定事实，不是某次 op 的成败——所以本方法
+     * 不做任何推断，只是把已经确定的状态落盘。
+     *
+     * 为什么需要它：prefs 的 a11yEnabled 在进程被 force-stop 后可能残留 true（onDestroy
+     * 不保证执行）。引擎侧 a11ySource() 只认新鲜心跳、会正确判离线，但 prefs 的陈旧 true
+     * 会让两侧长期不一致，也让下一个人 grep prefs 时读到假状态。
+     *
+     * 闭环保障：服务重新连上时 onServiceConnected() 会 setEnabledFlag(true) 改回来，
+     * 所以这次回写不会把状态永久钉死。与 setEnabledFlag 走同一条落盘路径，不碰 token。
+     *
+     * **幂等**：状态已经是 false 时直接返回（不写盘、不记日志）。这一条是必需的——
+     * a11y 死掉后每条 a11y op 都会进这个分支，不判当前值就是每次调用一次落盘加一条日志，
+     * 与 heartbeat() 注释里批过的「可收敛的无谓 I/O」同型。
+     */
+    fun markUnavailable(context: Context) {
+      // 幂等保护：a11y 死掉后**每一条** a11y op 都会走到回写路径，而状态只需纠正一次。
+      // 不判当前值就是「每次调用一次 prefs 落盘 + 一条日志」——与 heartbeat() 注释里
+      // 「每 2 秒写一次属于可收敛的无谓 I/O」同型的浪费，还会把 logcat 刷满。
+      // 已经是 false 就直接返回：不写盘、不记日志。
+      val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+      if (!prefs.getBoolean(KEY_A11Y, false)) return
+      setEnabledFlag(context, false)
+      LogCollector.log(TAG, "a11y prefs reconciled to disabled (handler absent; #648)")
+    }
+
     private fun setEnabledFlag(context: Context, enabled: Boolean) {
       val editor = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         .edit().putBoolean(KEY_A11Y, enabled)
