@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "legacyReferenceCounts": {
     "SnapshotTransaction.kt:626": 1,
     "SnapshotTransaction.kt:546": 1,
@@ -4637,5 +4637,10 @@
     "verify-webview-015.mjs:97": [
       ""
     ]
+  },
+  "symbols": {
+    "scripts/check-code-map.mjs#tableRows": "const tableRows = (chunk) => {\nconst rows = []\nfor (const line of chunk.split('\\n')) {\nconst t = line.trim()\nif (!t.startsWith('|')) continue\nconst cells = t.replace(/^\\||\\|$/g, '').split('|').map((s) => s.trim())\nif (cells.length < 2) continue\nif (/^-{2,}$/.test(cells[0]) || cells[0] === '' || cells[0] === '从' || cells[0] === 'ID') continue\nrows.push(cells)\n}\nreturn rows\n}",
+    "scripts/check-code-map.mjs#parseDoc": "* （实测：两个类各有 parseDoc 方法时数出 0 处定义，锚点被错绑到诱饵上）。\n*\n* 判定口径：\n* ① 行首（允许修饰符）出现 `fun|class|object|interface|val|var|let|function|type|def|struct|enum|const` + name\n* ② 或行首直接是 `name` 紧跟 `( < = :`（TS 类方法 / 注解式声明）\n* 两种情况都排除后面还接着标识符字符的（`nameExtra` 不算命中）。\n*/\nfunction definitionSitesOf(lines, name) {\nconst esc = name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')\nconst withKeyword = new RegExp(\n'^\\\\s*(?:(?:private|public|internal|protected|export|default|override|suspend|inline|operator|abstract|open|final|static|async|const|data|sealed|enum|lateinit|readonly)\\\\s+)*'\n+ '(?:fun|class|object|interface|val|var|let|function|type|def|struct|enum)\\\\s+'\n+ esc + '(?![A-Za-z0-9_$])',\n)\nconst bareMember = new RegExp('^\\\\s*(?:(?:public|private|protected|static|async|readonly)\\\\s+)*' + esc + '\\\\s*[<(=:]')\nconst sites = []\nfor (let i = 0; i < lines.length; i += 1) {\nconst t = lines[i]\nif (withKeyword.test(t) || bareMember.test(t)) sites.push(i)\n}\nreturn sites\n}",
+    "scripts/check-code-map.mjs#UNIVERSE": "const UNIVERSE = [\n{ root: 'app/src', keep: (p) => p === 'main/AndroidManifest.xml' || p.endsWith('.kt') },"
   }
 }
