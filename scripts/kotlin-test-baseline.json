@@ -14,7 +14,7 @@
     "ApkUpdateRegressTest": 2,
     "AppLanguageTest": 19,
     "AssetPatchFastPathTest": 14,
-    "AtomicFileReplaceTest": 2,
+    "AtomicFileReplaceTest": 3,
     "AuditLedgerSourceTest": 4,
     "BackGateTest": 13,
     "BootDiagnosticsContractTest": 17,
