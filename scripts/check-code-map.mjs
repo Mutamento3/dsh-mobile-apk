@@ -6,8 +6,8 @@
 // 按图索骥永远找不到它。本门禁守四件事：
 //   1. 覆盖：app/src、plugins/*/{src,test}、三个子仓 src、构建与门禁脚本 —— 每个文件
 //      至少被覆盖账本（<!-- COVERAGE --> 块）里的一条路径或 glob 命中；
-//   2. 锚点：文档里所有 `path:line` 必须真实存在（apk 仓优先，其次协调仓同级路径），
-//      且行号不超过文件长度；
+//   2. Anchors must resolve within the source file. Legacy coordinates are pinned to source-line
+//      snapshots, while new or moved coordinates require `#expect=` content;
 //   3. 编号：主表（<!-- TABLE-ROW --> 块）里的查点 ID 与 `### <ID>` 章节必须一一对应；
 //      耦合边（<!-- COUPLING --> 块）两端的 ID 必须都已登记；
 //   4. 排版：mermaid 围栏成对、块内不得出现 style/classDef/linkStyle（渲染兼容），
@@ -18,8 +18,9 @@
 //   node scripts/check-code-map.mjs --list          # 只打印账本盘点，不判红
 //   node scripts/check-code-map.mjs --doc <path>    # 换文档（调试用）
 //   node scripts/check-code-map.mjs --self-test     # 无仓库依赖的判别力自检（含故意失败样本）
+//   node scripts/check-code-map.mjs --refresh-anchor-baseline # Refresh reviewed legacy anchor snapshots
 // 退出码：0 = 通过；1 = 有失败项；2 = 前置不满足（文档缺失/文档缺账本块）。
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -44,8 +45,14 @@ const argOf = (n, d) => { const i = argv.indexOf('--' + n); return i >= 0 ? (arg
 const DOC_REL = argOf('doc', 'docs/AGENTS/EXECUTION-MAP.md')
 const LIST_ONLY = argv.includes('--list')
 const SELF_TEST = argv.includes('--self-test')
+const REFRESH_ANCHOR_BASELINE = argv.includes('--refresh-anchor-baseline')
 /** CI 等价性检查：apk 仓在被独立检出时没有协调仓父目录，--no-parent 用来本地预演那种情形。 */
 const NO_PARENT = argv.includes('--no-parent')
+const ANCHOR_BASELINE_REL = 'scripts/check-code-map-anchor-baseline.json'
+const ANCHOR_BASELINE_ABS = join(REPO, ANCHOR_BASELINE_REL)
+const ANCHOR_BASELINE = existsSync(ANCHOR_BASELINE_ABS)
+  ? JSON.parse(readFileSync(ANCHOR_BASELINE_ABS, 'utf8'))
+  : {}
 
 /** 覆盖全域：地图必须能定位到的文件集合（构建产物与第三方目录除外）。 */
 const UNIVERSE = [
@@ -91,8 +98,35 @@ const ID_SHAPE = /^[A-Za-z]{1,3}\d{1,3}$/
 const EXT = 'kt|kts|ts|tsx|mjs|js|py|ps1|sh|json|xml|yml|yaml|md'
 const PATH_GROUP = '((?:[A-Za-z0-9_.@-]+/)*[A-Za-z0-9_.@-]+[.](?:' + EXT + '))'
 const LINE_GROUP = ':([0-9]+)'
-const ANCHOR_RE = new RegExp('(?:^|[^A-Za-z0-9_./:@-])' + PATH_GROUP + LINE_GROUP, 'g')
-const EVIDENCE_RE = new RegExp(PATH_GROUP + LINE_GROUP)
+const RANGE_GROUP = '(?:-[0-9]+)?'
+const EXPECT_GROUP = '(?:#expect=([^`\\n]*))?'
+const ANCHOR_RE = new RegExp('(?:^|[^A-Za-z0-9_./:@-])' + PATH_GROUP + LINE_GROUP + RANGE_GROUP + EXPECT_GROUP, 'g')
+const EVIDENCE_RE = new RegExp(PATH_GROUP + LINE_GROUP + RANGE_GROUP + EXPECT_GROUP)
+
+function parseExpectation(raw) {
+  if (raw === undefined) return { expect: undefined }
+  try {
+    const expect = decodeURIComponent(raw.trim())
+    return expect ? { expect } : { expectError: 'expected fragment is empty' }
+  } catch {
+    return { expectError: 'expected fragment is not valid URI encoding' }
+  }
+}
+
+function countLegacyReferences(anchors) {
+  const counts = {}
+  for (const anchor of anchors) {
+    if (anchor.expect !== undefined || anchor.expectError !== undefined) continue
+    const key = anchor.path + ':' + anchor.line
+    counts[key] = (counts[key] ?? 0) + 1
+  }
+  return counts
+}
+
+function increasedLegacyReferences(anchors, baselineCounts) {
+  return Object.entries(countLegacyReferences(anchors))
+    .filter(([key, count]) => count > (baselineCounts[key] ?? 0))
+}
 
 /** 按 `## <序号>. <标题前缀>` 切出章节正文（可见表格按章节解析，注释块作为兼容来源）。 */
 export function sectionOf(text, titlePrefix) {
@@ -172,7 +206,7 @@ export function parseDoc(text) {
   const anchors = []
   // 负向后顾：路径前不能是路径字符或 `:`（后者用来跳过 `coord:docs/...:12` 这类跨仓引用）
   for (const m of text.matchAll(ANCHOR_RE)) {
-    anchors.push({ path: norm(m[1]), line: Number(m[2]) })
+    anchors.push({ path: norm(m[1]), line: Number(m[2]), ...parseExpectation(m[3]) })
   }
   const mermaid = []
   const fences = text.split('```')
@@ -187,11 +221,13 @@ const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{26FF}\u{FE0F}\u{1F1E6}-\u{1F1F
 
 /**
  * 核心判定：对给定文档文本 + 注入的文件系统视图做检查。
- * fsView = { exists(absOrRel) => bool, lineCount(rel) => number|null }（相对仓根）。
+ * fsView provides file existence, line count, and source-line content for each reference.
  */
-export function checkDoc(text, universe, fsView) {
+export function checkDoc(text, universe, fsView, anchorBaseline = ANCHOR_BASELINE) {
   const issues = []
   const doc = parseDoc(text)
+  const sourceLineBaseline = anchorBaseline.sourceLines ?? anchorBaseline
+  const legacyReferenceCounts = anchorBaseline.legacyReferenceCounts
   const push = (kind, detail) => issues.push({ kind, detail })
 
   if (doc.coverage.length === 0) push('no-ledger', '文档缺少 <!-- COVERAGE --> 账本块')
@@ -215,6 +251,60 @@ export function checkDoc(text, universe, fsView) {
   const dup = doc.tableIds.filter((id, i) => doc.tableIds.indexOf(id) !== i)
   for (const id of new Set(dup)) push('dup-row', '主表重复登记：' + id)
 
+  const checkedReferences = new Set()
+  const checkReference = (path, line, expectation, expectationError, label) => {
+    const key = path + ':' + line
+    const uniqueCheck = key + '#' + (expectation ?? '') + '#' + (expectationError ?? '')
+    if (checkedReferences.has(uniqueCheck)) return
+    checkedReferences.add(uniqueCheck)
+
+    const n = fsView.lineCount(path)
+    if (n === null) {
+      push('bad-anchor', 'Referenced file does not exist: ' + key + ' (' + label + ')')
+      return
+    }
+    if (line < 1 || line > n) {
+      push('bad-anchor', 'Referenced line is out of range: ' + key + ' (file has ' + n + ' lines; ' + label + ')')
+      return
+    }
+
+    const contents = fsView.lineContents ? fsView.lineContents(path, line) : []
+    if (expectationError) {
+      push('bad-anchor-expectation', 'Invalid expectation for ' + key + ': ' + expectationError)
+      return
+    }
+    if (expectation !== undefined) {
+      const matches = contents.filter((candidate) => candidate.text.includes(expectation))
+      const matchingFiles = new Set(matches.map((candidate) => candidate.file))
+      if (matches.length === 0) {
+        const actual = contents.map((candidate) => JSON.stringify(candidate.text)).join(', ') || '<unavailable>'
+        push('bad-anchor-content', 'Expected ' + JSON.stringify(expectation) + ' at ' + key + ', actual line: ' + actual)
+      } else if (matchingFiles.size !== 1) {
+        push('ambiguous-anchor', 'Expectation ' + JSON.stringify(expectation) + ' matches ' + matchingFiles.size + ' files for ' + key + '; use a repository-relative path')
+      }
+      return
+    }
+
+    const expected = sourceLineBaseline[key]
+    if (!Array.isArray(expected) || expected.length === 0) {
+      push('missing-anchor-expectation', 'New or changed reference must include #expect=<encoded-fragment>: ' + key)
+      return
+    }
+    if (!contents.some((candidate) => expected.includes(candidate.text))) {
+      const actual = contents.map((candidate) => JSON.stringify(candidate.text)).join(', ') || '<unavailable>'
+      push('anchor-content-drift', 'Referenced content changed at ' + key + '; expected one of ' + JSON.stringify(expected) + ', actual: ' + actual)
+    }
+  }
+
+  if (legacyReferenceCounts) {
+    for (const [key, count] of increasedLegacyReferences(doc.anchors, legacyReferenceCounts)) {
+      if (Object.hasOwn(sourceLineBaseline, key)) {
+        push('moved-anchor', 'New or moved legacy reference needs #expect=<encoded-fragment>: ' + key
+          + ' (baseline count ' + (legacyReferenceCounts[key] ?? 0) + ', current count ' + count + ')')
+      }
+    }
+  }
+
   // 3. 耦合边（右端可以是「外部角色」文字，只有形如查点 ID 的才要求已登记）
   for (const c of doc.couplings) {
     if (!c.parsed) { push('bad-coupling', '耦合边格式应为 `A -> B | 关系 | path:line`：' + c.raw); continue }
@@ -222,11 +312,8 @@ export function checkDoc(text, universe, fsView) {
     if (ID_SHAPE.test(c.to) && !tableSet.has(c.to)) push('bad-coupling', '耦合边右端是查点 ID 但未登记：' + c.to + '（' + c.raw + '）')
     const ev = (c.evidence || '').match(EVIDENCE_RE)
     if (!ev) push('bad-coupling', '耦合边缺 `path:line` 证据：' + c.raw)
-    else {
-      const rel = norm(ev[1])
-      const n = fsView.lineCount(rel)
-      if (n === null) push('bad-coupling', '耦合边证据文件不存在：' + rel + '（' + c.raw + '）')
-      else if (Number(ev[2]) > n) push('bad-coupling', '耦合边证据行号越界：' + rel + ':' + ev[2] + '（共 ' + n + ' 行）')
+    else if (ev[3] !== undefined && parseExpectation(ev[3]).expectError) {
+      push('bad-coupling', '耦合边证据含无效期望片段：' + c.raw)
     }
   }
 
@@ -234,13 +321,9 @@ export function checkDoc(text, universe, fsView) {
   const seen = new Set()
   for (const a of doc.anchors) {
     const key = a.path + ':' + a.line
-    if (seen.has(key)) continue
     seen.add(key)
-    const n = fsView.lineCount(a.path)
-    if (n === null) push('bad-anchor', '锚点文件不存在（apk 仓与协调仓都没有）：' + a.path + ':' + a.line)
-    else if (a.line < 1 || a.line > n) push('bad-anchor', '锚点行号越界：' + a.path + ':' + a.line + '（共 ' + n + ' 行）')
+    checkReference(a.path, a.line, a.expect, a.expectError, 'anchor')
   }
-
   // 5. 排版
   if (EMOJI_RE.test(text)) push('emoji', '文档含 emoji（仓铁律：提交/文档/标签一律不用）')
   let open = false
@@ -285,6 +368,7 @@ function collectUniverse(repo) {
 
 function makeFsView(repo, parent) {
   const cache = new Map()
+  const fileLines = new Map()
   const weak = new Set()
   const locate = (rel) => {
     for (const root of [repo, parent].filter((r) => r !== null)) {
@@ -293,8 +377,21 @@ function makeFsView(repo, parent) {
     }
     return null
   }
-  const lineOf = (abs) => {
-    try { return readFileSync(abs, 'utf8').split('\n').length } catch { return null }
+  const linesOf = (abs) => {
+    if (fileLines.has(abs)) return fileLines.get(abs)
+    try {
+      const lines = readFileSync(abs, 'utf8').split('\n')
+      fileLines.set(abs, lines)
+      return lines
+    } catch {
+      fileLines.set(abs, null)
+      return null
+    }
+  }
+  const lineContentsOf = (abs, line) => {
+    const lines = linesOf(abs)
+    const value = lines?.[line - 1]
+    return value === undefined ? null : value.trim()
   }
   // 裸文件名（正文里常写 `BrowserHost.kt:498`）按全仓同名文件解析：唯一=严格，多候选=弱锚点
   let index = null
@@ -321,17 +418,32 @@ function makeFsView(repo, parent) {
   return {
     weak,
     exists: (rel) => locate(rel) !== null,
+    lineContents: (rel, line) => {
+      const abs = locate(rel)
+      if (abs) {
+        const text = lineContentsOf(abs, line)
+        return text === null ? [] : [{ file: abs, text }]
+      }
+      if (!rel.includes('/')) {
+        if (index === null) buildIndex()
+        return (index.get(rel) ?? []).flatMap((file) => {
+          const text = lineContentsOf(file, line)
+          return text === null ? [] : [{ file, text }]
+        })
+      }
+      return []
+    },
     lineCount: (rel) => {
       if (cache.has(rel)) return cache.get(rel)
       let n = null
       const abs = locate(rel)
-      if (abs) n = lineOf(abs)
+      if (abs) n = linesOf(abs)?.length ?? null
       else if (!rel.includes('/')) {
         if (index === null) buildIndex()
         const cands = index.get(rel) ?? []
         if (cands.length > 0) {
           weak.add(rel)
-          n = Math.max(...cands.map(lineOf).filter((x) => typeof x === 'number'))
+          n = Math.max(...cands.map((file) => linesOf(file)?.length).filter((x) => typeof x === 'number'))
         }
       }
       cache.set(rel, n)
@@ -344,30 +456,57 @@ function selfTest() {
   const universe = ['app/a.kt', 'app/b.kt']
   const mk = (map) => ({
     exists: (p) => Object.prototype.hasOwnProperty.call(map, p),
-    lineCount: (p) => (Object.prototype.hasOwnProperty.call(map, p) ? map[p] : null),
+    lineCount: (p) => (Object.prototype.hasOwnProperty.call(map, p) ? map[p].length : null),
+    lineContents: (p, line) => (Object.prototype.hasOwnProperty.call(map, p) && map[p][line - 1] !== undefined
+      ? [{ file: p, text: map[p][line - 1].trim() }] : []),
   })
-  const fsFull = mk({ 'app/a.kt': 10, 'app/b.kt': 20 })
+  const fsFull = mk({ 'app/a.kt': ['header', 'fun ready()', 'fun other()', 'fun helper()'], 'app/b.kt': ['field', 'value'] })
+  const baseline = {
+    sourceLines: { 'app/a.kt:3': ['fun other()'], 'app/a.kt:4': ['fun helper()'] },
+    legacyReferenceCounts: { 'app/a.kt:3': 1, 'app/a.kt:4': 1 },
+  }
   const head = '<!-- COVERAGE\n'
   const clean = '<!-- TABLE-ROW\n| K01 | 甲 | 一句话 | 入口 | 稳态控制 | - | - | app/a.kt | 低 |\n-->\n'
     + '### K01 甲\n\n- **一句话**：x\n- 关键坐标：`app/a.kt:3`\n\n<!-- COUPLING\nK01 -> K01 | 自环 | app/a.kt:4\n-->\n'
     + head + 'app/a.kt\napp/b.kt\n-->\n'
   const cases = [
-    ['干净样例判绿', clean, fsFull, 0],
-    ['覆盖缺口能被发现（b.kt 无人认领）', clean.replace('app/b.kt\n-->\n', '-->\n'), fsFull, 1],
-    ['幽灵路径能被发现（追加一个不存在的路径）', clean.replace('app/b.kt\n-->\n', 'app/b.kt\napp/none.kt\n-->\n'), fsFull, 1],
-    ['锚点行号越界能被发现', clean.replace('app/a.kt:3', 'app/a.kt:99'), fsFull, 1],
-    ['锚点文件不存在能被发现', clean.replace('app/a.kt:3', 'app/ghost.kt:3'), fsFull, 1],
-    ['主表/章节编号不一致能被发现', clean.replace('### K01 甲', '### K02 甲'), fsFull, 2],
-    ['耦合边缺证据能被发现', clean.replace('| 自环 | app/a.kt:4', '| 自环 |'), fsFull, 1],
-    ['emoji 能被发现', clean.replace('### K01 甲', '### K01 甲 ' + String.fromCodePoint(0x26A0)), fsFull, 1],
+    ['A valid document passes', clean, fsFull, 0, baseline],
+    ['An uncovered file is rejected', clean.replace('app/b.kt\n-->\n', '-->\n'), fsFull, 1, baseline],
+    ['A nonexistent coverage path is rejected', clean.replace('app/b.kt\n-->\n', 'app/b.kt\napp/none.kt\n-->\n'), fsFull, 1, baseline],
+    ['An out-of-range anchor is rejected', clean.replace('app/a.kt:3', 'app/a.kt:99'), fsFull, 1, baseline],
+    ['A missing anchor file is rejected', clean.replace('app/a.kt:3', 'app/ghost.kt:3'), fsFull, 1, baseline],
+    ['A mismatched expected fragment is rejected', clean.replace('app/a.kt:3', 'app/a.kt:3#expect=notPresent'), fsFull, 1, baseline],
+    ['A matching expected fragment passes', clean.replace('app/a.kt:3', 'app/a.kt:3#expect=other'), fsFull, 0, baseline],
+    ['Malformed URI-encoded expectation is rejected', clean.replace('app/a.kt:3', 'app/a.kt:3#expect=%zz'), fsFull, 1, baseline],
+    ['A new anchor without an expected fragment is rejected', clean.replace('app/a.kt:3', 'app/a.kt:2'), fsFull, 1, baseline],
+    ['Moving an anchor to another known line requires an expectation', clean.replace('app/a.kt:3', 'app/a.kt:4'), fsFull, 1, baseline],
+    ['Legacy anchor content drift is rejected', clean, mk({ 'app/a.kt': ['header', 'fun ready()', 'changed body()', 'fun helper()'], 'app/b.kt': ['field', 'value'] }), 1, baseline],
+    ['Mismatched coupling evidence is rejected', clean.replace('app/a.kt:4', 'app/a.kt:4#expect=missing'), fsFull, 1, baseline],
+    ['An expected fragment uniquely resolves a duplicate basename', clean.replace('app/a.kt:3', 'index.ts:3#expect=screenScope'), {
+      exists: (p) => p === 'app/a.kt' || p === 'app/b.kt',
+      lineCount: (p) => p === 'index.ts' ? 3 : (p === 'app/a.kt' ? 4 : (p === 'app/b.kt' ? 2 : null)),
+      lineContents: (p, line) => p === 'index.ts' && line === 3
+        ? [{ file: 'plugins/bridge/index.ts', text: 'const screenScope = true' }, { file: 'plugins/manage/index.ts', text: 'const manage = true' }]
+        : fsFull.lineContents(p, line),
+    }, 0, { sourceLines: { 'app/a.kt:4': ['fun helper()'] } }],
+    ['An ambiguous expected fragment is rejected', clean.replace('app/a.kt:3', 'index.ts:3#expect=shared'), {
+      exists: (p) => p === 'app/a.kt' || p === 'app/b.kt',
+      lineCount: (p) => p === 'index.ts' ? 3 : (p === 'app/a.kt' ? 4 : (p === 'app/b.kt' ? 2 : null)),
+      lineContents: (p, line) => p === 'index.ts' && line === 3
+        ? [{ file: 'plugins/bridge/index.ts', text: 'shared screenScope' }, { file: 'plugins/manage/index.ts', text: 'shared manage' }]
+        : fsFull.lineContents(p, line),
+    }, 1, { sourceLines: { 'app/a.kt:4': ['fun helper()'] } }],
+    ['Mismatched table and section IDs are rejected', clean.replace('### K01 甲', '### K02 甲'), fsFull, 2, baseline],
+    ['A coupling without evidence is rejected', clean.replace('| 自环 | app/a.kt:4', '| 自环 |'), fsFull, 1, baseline],
+    ['Emoji is rejected', clean.replace('### K01 甲', '### K01 甲 ' + String.fromCodePoint(0x26A0)), fsFull, 1, baseline],
   ]
   let pass = 0
   const lines = []
-  for (const [name, text, fsView, want] of cases) {
-    const { issues } = checkDoc(text, universe, fsView)
+  for (const [name, text, fsView, want, expected] of cases) {
+    const { issues } = checkDoc(text, universe, fsView, expected)
     const ok = issues.length === want
     if (ok) pass += 1
-    lines.push((ok ? '  ok   ' : '  FAIL ') + name + '：命中 ' + issues.length + ' / 期望 ' + want
+    lines.push((ok ? '  ok   ' : '  FAIL ') + name + ': matched ' + issues.length + ' / expected ' + want
       + (ok ? '' : ' -> ' + issues.map((i) => i.kind).join(',')))
   }
   const ok = pass === cases.length
@@ -388,7 +527,53 @@ if (isMain) {
   }
   const text = readFileSync(docAbs, 'utf8')
   const universe = collectUniverse(REPO)
-  const { issues, stats } = checkDoc(text, universe, makeFsView(REPO, NO_PARENT ? null : PARENT))
+  const fsView = makeFsView(REPO, NO_PARENT ? null : PARENT)
+  if (REFRESH_ANCHOR_BASELINE) {
+    const parsed = parseDoc(text)
+    const sourceLineBaseline = ANCHOR_BASELINE.sourceLines ?? ANCHOR_BASELINE
+    const legacyReferenceCounts = ANCHOR_BASELINE.legacyReferenceCounts
+    if (legacyReferenceCounts) {
+      const moved = increasedLegacyReferences(parsed.anchors, legacyReferenceCounts)
+        .filter(([key]) => Object.hasOwn(sourceLineBaseline, key))
+      if (moved.length > 0) {
+        console.error('Cannot refresh moved legacy references; add #expect=<encoded-fragment>: '
+          + moved.slice(0, 20).map(([key]) => key).join(', '))
+        process.exit(1)
+      }
+    }
+    const references = new Set(parsed.anchors
+      .filter((a) => a.expect === undefined && a.expectError === undefined)
+      .map((a) => a.path + ':' + a.line))
+    for (const c of parsed.couplings) {
+      const ev = (c.evidence || '').match(EVIDENCE_RE)
+      if (ev && ev[3] === undefined && !parseExpectation(ev[3]).expectError) {
+        references.add(norm(ev[1]) + ':' + Number(ev[2]))
+      }
+    }
+    const unknown = [...references].filter((key) => !Object.hasOwn(sourceLineBaseline, key))
+    if (unknown.length > 0) {
+      console.error('Cannot refresh baseline for new references; add #expect=<encoded-fragment>: ' + unknown.slice(0, 20).join(', '))
+      process.exit(1)
+    }
+    const sourceLines = {}
+    for (const key of [...references].sort()) {
+      const split = key.lastIndexOf(':')
+      const contents = fsView.lineContents(key.slice(0, split), Number(key.slice(split + 1)))
+      if (contents.length === 0) {
+        console.error('Cannot refresh missing reference content: ' + key)
+        process.exit(1)
+      }
+      sourceLines[key] = [...new Set(contents.map((candidate) => candidate.text))].sort()
+    }
+    writeFileSync(ANCHOR_BASELINE_ABS, JSON.stringify({
+      formatVersion: 1,
+      legacyReferenceCounts: countLegacyReferences(parsed.anchors),
+      sourceLines,
+    }, null, 2) + '\n')
+    console.log('CHECK-CODE-MAP baseline refreshed: ' + references.size + ' legacy references')
+    process.exit(0)
+  }
+  const { issues, stats } = checkDoc(text, universe, fsView)
 
   console.log('执行地图: ' + DOC_REL + '（基线 repo=' + REPO + '）')
   console.log('盘点: 查点 ' + stats.blocks + ' · 覆盖条目 ' + stats.coverage + ' · 锚点 ' + stats.anchors

@@ -1,0 +1,4659 @@
+{
+  "formatVersion": 1,
+  "legacyReferenceCounts": {
+    "SnapshotTransaction.kt:626": 1,
+    "SnapshotTransaction.kt:546": 1,
+    "SnapshotTransaction.kt:196": 1,
+    "SnapshotTransaction.kt:313": 1,
+    "SnapshotFs.kt:177": 1,
+    "SnapshotFs.kt:83": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/WatchdogV2.kt:109": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlPoller.kt:65": 1,
+    "ControlPoller.kt:96": 3,
+    "ControlPoller.kt:158": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:444": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:155": 1,
+    "WatchdogV2.kt:109": 1,
+    "EngineStartFlow.kt:549": 2,
+    "UpdateManagerPolicyTest.kt:58": 1,
+    "ForegroundPageRecoveryWiringTest.kt:47": 1,
+    "SnapshotTransaction.kt:190": 1,
+    "EngineManager.kt:238": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:423": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicyTest.kt:129": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:187": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:821": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1661": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1087": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1101": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1565": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1581": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1589": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:815": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:319": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:84": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:60": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:322": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:495": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayHost.kt:207": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:678": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/LogCollector.kt:458": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/UndoGate.kt:240": 1,
+    "vendor/dsh-undo-savepoint/lib/core.mjs:1180": 1,
+    "index.js:2198": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/PluginMounts.kt:41": 1,
+    "UndoGate.kt:279": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:196": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/UpdateManager.kt:69": 1,
+    "plugins/dsh-android-bridge/src/screen-scope.ts:200": 1,
+    "plugins/dsh-android-browser/src/tools.ts:281": 2,
+    "plugins/dsh-android-browser/src/tools.ts:33": 2,
+    "scripts/check-kotlin-test-count.mjs:129": 3,
+    "scripts/check-kotlin-test-count.mjs:153": 1,
+    "scripts/verify-vdisplay-float.mjs:95": 4,
+    "scripts/verify-browser-panel.mjs:123": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:384": 1,
+    "plugins/dsh-android-file-open/src/index.ts:43": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:605": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:193": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:299": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:274": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlAudit.kt:34": 2,
+    "plugins/dsh-android-manage/src/index.ts:394": 3,
+    "plugins/dsh-android-manage/src/index.ts:728": 3,
+    "plugins/dsh-android-manage/src/index.ts:1537": 3,
+    "dsh-host-web-compat/scripts/smoke-injections.mjs:50": 5,
+    "dsh-host-web-compat/lib/index.js:783": 6,
+    "scripts/build-apk-013.ps1:166": 3,
+    "plugins/dsh-android-vdisplay/test/tools-callable.test.mjs:122": 3,
+    "scripts/build-apk-013.ps1:141": 3,
+    "MainActivity.kt:605": 1,
+    "GuidePageRenderer.kt:363": 1,
+    "EngineStartFlow.kt:96": 1,
+    "MainActivity.kt:422": 1,
+    "DeviceControlService.kt:852": 1,
+    "EngineManager.kt:1552": 1,
+    "MainActivity.kt:78": 1,
+    "dsh-host-web-compat/lib/index.js:794": 1,
+    "EngineStartFlow.kt:427": 1,
+    "MainActivity.kt:191": 1,
+    "MainActivity.kt:850": 3,
+    "ARCHITECTURE.md:15": 1,
+    "MainActivity.kt:812": 1,
+    "MainActivity.kt:544": 1,
+    "docs/AGENTS/ARCHITECTURE.md:12": 2,
+    "docs/AGENTS/ARCHITECTURE.md:15": 2,
+    "WebUiChrome.kt:37": 2,
+    "LogCollector.kt:458": 1,
+    "MainActivity.kt:569": 1,
+    "MainActivity.kt:822": 1,
+    "EngineService.kt:129": 1,
+    "WatchdogV2.kt:146": 1,
+    "WatchdogV2.kt:96": 1,
+    "EngineService.kt:140": 1,
+    "EngineManager.kt:1464": 2,
+    "docs/AGENTS/ARCHITECTURE.md:45": 2,
+    "WatchdogV2.kt:3": 2,
+    "BootReceiver.kt:23": 2,
+    "docs/AGENTS/ARCHITECTURE.md:76": 2,
+    "SnapshotTransaction.kt:688": 1,
+    "SnapshotTransaction.kt:798": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/SnapshotTransaction.kt:283": 1,
+    "EngineStartFlow.kt:497": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/SnapshotExtractor.kt:81": 1,
+    "AndroidBridge.kt:423": 2,
+    "app/build.gradle.kts:126": 2,
+    "BrowserHostNavigationPolicyTest.kt:129": 2,
+    "ControlAudit.kt:34": 2,
+    "ShellOps.kt:588": 2,
+    "ShellOps.kt:94": 2,
+    "ControlProtocolV2.kt:196": 2,
+    "protocol-v2.ts:349": 2,
+    "protocol-v2.ts:235": 2,
+    "ControlProtocolV2.kt:21": 2,
+    "BackGate.kt:16": 2,
+    "MainActivity.kt:502": 2,
+    "MuxClient.kt:45": 2,
+    "DeviceControlService.kt:678": 2,
+    "plugins/dsh-android-bridge/src/screen-scope.ts:70": 2,
+    "index.ts:991": 3,
+    "plugins/dsh-android-manage/src/index.ts:2031": 2,
+    "index.ts:394": 2,
+    "plugins/dsh-android-bridge/test/screen-scope.test.mjs:336": 2,
+    "plugins/dsh-android-manage/test/a11y-routing.test.mjs:479": 2,
+    "GlobalActionCatalog.kt:33": 2,
+    "docs/AGENTS/ACCESSIBILITY-API.md:99": 5,
+    "GlobalActionCatalog.kt:47": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/GlobalActionCatalogTest.kt:63": 2,
+    "plugins/dsh-android-manage/src/index.ts:517": 2,
+    "ControlPoller.kt:49": 2,
+    "docs/AGENTS/ARCHITECTURE.md:68": 3,
+    "docs/AGENTS/ARCHITECTURE.md:65": 3,
+    "docs/AGENTS/ACCESSIBILITY-API.md:167": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:353": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/GlobalActionCatalog.kt:33": 3,
+    "ShellOps.kt:319": 1,
+    "plugins/dsh-android-bridge/src/screen-scope.ts:242": 1,
+    "ShellOps.kt:99": 1,
+    "index.ts:1052": 1,
+    "ShizukuUserService.kt:70": 1,
+    "index.ts:1063": 1,
+    "ShizukuTransport.kt:806": 1,
+    "index.ts:368": 1,
+    "index.ts:949": 3,
+    "ShellOps.kt:123": 1,
+    "ShizukuUserService.kt:207": 1,
+    "MainActivity.kt:1054": 1,
+    "MainActivity.kt:1076": 1,
+    "ShizukuUserService.kt:30": 2,
+    "ShizukuTransport.kt:821": 2,
+    "ShellOps.kt:91": 2,
+    "ShellOps.kt:132": 5,
+    "DeviceControlService.kt:703": 2,
+    "plugins/dsh-android-bridge/src/index.ts:368": 1,
+    "app/src/main/res/xml/file_paths.xml:3": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:467": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ShizukuProbe.kt:71": 1,
+    "app/src/main/AndroidManifest.xml:158": 1,
+    "VdisplayController.kt:84": 2,
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-adapter.ts:203": 1,
+    "browser-tab.tsx:54": 1,
+    "MainActivity.kt:565": 1,
+    "MainActivity.kt:815": 1,
+    "BrowserHostNavigationPolicy.kt:87": 1,
+    "docs/AGENTS/ARCHITECTURE.md:18": 2,
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-presentation.ts:20": 2,
+    "BrowserHost.kt:810": 2,
+    "OverlayService.kt:473": 2,
+    "OverlayPanel.kt:1060": 2,
+    "OverlayService.kt:621": 2,
+    "OverlayPanel.kt:179": 2,
+    "OverlayReport.kt:370": 2,
+    "OverlayService.kt:502": 2,
+    "OverlayService.kt:299": 4,
+    "OverlayPanel.kt:1177": 2,
+    "OverlayReport.kt:164": 2,
+    "OverlayService.kt:509": 3,
+    "OverlayPanel.kt:947": 2,
+    "OverlayPanel.kt:73": 2,
+    "OverlayService.kt:499": 2,
+    "OverlayLiveFeed.kt:160": 2,
+    "OverlayService.kt:512": 2,
+    "OverlayService.kt:737": 2,
+    "MainActivity.kt:296": 3,
+    "docs/AGENTS/ARCHITECTURE.md:27": 3,
+    "docs/AGENTS/ARCHITECTURE.md:29": 3,
+    "docs/AGENTS/modules.md:39": 3,
+    "OverlayPanel.kt:818": 5,
+    "OverlayPanel.kt:616": 3,
+    "OverlayPanel.kt:904": 3,
+    "OverlayPanel.kt:24": 3,
+    "OverlayPanel.kt:489": 3,
+    "OverlayLiveFeed.kt:166": 3,
+    "OverlayService.kt:106": 3,
+    "OverlayReport.kt:252": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:141": 6,
+    "OverlayService.kt:669": 6,
+    "OverlayService.kt:683": 9,
+    "NotifyDecisionQueue.kt:194": 2,
+    "NotifyActionReceiver.kt:89": 2,
+    "LogCollector.kt:785": 2,
+    "MainActivity.kt:1167": 2,
+    "NotificationContractTest.kt:206": 2,
+    "NotifyDecisionQueue.kt:323": 2,
+    "NotifyDecisionQueue.kt:310": 2,
+    "NotifyCenter.kt:145": 2,
+    "NotifyCenter.kt:401": 2,
+    "docs/AGENTS/ARCHITECTURE.md:70": 3,
+    "docs/AGENTS/ARCHITECTURE.md:71": 3,
+    "docs/AGENTS/modules.md:36": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayReport.kt:233": 3,
+    "plugins/dsh-android-bridge/src/notify-projection.ts:68": 3,
+    "OverlayReport.kt:244": 3,
+    "NotifyCenter.kt:1048": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:706": 3,
+    "NotifyCenter.kt:612": 3,
+    "NotifyCenter.kt:829": 3,
+    "plugins/dsh-android-bridge/src/index.ts:1458": 3,
+    "NotifyStore.kt:18": 3,
+    "NotifyCenter.kt:631": 3,
+    ".github/workflows/pr-gate.yml:140": 1,
+    "scripts/build-apk.mjs:197": 1,
+    "scripts/build-apk-013.ps1:145": 2,
+    "scripts/check-release-gates.mjs:104": 1,
+    ".github/workflows/pr-gate.yml:91": 1,
+    "scripts/build-apk.mjs:347": 1,
+    "scripts/build-apk-013.ps1:388": 2,
+    "app/build.gradle.kts:88": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/CallSiteContractTest.kt:294": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayHaloInvariantTest.kt:92": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyCenterChannelTest.kt:33": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotUserDataTest.kt:84": 2,
+    "scripts/check-kotlin-test-count.mjs:143": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotTransactionTest.kt:319": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogMarkerConsumeTest.kt:45": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BootPageConsoleRouteTest.kt:114": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogMarkerConsumeTest.kt:159": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/AcceptRoutingTest.kt:24": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/AcceptRoutingTest.kt:45": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/AdbLiveProbeTest.kt:18": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/AdbLiveProbeTest.kt:60": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ApiLevelGuardTest.kt:209": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ApiLevelGuardTest.kt:282": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ApkArtifactCheckTest.kt:25": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ApkArtifactCheckTest.kt:36": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/W3ShellContractTest.kt:85": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BackGateTest.kt:21": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BackGateTest.kt:126": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BootFailLogTest.kt:39": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BootFailLogTest.kt:160": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BootPageConsoleRouteTest.kt:39": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BootPageConsoleRouteTest.kt:113": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostCleartextConsistencyTest.kt:42": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostCleartextConsistencyTest.kt:49": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicyTest.kt:10": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicyTest.kt:62": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayContractTest.kt:49": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayContractTest.kt:66": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayPolicyTest.kt:27": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayPolicyTest.kt:43": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/CallSiteContractTest.kt:54": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ControlProtocolV2Test.kt:50": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ControlProtocolV2Test.kt:76": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/DiagnosticsMirrorTest.kt:20": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/DiagnosticsMirrorTest.kt:43": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootBudgetTest.kt:16": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootBudgetTest.kt:28": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootInstrumentationTest.kt:20": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootInstrumentationTest.kt:45": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/FactoryProfilePatchTest.kt:50": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/FactoryProfilePatchTest.kt:228": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingCleanupTest.kt:17": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingCleanupTest.kt:25": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingSafetyTest.kt:25": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingSafetyTest.kt:92": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/GlobalActionCatalogTest.kt:25": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/GlobalActionCatalogTest.kt:50": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/LogRedactionTest.kt:23": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/LogRedactionTest.kt:46": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/LogRotationTest.kt:24": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/LogRotationTest.kt:39": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/MuxHandshakeAuthTest.kt:17": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/MuxHandshakeAuthTest.kt:37": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotificationContractTest.kt:81": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotificationContractTest.kt:170": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyActionOutcomeTest.kt:14": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyActionOutcomeTest.kt:53": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyCenterChannelTest.kt:15": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyDecisionQueueTest.kt:16": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyDecisionQueueTest.kt:82": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyFormDecisionTest.kt:14": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyFormDecisionTest.kt:26": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyProtocolTest.kt:18": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyProtocolTest.kt:131": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifySuppressQueueTest.kt:24": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/NotifySuppressQueueTest.kt:71": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayCompletionNoticeTest.kt:28": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayCompletionNoticeTest.kt:113": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayHaloInvariantTest.kt:192": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ProcIoTest.kt:27": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ProcIoTest.kt:82": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ScreenScopeTest.kt:8": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ScreenScopeTest.kt:15": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScopeTargetTest.kt:21": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScopeTargetTest.kt:121": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScreenCommandFixtureTest.kt:44": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScreenCommandFixtureTest.kt:54": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotExtractorTest.kt:18": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotExtractorTest.kt:83": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:14": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:45": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:65": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:82": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:103": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:130": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:166": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:186": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotRefreshStageTest.kt:12": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotRefreshStageTest.kt:38": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotFileModeTest.kt:7": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotFileModeTest.kt:10": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotUserDataTest.kt:14": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ProfilePackageManifestTest.kt:8": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/ProfilePackageManifestTest.kt:23": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/UndoGateDecisionTest.kt:20": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/UndoGateDecisionTest.kt:61": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerSuffixTest.kt:18": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerSuffixTest.kt:54": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerTest.kt:15": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerTest.kt:60": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/VdisplayArbitrationTest.kt:14": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/VdisplayArbitrationTest.kt:30": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/W3ShellContractTest.kt:52": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/W3ShellContractTest.kt:107": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogLadderTest.kt:25": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogLadderTest.kt:189": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogMarkerConsumeTest.kt:69": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WindowPickTest.kt:22": 1,
+    "app/src/test/java/com/dsharnessmobile/shell/WindowPickTest.kt:40": 1,
+    "screen-scope.ts:200": 2,
+    "screen-scope.ts:203": 2,
+    "screen-scope.ts:293": 2,
+    "screen-scope.ts:405": 2,
+    "ShellOps.kt:451": 2,
+    "index.ts:1038": 2,
+    "index.ts:1074": 2,
+    "index.ts:393": 2,
+    "index.ts:1255": 2,
+    "control-policy.ts:126": 2,
+    "index.ts:584": 3,
+    "control-queue.ts:128": 2,
+    "ControlPoller.kt:167": 2,
+    "control-queue.ts:139": 3,
+    "plugins/dsh-android-browser/src/tools.ts:262": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:701": 3,
+    "plugins/dsh-android-bridge/src/screen-scope.ts:366": 2,
+    "plugins/dsh-android-manage/src/index.ts:1494": 2,
+    "plugins/dsh-android-manage/src/index.ts:901": 2,
+    "docs/AGENTS/gotchas.md:178": 3,
+    "plugins/dsh-android-bridge/src/lossless-json.ts:1": 3,
+    "plugins/dsh-android-bridge/test/privilege-status.test.mjs:1": 3,
+    "plugins/dsh-android-manage/src/index.ts:7": 3,
+    "plugins/dsh-android-manage/src/index.ts:2283": 5,
+    "tools.ts:281": 2,
+    "BrowserHost.kt:396": 2,
+    "BrowserHost.kt:625": 2,
+    "contract.ts:136": 2,
+    "tools.ts:33": 4,
+    "BrowserHost.kt:1412": 2,
+    "tools.ts:26": 2,
+    "status.ts:135": 2,
+    "plugins/dsh-android-vdisplay/src/index.ts:140": 2,
+    "tools.ts:73": 2,
+    "plugins/dsh-android-vdisplay/src/client/index.ts:83": 2,
+    "AndroidBridge.kt:325": 2,
+    "MainActivity.kt:784": 2,
+    "dsh-client-ui-responsive/src/client/android-bridge.ts:82": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:35": 2,
+    "plugins/dsh-android-file-open/src/index.ts:238": 3,
+    "plugins/dsh-android-linux-env/src/index.ts:349": 2,
+    "plugins/dsh-android-file-open/src/index.ts:525": 3,
+    "back-stack.ts:94": 1,
+    "BackGate.kt:56": 1,
+    "attachment-picker-menu.ts:184": 1,
+    "back-stack.ts:521": 1,
+    "back-stack.ts:103": 1,
+    "dsh-client-ui-responsive/tests/attachment-picker-menu.spec.ts:80": 2,
+    "back-stack.spec.ts:259": 1,
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-presentation.ts:44": 2,
+    "dsh-client-ui-responsive/src/client/enter-guard.ts:63": 3,
+    "keyboard-boundary.ts:48": 2,
+    "reference-menu.ts:45": 2,
+    "mobile-form.css.ts:25": 2,
+    "dsh-client-ui-responsive/src/client/mobile/form-marker.ts:45": 2,
+    "AGENTS.md:30": 3,
+    "scripts/build-apk-013.ps1:206": 2,
+    "apply-patches.mjs:1568": 2,
+    "0.13.7-CERTIFICATION.md:11": 2,
+    "scripts/make-snapshot.sh:8": 2,
+    "build-release.ps1:89": 2,
+    "check-patch-mirror.mjs:109": 3,
+    "check-inject-completeness.mjs:2": 2,
+    "inject-snapshot.py:106": 2,
+    "build-release.ps1:109": 2,
+    "docs/AGENTS/build-and-env.md:32": 3,
+    "scripts/build-snapshot-013.mjs:985": 7,
+    "scripts/lib/shell.mjs:31": 5,
+    "scripts/check-release-gates.mjs:28": 8,
+    "build-and-env.md:48": 3,
+    "docs/AGENTS/build-and-env.md:48": 5,
+    "scripts/build-release.ps1:56": 5,
+    "docs/AGENTS/RUNTIME-PATCHES.md:56": 3,
+    "scripts/build-apk-013.ps1:211": 3,
+    "scripts/patches/apply-patches.mjs:1568": 4,
+    "docs/AGENTS/0.13.7-CERTIFICATION.md:11": 3,
+    "AGENTS.md:21": 3,
+    "scripts/profile-web.cordis.patch.yml:128": 3,
+    "scripts/check-patch-mirror.mjs:231": 3,
+    "scripts/check-release-gates.mjs:246": 6,
+    ".github/workflows/pr-gate.yml:64": 2,
+    "scripts/check-snapshot-builder-output.mjs:156": 2,
+    "scripts/check-plugin-tests.mjs:33": 3,
+    ".github/workflows/pr-gate.yml:41": 3,
+    "scripts/check-runtime-assets.mjs:96": 3,
+    "VdisplayController.kt:753": 2,
+    "MainActivity.kt:788": 2,
+    "BrowserHost.kt:384": 3,
+    "BrowserHost.kt:1035": 2,
+    "verify-state-sync.mjs:248": 2,
+    "verify-webview-015.mjs:3": 2,
+    "scripts/verify-vdisplay-viewer.mjs:2": 2,
+    "scripts/verify-vdisplay-float.mjs:4": 2,
+    "VdisplayController.kt:483": 2,
+    "scripts/t0-check.ps1:14": 2,
+    "scripts/deploy-device.ps1:31": 4,
+    "scripts/device-smoke.ps1:14": 2,
+    "VdisplayController.kt:40": 3,
+    "VdisplayController.kt:721": 2,
+    "docs/AGENTS/build-and-env.md:54": 2,
+    "docs/AGENTS/emulator-test-protocol.md:29": 2,
+    "docs/AGENTS/emulator-test-protocol.md:61": 2,
+    "docs/AGENTS/emulator-test-protocol.md:4": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:408": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:700": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:207": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:812": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:670": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:1113": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/WebUiChrome.kt:19": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:205": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:391": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:296": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:137": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:667": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:266": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:294": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ApkUpdateAction.kt:245": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ConsoleSession.kt:32": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/SourceSettings.kt:88": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BootReceiver.kt:24": 1,
+    "EngineStartFlow.kt:445": 1,
+    "MainActivity.kt:145": 1,
+    "EngineManager.kt:813": 1,
+    "EngineStartFlow.kt:700": 1,
+    "UpdateManager.kt:84": 1,
+    "EngineService.kt:207": 1,
+    "EngineStartFlow.kt:345": 1,
+    "UndoGate.kt:278": 1,
+    "WatchdogV2.kt:258": 1,
+    "NotifyCenter.kt:188": 1,
+    "EngineService.kt:43": 2,
+    "ConsoleSession.kt:32": 1,
+    "LogCollector.kt:395": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:427": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineService.kt:348": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:99": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:68": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/FactoryProfilePatch.kt:79": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:89": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DownloadSaver.kt:101": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:193": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/PublicRepoProvision.kt:1": 1,
+    "EngineManager.kt:790": 1,
+    "MainActivity.kt:354": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:160": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:719": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:110": 1,
+    "plugins/dsh-android-bridge/src/control-queue.ts:347": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/UndoGate.kt:278": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/UndoGate.kt:136": 1,
+    "scripts/check-bridge-symmetry.mjs:1": 1,
+    "app/build.gradle.kts:127": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlPoller.kt:158": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:652": 2,
+    "plugins/dsh-android-manage/src/index.ts:1899": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:770": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:852": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1034": 4,
+    "plugins/dsh-android-bridge/src/screen-scope.ts:405": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:107": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:661": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:197": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:771": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:332": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:586": 1,
+    "scripts/check-bounded-io.mjs:54": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:550": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:324": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1045": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:608": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:718": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:524": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:206": 1,
+    "dsh-client-ui-responsive/src/client/dev-section/phone-control.tsx:180": 2,
+    "plugins/dsh-android-vdisplay/src/status.ts:14": 3,
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-presentation.ts:61": 4,
+    "plugins/dsh-android-browser/src/contract.ts:42": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:634": 2,
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostCleartextConsistencyTest.kt:12": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayReport.kt:180": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:161": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyBridge.kt:304": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:574": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayPanel.kt:87": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayLiveFeed.kt:26": 1,
+    "app/src/main/AndroidManifest.xml:65": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1564": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyBridge.kt:207": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:828": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:375": 3,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:145": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyStore.kt:321": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyStore.kt:68": 1,
+    "plugins/dsh-android-bridge/src/control-policy.ts:79": 1,
+    "plugins/dsh-android-bridge/src/shell-ops.ts:120": 3,
+    "plugins/dsh-android-manage/src/index.ts:137": 3,
+    "plugins/dsh-android-bridge/src/index.ts:645": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1612": 1,
+    "plugins/dsh-android-bridge/src/index.ts:234": 1,
+    "plugins/dsh-android-bridge/src/index.ts:251": 2,
+    "plugins/dsh-android-bridge/src/capability-gate.ts:12": 1,
+    "plugins/dsh-android-manage/src/index.ts:133": 2,
+    "plugins/dsh-android-manage/src/index.ts:1071": 1,
+    "plugins/dsh-android-manage/src/index.ts:580": 1,
+    "plugins/dsh-android-manage/src/index.ts:1519": 1,
+    "plugins/dsh-android-manage/src/index.ts:138": 1,
+    "plugins/dsh-android-manage/src/ime-broadcast.ts:61": 2,
+    "plugins/dsh-android-manage/src/index.ts:152": 1,
+    "plugins/dsh-android-manage/src/index.ts:1268": 1,
+    "plugins/dsh-android-manage/src/index.ts:114": 2,
+    "plugins/dsh-android-browser/src/tools.ts:254": 2,
+    "plugins/dsh-android-vdisplay/src/index.ts:198": 1,
+    "plugins/dsh-android-vdisplay/src/client/index.ts:194": 2,
+    "plugins/dsh-android-bridge/src/index.ts:949": 4,
+    "scripts/check-tool-output-schema.mjs:153": 2,
+    "plugins/dsh-android-file-open/src/route-auth.ts:47": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:32": 1,
+    "dsh-client-ui-responsive/src/client/mobile/incoming-draft.ts:175": 1,
+    "dsh-shell-termux/src/index.ts:42": 2,
+    "plugins/dsh-android-bridge/src/index.ts:569": 2,
+    "plugins/dsh-android-file-open/src/index.ts:302": 1,
+    "scripts/profile-web.cordis.patch.yml:81": 1,
+    "plugins/dsh-android-linux-env/src/runtime-cache.ts:40": 1,
+    "dsh-client-ui-responsive/src/client/android-bridge.ts:17": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:923": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BackGate.kt:38": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:1030": 1,
+    "dsh-host-web-compat/lib/index.js:302": 2,
+    "plugins/dsh-android-file-open/src/index.ts:527": 4,
+    "dsh-client-ui-responsive/src/client/dev-section/runtime-cache.tsx:91": 1,
+    "dsh-shell-termux/src/index.ts:39": 1,
+    "dsh-host-web-compat/scripts/boot-watchdog.test.mjs:231": 2,
+    "scripts/profile-web.cordis.patch.yml:7": 1,
+    "scripts/build-snapshot-013.mjs:933": 1,
+    "scripts/plugin-dirs.json:1": 1,
+    "scripts/patches/apply-patches.mjs:1583": 1,
+    "scripts/check-patch-mirror.mjs:109": 1,
+    "scripts/check-release-gates.mjs:191": 1,
+    ".github/workflows/build-apk-source.yml:134": 1,
+    "scripts/patches/registry.json:211": 1,
+    "scripts/patches/apply-patches.mjs:122": 1,
+    "scripts/source-build/reconcile-engine-patch-copies.mjs:58": 1,
+    "scripts/source-build/check-dsh-source-snapshot.mjs:25": 1,
+    "scripts/check-release-gates.mjs:135": 1,
+    "scripts/check-boot-budget.mjs:671": 1,
+    "scripts/check-runtime-assets.mjs:126": 1,
+    "scripts/check-boot-budget.mjs:609": 1,
+    "scripts/check-inject-completeness.mjs:100": 1,
+    "scripts/check-browser-syntax-floor.mjs:536": 1,
+    "scripts/verify-webview-015.mjs:43": 1,
+    "scripts/verify-state-sync.mjs:107": 1,
+    "scripts/verify-browser-host.mjs:98": 1,
+    "scripts/verify-vdisplay-viewer.mjs:161": 1,
+    "scripts/verify-webview-015.mjs:11": 2,
+    "scripts/verify-client-plugin-fail-recovery.mjs:11": 1,
+    "docs/AGENTS/emulator-test-protocol.md:96": 1,
+    "EngineStartFlow.kt:724": 1,
+    "ShellOps.kt:556": 1,
+    "OverlayReport.kt:238": 2,
+    "scripts/check-kotlin-test-count.mjs:106": 1,
+    "tools.ts:136": 2,
+    "tools.ts:225": 2,
+    "facts.ts:104": 2,
+    "dsh-host-web-compat/lib/index.js:895": 2,
+    "EngineManager.kt:1463": 2,
+    "inject-all.py:336": 2,
+    "build-snapshot-013.mjs:366": 2,
+    "build-apk-013.ps1:229": 2,
+    "build-snapshot-013.mjs:315": 2,
+    "scripts/build-apk.mjs:61": 4,
+    "scripts/check-patch-mirror.mjs:339": 4,
+    "scripts/check-boot-budget.mjs:681": 3,
+    "BrowserHost.kt:1661": 3,
+    "ShizukuProbe.kt:77": 2,
+    "ShizukuTransport.kt:98": 2,
+    "VdisplayController.kt:326": 2,
+    "docs/AGENTS/gotchas.md:74": 2,
+    "docs/AGENTS/emulator-test-protocol.md:57": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/ApkUpdateAction.kt:228": 1,
+    "GuidePageRenderer.kt:781": 1,
+    "AndroidBridge.kt:611": 1,
+    "UpdateCheckerTest.kt:393": 1,
+    "ApkUpdateAction.kt:261": 1,
+    "UpdateCheckerTest.kt:364": 1,
+    "ApkUpdateAction.kt:578": 1,
+    "EngineStartFlow.kt:1143": 1,
+    "MainActivity.kt:475": 1,
+    "EngineStartFlow.kt:1150": 1,
+    "UpdateCheckerTest.kt:426": 1,
+    "MainActivity.kt:719": 1,
+    "BackGate.kt:132": 1,
+    "ConsoleActivity.kt:105": 1,
+    "DeviceControlService.kt:452": 1,
+    "EngineProbe.kt:51": 1,
+    "DownloadSaver.kt:101": 1,
+    "NotifyBridge.kt:328": 1,
+    "OverlayPanel.kt:824": 2,
+    "OverlayService.kt:580": 1,
+    "MuxClient.kt:91": 1,
+    "EngineService.kt:134": 1,
+    "EngineStartFlow.kt:349": 1,
+    "ShellState.kt:38": 2,
+    "ShellState.kt:99": 1,
+    "EngineAuth.kt:46": 1,
+    "plugins/dsh-android-bridge/src/index.ts:135": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/BackGate.kt:52": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/EngineAuth.kt:172": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MuxClient.kt:172": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlPoller.kt:125": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:86": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlProtocolV2.kt:215": 1,
+    "DeviceControlService.kt:964": 1,
+    "ControlCarrier.kt:86": 1,
+    "DeviceControlService.kt:607": 1,
+    "AdbKeyboardReceiver.kt:45": 1,
+    "plugins/dsh-android-manage/src/index.ts:1999": 1,
+    "AdbKeyboardService.kt:114": 1,
+    "AdbKeyboardReceiver.kt:76": 1,
+    "MainActivity.kt:793": 1,
+    "ControlCarrier.kt:110": 1,
+    "VdisplayController.kt:133": 1,
+    "ControlProtocolV2.kt:96": 1,
+    "index.ts:1899": 1,
+    "ControlPoller.kt:65": 2,
+    "ControlCarrier.kt:84": 1,
+    "index.ts:313": 2,
+    "AdbKeyboardService.kt:60": 1,
+    "ControlProtocolV2.kt:46": 1,
+    "ControlCarrier.kt:47": 1,
+    "ScreenScope.kt:49": 1,
+    "MainActivity.kt:772": 1,
+    "EngineManager.kt:1442": 1,
+    "AdbKeyboardService.kt:122": 1,
+    "index.ts:42": 1,
+    "GlobalActionCatalog.kt:23": 1,
+    "index.ts:924": 1,
+    "index.ts:945": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:607": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:745": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:496": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:409": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/GlobalActionCatalog.kt:47": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/AdbKeyboardReceiver.kt:25": 1,
+    "AdbKeyboardService.kt:106": 1,
+    "VdisplayController.kt:306": 1,
+    "VdisplayOps.kt:20": 1,
+    "ScreenScope.kt:31": 1,
+    "AndroidBridge.kt:319": 2,
+    "MainActivity.kt:782": 1,
+    "ShellOps.kt:197": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:306": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:372": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:474": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:95": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayHost.kt:157": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayFloat.kt:76": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayOps.kt:15": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/VirtualDisplayProbe.kt:97": 1,
+    "docs/AGENTS/ARCHITECTURE.md:90": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:319": 2,
+    "VdisplayController.kt:529": 2,
+    "docs/AGENTS/ARCHITECTURE.md:136": 2,
+    "VdisplayController.kt:372": 2,
+    "VdisplayController.kt:124": 2,
+    "VdisplayOps.kt:21": 2,
+    "MainActivity.kt:769": 1,
+    "MainActivity.kt:306": 1,
+    "EngineService.kt:70": 1,
+    "OverlayService.kt:382": 2,
+    "OverlayPanel.kt:309": 1,
+    "OverlayService.kt:415": 1,
+    "OverlayService.kt:436": 1,
+    "OverlayService.kt:547": 1,
+    "OverlayPanel.kt:87": 1,
+    "OverlayLiveFeed.kt:28": 1,
+    "OverlayPanel.kt:423": 1,
+    "OverlayPanel.kt:308": 1,
+    "OverlayService.kt:155": 1,
+    "OverlayService.kt:166": 1,
+    "OverlayService.kt:143": 1,
+    "OverlayService.kt:470": 1,
+    "OverlayHalo.kt:113": 1,
+    "OverlayService.kt:427": 1,
+    "OverlayPanel.kt:387": 1,
+    "OverlayController.kt:22": 2,
+    "OverlayService.kt:775": 1,
+    "NotifyCenter.kt:161": 1,
+    "MainActivity.kt:642": 1,
+    "OverlayService.kt:783": 1,
+    "OverlayService.kt:85": 1,
+    "OverlayService.kt:574": 1,
+    "MuxClient.kt:46": 1,
+    "NotifyBridge.kt:28": 2,
+    "OverlayLiveFeed.kt:26": 1,
+    "OverlayService.kt:449": 1,
+    "OverlayReport.kt:180": 1,
+    "OverlayPanel.kt:1174": 1,
+    "OverlayPanel.kt:204": 1,
+    "OverlayService.kt:216": 1,
+    "OverlayService.kt:252": 1,
+    "OverlayService.kt:504": 1,
+    "OverlayPanel.kt:177": 1,
+    "OverlayHalo.kt:143": 1,
+    "OverlayService.kt:232": 1,
+    "OverlayService.kt:765": 1,
+    "OverlayReport.kt:348": 1,
+    "OverlayPanel.kt:835": 1,
+    "OverlayPanel.kt:112": 1,
+    "EngineService.kt:37": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1593": 1,
+    "NotifyStore.kt:197": 1,
+    "EngineService.kt:123": 1,
+    "NotifyStore.kt:233": 1,
+    "NotifyBridge.kt:165": 1,
+    "NotifyActionReceiver.kt:82": 1,
+    "AndroidBridge.kt:375": 1,
+    "NotifyCenter.kt:257": 1,
+    "EngineService.kt:40": 1,
+    "EngineService.kt:116": 1,
+    "NotifyCenter.kt:33": 1,
+    "NotifyStore.kt:66": 1,
+    "WatchdogV2.kt:29": 1,
+    "WatchdogV2.kt:236": 1,
+    "NotifyDecisionQueue.kt:28": 1,
+    "NotifyProbe.kt:21": 1,
+    "NotifyStore.kt:36": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1457": 1,
+    "notify-projection.ts:55": 1,
+    "OverlayPanel.kt:69": 1,
+    "NotifyCenter.kt:84": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:49": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:345": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:589": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyStore.kt:360": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyBridge.kt:200": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyActionReceiver.kt:51": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyDecisionQueue.kt:266": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/NotifySuppressQueue.kt:119": 1,
+    "NotifyCenter.kt:550": 1,
+    "NotifyCenter.kt:370": 1,
+    "NotifyCenter.kt:527": 1,
+    "NotificationContractTest.kt:242": 2,
+    "NotifyCenter.kt:676": 1,
+    "app/src/main/AndroidManifest.xml:98": 1,
+    "NotifyCenter.kt:850": 1,
+    "NotifyDecisionQueue.kt:192": 1,
+    "NotifyStore.kt:118": 1,
+    "NotifyStore.kt:127": 1,
+    "NotifySuppressQueue.kt:83": 2,
+    "NotifyStore.kt:398": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1224": 1,
+    "plugins/dsh-android-bridge/src/capability-gate.ts:250": 1,
+    "index.ts:1438": 2,
+    "control-queue.ts:347": 1,
+    "index.ts:1669": 1,
+    "index.ts:1558": 1,
+    "index.ts:1416": 1,
+    "index.ts:909": 2,
+    "index.ts:1612": 1,
+    "index.ts:1444": 1,
+    "index.ts:477": 1,
+    "index.ts:112": 1,
+    "index.ts:1664": 1,
+    "index.ts:263": 1,
+    "control-queue.ts:230": 1,
+    "screen-scope.ts:549": 1,
+    "index.ts:165": 1,
+    "screen-scope.ts:25": 1,
+    "index.ts:1463": 1,
+    "shell-ops.ts:17": 1,
+    "control-policy.ts:79": 1,
+    "screen-scope.ts:70": 1,
+    "index.ts:428": 2,
+    "index.ts:453": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:249": 1,
+    "plugins/dsh-android-vdisplay/src/status.ts:190": 1,
+    "plugins/dsh-android-browser/src/facts.ts:66": 1,
+    "tools.ts:262": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:70": 1,
+    "index.ts:251": 1,
+    "scripts/api-route-auth-policy.json:126": 1,
+    "plugins/dsh-android-bridge/src/index.ts:909": 1,
+    "plugins/dsh-android-bridge/src/index.ts:472": 1,
+    "plugins/dsh-android-bridge/src/control-queue.ts:139": 1,
+    "plugins/dsh-android-bridge/src/index.ts:755": 1,
+    "plugins/dsh-android-bridge/src/index.ts:1558": 1,
+    "index.ts:472": 1,
+    "plugins/dsh-android-bridge/test/screen-scope.test.mjs:779": 1,
+    "screen-scope.ts:569": 1,
+    "control-queue.ts:140": 1,
+    "control-queue.ts:227": 1,
+    "lossless-json.ts:30": 1,
+    "notify-projection.ts:37": 1,
+    "docs/archive/known-gaps-pre-0.14.5-2026-10-07.md:170": 2,
+    "plugins/dsh-android-bridge/src/index.ts:829": 2,
+    "plugins/dsh-android-bridge/src/index.ts:991": 2,
+    "docs/AGENTS/ARCHITECTURE.md:151": 2,
+    "plugins/dsh-android-manage/src/index.ts:2286": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/AdbKeyboardService.kt:166": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:255": 1,
+    "plugins/dsh-android-manage/src/index.ts:1300": 1,
+    "plugins/dsh-android-manage/src/index.ts:1341": 1,
+    "plugins/dsh-android-manage/src/index.ts:571": 1,
+    "plugins/dsh-android-manage/src/index.ts:1507": 1,
+    "plugins/dsh-android-manage/src/protocol-v2.ts:114": 1,
+    "scripts/check-tool-output-schema.mjs:7": 1,
+    "plugins/dsh-android-browser/src/contract.ts:14": 1,
+    "plugins/dsh-android-vdisplay/src/index.ts:96": 1,
+    "plugins/dsh-android-browser/src/index.ts:274": 1,
+    "plugins/dsh-android-vdisplay/src/index.ts:92": 1,
+    "index.ts:295": 1,
+    "index.ts:298": 1,
+    "plugins/dsh-android-vdisplay/src/client/index.ts:171": 1,
+    "tools.ts:245": 1,
+    "tools.ts:254": 1,
+    "tools.ts:1075": 1,
+    "BrowserHost.kt:1085": 1,
+    "BrowserHost.kt:677": 1,
+    "VdisplayHost.kt:54": 1,
+    "contract.ts:41": 1,
+    "status.ts:14": 1,
+    "tools.ts:193": 1,
+    "plugins/dsh-android-vdisplay/src/index.ts:162": 1,
+    "BrowserHost.kt:908": 1,
+    "BrowserHost.kt:91": 1,
+    "BrowserHost.kt:304": 1,
+    "VdisplayController.kt:233": 1,
+    "plugins/dsh-android-vdisplay/src/client/index.ts:93": 1,
+    "dsh-client-ui-responsive/src/client/index.ts:192": 1,
+    "facts.ts:50": 1,
+    "index.ts:69": 1,
+    "index.ts:31": 1,
+    "plugins/dsh-android-browser/src/tools.ts:136": 1,
+    "plugins/dsh-android-browser/src/facts.ts:99": 1,
+    "plugins/dsh-android-browser/src/tier.ts:57": 1,
+    "plugins/dsh-android-vdisplay/src/status.ts:131": 1,
+    "plugins/dsh-android-vdisplay/src/status.ts:186": 1,
+    "BrowserHost.kt:128": 1,
+    "tools.ts:119": 1,
+    "BrowserHost.kt:1087": 1,
+    "tools.ts:505": 1,
+    "BrowserHost.kt:1432": 1,
+    "BrowserHost.kt:75": 1,
+    "BrowserHost.kt:1336": 1,
+    "BrowserHostNavigationPolicy.kt:35": 1,
+    "status.ts:141": 1,
+    "VdisplayController.kt:418": 1,
+    "VdisplayController.kt:554": 1,
+    "VdisplayHost.kt:70": 1,
+    "plugins/dsh-android-browser/src/tools.ts:407": 2,
+    "BrowserHost.kt:818": 2,
+    "BrowserHost.kt:80": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:304": 2,
+    "docs/AGENTS/ARCHITECTURE.md:17": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:425": 2,
+    "VdisplayController.kt:766": 2,
+    "VdisplayHost.kt:214": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:333": 2,
+    "plugins/dsh-android-vdisplay/src/client/index.ts:84": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:379": 1,
+    "plugins/dsh-android-file-open/src/index.ts:481": 1,
+    "plugins/dsh-android-linux-env/src/index.ts:337": 1,
+    "FileIncoming.kt:301": 1,
+    "plugins/dsh-android-bridge/src/route-auth.ts:4": 1,
+    "FileIncoming.kt:32": 1,
+    "plugins/dsh-android-file-open/src/index.ts:36": 1,
+    "plugins/dsh-android-linux-env/src/index.ts:30": 1,
+    "plugins/dsh-android-linux-env/src/index.ts:72": 1,
+    "scripts/build-snapshot-013.mjs:456": 1,
+    "EngineManager.kt:1314": 1,
+    "EngineManager.kt:1316": 1,
+    "plugins/dsh-android-file-open/src/index.ts:431": 3,
+    "plugins/dsh-android-file-open/src/index.ts:216": 1,
+    "plugins/dsh-android-linux-env/src/index.ts:353": 1,
+    "plugins/dsh-android-linux-env/src/runtime-cache.ts:469": 1,
+    "FileIncoming.kt:342": 1,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:326": 2,
+    "plugins/dsh-android-file-open/src/index.ts:20": 2,
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:97": 2,
+    "dsh-host-web-compat/lib/index.js:770": 2,
+    "index.ts:125": 1,
+    "dsh-client-ui-responsive/src/client/index.ts:352": 1,
+    "form-marker.ts:88": 1,
+    "mobile-form.css.ts:26": 1,
+    "mobile-settings.css.ts:15": 2,
+    "composer-menu.css.ts:25": 2,
+    "trajectory-details.css.ts:16": 1,
+    "reference-menu.ts:133": 1,
+    "back-stack.ts:347": 1,
+    "scripts/patches/apply-patches.mjs:865": 1,
+    "form-marker.ts:96": 1,
+    "keyboard-boundary.ts:67": 1,
+    "MobileChrome.tsx:35": 1,
+    "back-stack.ts:445": 1,
+    "dsh-host-web-compat/lib/index.js:136": 1,
+    "form-marker.ts:83": 1,
+    "mobile-form.css.ts:55": 1,
+    "settings-document.ts:65": 1,
+    "MobileChrome.tsx:85": 1,
+    "composer-popup-guard.ts:140": 1,
+    "MobileChrome.tsx:82": 1,
+    "composer-popup-guard.ts:165": 1,
+    "reference-menu.ts:211": 1,
+    "attachment-picker-menu.ts:215": 1,
+    "back-stack.ts:95": 2,
+    "back-stack.ts:426": 2,
+    "session-marker.ts:67": 1,
+    "browser-auto-place.ts:85": 1,
+    "dsh-host-web-compat/lib/index.js:480": 1,
+    "index.ts:444": 1,
+    "incoming-draft.ts:86": 1,
+    "dsh-client-ui-responsive/tests/incoming-draft.spec.ts:166": 1,
+    "trajectory-panels-observer.ts:43": 1,
+    "session-log-dialog-observer.ts:56": 1,
+    "trajectory-details.css.ts:44": 1,
+    "session-log-dialog.css.ts:40": 1,
+    "index.ts:142": 1,
+    "snapshot-panels-observer.ts:47": 1,
+    "snapshot-panels.css.ts:15": 1,
+    "MainActivity.kt:923": 1,
+    "mobile-form.css.ts:21": 1,
+    "composer-insets.css.ts:13": 1,
+    "keyboard-boundary.ts:94": 1,
+    "index.ts:281": 1,
+    "back-stack.ts:286": 1,
+    "browser-auto-place.ts:239": 1,
+    "index.ts:517": 1,
+    "dsh-host-web-compat/lib/index.js:802": 2,
+    "plugins/dsh-android-linux-env/src/index.ts:388": 1,
+    "dsh-host-web-compat/lib/index.js:389": 1,
+    "theme-bridge.ts:81": 1,
+    "dsh-host-web-compat/lib/index.js:430": 1,
+    "dsh-host-web-compat/lib/index.js:400": 1,
+    "dsh-host-web-compat/lib/index.js:411": 1,
+    "open-path.ts:33": 1,
+    "settings-document.ts:78": 1,
+    "dsh-host-web-compat/lib/index.js:416": 1,
+    "settings-document.ts:34": 1,
+    "GeneralSettings.tsx:43": 1,
+    "DevSection.tsx:60": 1,
+    "DevSection.tsx:31": 1,
+    "DevSection.tsx:72": 1,
+    "DevSection.tsx:220": 1,
+    "DevSection.tsx:152": 1,
+    "phone-control.tsx:170": 1,
+    "phone-control.tsx:180": 1,
+    "phone-control.tsx:196": 1,
+    "phone-control.tsx:206": 1,
+    "phone-control.tsx:240": 1,
+    "phone-control.tsx:363": 1,
+    "notify-settings.tsx:66": 1,
+    "phone-control.tsx:220": 1,
+    "incoming-draft.ts:150": 1,
+    "browser-auto-place.ts:45": 1,
+    "index.ts:380": 1,
+    "native-browser-presentation.ts:61": 1,
+    "native-browser-adapter.ts:203": 1,
+    "native-browser-adapter.ts:202": 1,
+    "back-stack.ts:551": 1,
+    "MainActivity.kt:803": 1,
+    "BackGate.kt:126": 1,
+    "BackGate.kt:38": 1,
+    "index.ts:432": 1,
+    "MainActivity.kt:1030": 1,
+    "DownloadSaver.kt:61": 1,
+    "theme-bridge.ts:68": 1,
+    "dsh-host-web-compat/lib/index.js:381": 1,
+    "MainActivity.kt:880": 1,
+    "dsh-host-web-compat/lib/index.js:398": 1,
+    "ConfigTransfer.kt:117": 1,
+    "dsh-host-web-compat/lib/index.js:409": 1,
+    "LogCollector.kt:740": 1,
+    "EngineStartFlow.kt:206": 1,
+    "dsh-host-web-compat/lib/index.js:137": 1,
+    "dsh-host-web-compat/lib/index.js:360": 1,
+    "dsh-host-web-compat/lib/index.js:295": 1,
+    "LogCollector.kt:755": 1,
+    "LogCollector.kt:780": 1,
+    "MainActivity.kt:1057": 1,
+    "EngineStartFlow.kt:317": 1,
+    "EngineStartFlow.kt:350": 1,
+    "UndoGate.kt:165": 1,
+    "PluginMounts.kt:259": 1,
+    "PluginMounts.kt:470": 1,
+    "scripts/verify-client-plugin-fail-recovery.mjs:1": 1,
+    "dsh-host-web-compat/lib/index.js:552": 1,
+    "dsh-client-ui-responsive/src/client/mobile/form-marker.ts:88": 1,
+    "dsh-client-ui-responsive/src/client/mobile/back-stack.ts:334": 1,
+    "dsh-host-web-compat/lib/index.js:328": 1,
+    "dsh-host-web-compat/lib/index.js:286": 1,
+    "dsh-host-web-compat/lib/index.js:307": 1,
+    "dsh-shell-termux/src/index.ts:184": 1,
+    "back-stack.ts:35": 1,
+    "use-shell-state.ts:26": 1,
+    "dsh-client-ui-responsive/src/client/mobile/attachment-picker-menu.ts:184": 1,
+    "dsh-client-ui-responsive/tests/back-stack.spec.ts:259": 1,
+    "docs/AGENTS/gotchas.md:103": 2,
+    "dsh-client-ui-responsive/src/client/dev-section/notify-settings.tsx:66": 2,
+    "check-release-gates.mjs:136": 1,
+    "build-snapshot-013.mjs:31": 1,
+    "build-apk-013.ps1:37": 1,
+    "check-build-chain-abort.mjs:53": 1,
+    "build-snapshot-013.mjs:40": 1,
+    "check-inject-completeness.mjs:37": 1,
+    "check-patch-mounts.mjs:28": 1,
+    "build-snapshot-013.mjs:294": 1,
+    "build-apk-013.ps1:211": 1,
+    "build-snapshot-013.mjs:300": 1,
+    "apply-patches.mjs:1596": 1,
+    "inject-all.py:174": 1,
+    "build-snapshot-013.mjs:982": 1,
+    "inject-all.py:304": 1,
+    "inject-all.py:32": 1,
+    "check-inject-completeness.mjs:28": 1,
+    "inject-all.py:273": 1,
+    "check-snapshot-builder-output.mjs:139": 1,
+    "check-release-gates.mjs:28": 1,
+    "scripts/build-apk-013.ps1:182": 1,
+    "scripts/build-apk-013.ps1:283": 1,
+    "scripts/build-apk-engine.mjs:33": 1,
+    "scripts/build-apk-engine.test.mjs:121": 1,
+    "scripts/patches/data/registry-scan-c4.mjs:11": 1,
+    "scripts/patches/data/client-index-loader-barrier.mjs:3": 1,
+    "scripts/patches/data/undo-safe-transaction-snippet.mjs:1": 1,
+    "apply-patches.mjs:519": 1,
+    "scripts/build-apk-013.ps1:427": 2,
+    "scripts/build-snapshot-013.mjs:31": 1,
+    "scripts/build-snapshot-013.mjs:297": 1,
+    "scripts/inject-all.py:321": 1,
+    "check-inject-completeness.mjs:98": 1,
+    "build-snapshot-013.mjs:1029": 1,
+    "check-snapshot-asset.ps1:26": 1,
+    "scripts/build-release.ps1:60": 2,
+    "scripts/check-plugin-tests.mjs:54": 1,
+    "scripts/build-apk-013.ps1:174": 1,
+    "scripts/check-release-gates.mjs:164": 1,
+    "scripts/check-patch-mirror.mjs:170": 1,
+    "scripts/check-gate-skips.mjs:62": 2,
+    ".github/workflows/pr-gate.yml:40": 1,
+    "scripts/check-release-gates.mjs:212": 1,
+    ".github/workflows/pr-gate.yml:11": 1,
+    ".github/workflows/pr-gate.yml:113": 1,
+    "scripts/build-snapshot-013.mjs:169": 1,
+    "scripts/check-patch-mirror.mjs:160": 3,
+    "scripts/check-browser-syntax-floor.mjs:658": 1,
+    "scripts/check-patch-mirror.mjs:347": 1,
+    "scripts/check-release-gates.mjs:152": 1,
+    "scripts/check-gate-skips.mjs:40": 1,
+    ".github/workflows/pr-gate.yml:82": 1,
+    "scripts/check-contract.mjs:165": 1,
+    "scripts/check-browser-syntax-floor.mjs:535": 1,
+    "docs/AGENTS/emulator-test-protocol.md:39": 1,
+    "scripts/device-smoke.ps1:9": 1,
+    "verify-webview-015.mjs:6": 1,
+    "verify-browser-host.mjs:4": 1,
+    "verify-browser-panel.mjs:12": 1,
+    "verify-webview-015.mjs:97": 1,
+    "BrowserHost.kt:1371": 1,
+    "verify-state-sync.mjs:27": 1,
+    "verify-engine-log-copy.mjs:30": 1,
+    "verify-state-sync.mjs:107": 1,
+    "verify-browser-host.mjs:70": 1,
+    "verify-vdisplay-viewer.mjs:81": 1,
+    "verify-webview-015.mjs:11": 1,
+    "verify-vdisplay-viewer.mjs:106": 1,
+    "verify-webview-015.mjs:60": 1,
+    "MainActivity.kt:1164": 1,
+    "verify-state-sync.mjs:106": 1,
+    "verify-engine-log-copy.mjs:28": 1,
+    "device-smoke.ps1:24": 1,
+    "scripts/verify-webview-015.mjs:6": 1,
+    "scripts/verify-state-sync.mjs:244": 1,
+    "scripts/verify-state-sync.mjs:247": 1,
+    "scripts/verify-browser-host.mjs:55": 1,
+    "scripts/verify-browser-panel.mjs:66": 1,
+    "scripts/verify-vdisplay-viewer.mjs:165": 1,
+    "verify-state-sync.mjs:246": 1,
+    "verify-browser-host.mjs:58": 1,
+    "verify-state-sync.mjs:161": 1,
+    "docs/AGENTS/gotchas.md:44": 1,
+    "MainActivity.kt:514": 1
+  },
+  "sourceLines": {
+    ".github/workflows/build-apk-source.yml:134": [
+      "if [ ! -d .deploy-tmp/deepseek-harness/.git ]; then"
+    ],
+    ".github/workflows/pr-gate.yml:11": [
+      "# 而且旧的那份可能后完成——它带着旧的检出状态给自己的检查项盖章，看起来是绿的，实际验的不是最新代码。"
+    ],
+    ".github/workflows/pr-gate.yml:113": [
+      "# 跨语言 op 清单对等（0.14.1）：引擎 REAL_SCREEN_CONTROL_OPS 与壳侧 REAL_SCREEN_OPS 必须逐条相同。"
+    ],
+    ".github/workflows/pr-gate.yml:140": [
+      "if: always()"
+    ],
+    ".github/workflows/pr-gate.yml:40": [
+      "run: node --test scripts/check-apk-signatures.test.mjs scripts/resolve-version-suffix.test.mjs scripts/build-apk-engine.test.mjs scripts/check-third-party.test.mjs scripts/check-upstream-patch-bytes.test.mjs"
+    ],
+    ".github/workflows/pr-gate.yml:41": [
+      "- name: 下载站发布同步与路由回归"
+    ],
+    ".github/workflows/pr-gate.yml:64": [
+      "run: |"
+    ],
+    ".github/workflows/pr-gate.yml:82": [
+      "node --test scripts/probe-engine-anchors.test.mjs"
+    ],
+    ".github/workflows/pr-gate.yml:91": [
+      "set -euo pipefail"
+    ],
+    "0.13.7-CERTIFICATION.md:11": [
+      "| 统一补丁（vendor） | 通过 | 双 ABI 均 `apply-patches: ALL OK（13/13，mode=check）`（新增 undo-E8；attachment-formats 已退役） |"
+    ],
+    "AGENTS.md:21": [
+      "`dsh-shell-termux` 0.2.0 · `dsh-client-ui-responsive` 0.3.3 · `dsh-host-web-compat` 0.1.16 · `plugins/`（bridge 0.2.4 / manage 0.3.0 / model-capability 0.2.1 / file-open 0.1.0 / browser 0.1.0 / linux-env 0.1.2 / vdisplay 0.1.0）· `vendor/`（marketplace / undo-savepoint）"
+    ],
+    "AGENTS.md:30": [
+      ""
+    ],
+    "ARCHITECTURE.md:15": [
+      "| 文件 | 职责一句话 | 被引用 |"
+    ],
+    "AdbKeyboardReceiver.kt:45": [
+      "override fun onReceive(context: Context, intent: Intent) {"
+    ],
+    "AdbKeyboardReceiver.kt:76": [
+      "fun shouldHandle("
+    ],
+    "AdbKeyboardService.kt:106": [
+      "val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager ?: return"
+    ],
+    "AdbKeyboardService.kt:114": [
+      "private fun registerRuntimeReceiver() {"
+    ],
+    "AdbKeyboardService.kt:122": [
+      "if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {"
+    ],
+    "AdbKeyboardService.kt:60": [
+      "background = android.graphics.drawable.ColorDrawable(0xFFF2F2F2.toInt())"
+    ],
+    "AndroidBridge.kt:319": [
+      "/**"
+    ],
+    "AndroidBridge.kt:325": [
+      "@JavascriptInterface"
+    ],
+    "AndroidBridge.kt:375": [
+      "fun setOverlayEnabled(enable: Boolean): Boolean = onSetOverlayEnabled(enable)"
+    ],
+    "AndroidBridge.kt:423": [
+      "fun browserHostViewport(viewport: String): String = onBrowserHostViewport(viewport)"
+    ],
+    "AndroidBridge.kt:611": [
+      "* 立即返回 `{ok, code:repair-started|repair-running, running, startedAt, ...}`；"
+    ],
+    "ApkUpdateAction.kt:261": [
+      ""
+    ],
+    "ApkUpdateAction.kt:578": [
+      "internal fun publishCheckResult(r: UpdateChecker.CheckResult, e: Int) {"
+    ],
+    "BackGate.kt:126": [
+      "* 页面 → 壳的返回层栈上行接口（window.dshBackBridge）。"
+    ],
+    "BackGate.kt:132": [
+      "class BackGateBridge(private val state: BackGateState) {"
+    ],
+    "BackGate.kt:16": [
+      "* - 层穷尽后才允许 finish；「观测不到/关不掉的层」一律消费，不得误退应用。"
+    ],
+    "BackGate.kt:38": [
+      "const val DISPATCH_SCRIPT: String = \"window.__dshBack && window.__dshBack()\""
+    ],
+    "BackGate.kt:56": [
+      "}"
+    ],
+    "BootReceiver.kt:23": [
+      "class BootReceiver : BroadcastReceiver() {"
+    ],
+    "BrowserHost.kt:1035": [
+      "id = View.generateViewId()"
+    ],
+    "BrowserHost.kt:1085": [
+      "if (count <= BLOCKED_REQUEST_LOG_LIMIT) {"
+    ],
+    "BrowserHost.kt:1087": [
+      "}"
+    ],
+    "BrowserHost.kt:128": [
+      "if (activeTabId == null) activeTabId = wanted"
+    ],
+    "BrowserHost.kt:1336": [
+      "tab.view?.visibility = if (visible && tab.id == workspace.activeTabId) View.VISIBLE else View.INVISIBLE"
+    ],
+    "BrowserHost.kt:1371": [
+      "* 代价：每 [BrowserOverlayPolicy.STAGE_BOUNDS_WATCHDOG_MS] 一次主线程空转（绝大多数拍"
+    ],
+    "BrowserHost.kt:1412": [
+      "// `root.addView(created, FrameLayout.LayoutParams(1, 1))` 挂上去的，只有"
+    ],
+    "BrowserHost.kt:1432": [
+      "}"
+    ],
+    "BrowserHost.kt:1661": [
+      "val tab = ensureTab(null)"
+    ],
+    "BrowserHost.kt:304": [
+      "* 正确模型：切到别的对话就看不到、也碰不到别人的页面；各自独立开页、独立计代次、"
+    ],
+    "BrowserHost.kt:384": [
+      "workspace.modelTabId = null"
+    ],
+    "BrowserHost.kt:396": [
+      "*"
+    ],
+    "BrowserHost.kt:625": [
+      "* 0.14.0：入参兼容裸 URL（旧调用/设备脚本）与 JSON `{url?, session?}`（可信面板带会话）。"
+    ],
+    "BrowserHost.kt:677": [
+      "}"
+    ],
+    "BrowserHost.kt:75": [
+      "/** 锚点标签页 id（首个页面恒定用它，保证旧调用与设备脚本的期望值不变）。 */"
+    ],
+    "BrowserHost.kt:80": [
+      "private const val MAX_TABS = 8"
+    ],
+    "BrowserHost.kt:810": [
+      "\"browserCaps\" -> controlOnMain(target) { caps() }"
+    ],
+    "BrowserHost.kt:818": [
+      "// Do not route through show(), which claims the global foreground workspace."
+    ],
+    "BrowserHost.kt:908": [
+      "applyStageBounds()"
+    ],
+    "BrowserHost.kt:91": [
+      "private val ORPHAN_GENERATION = AtomicLong(0)"
+    ],
+    "BrowserHostNavigationPolicy.kt:35": [
+      "val rebuilt = buildString {"
+    ],
+    "BrowserHostNavigationPolicy.kt:87": [
+      "if (authority.count { it == ':' } > 1) return Destination(reason = \"malformed-host\")"
+    ],
+    "BrowserHostNavigationPolicyTest.kt:129": [
+      "\"http://8.8.8.8/style.css\","
+    ],
+    "ConfigTransfer.kt:117": [
+      "\"window.__dshBridge?.onDirectoryPicked?.(\" + jsString(callback) + \", \" + jsString(path) + \")\", null,"
+    ],
+    "ConsoleActivity.kt:105": [
+      "super.onCreate(savedInstanceState)"
+    ],
+    "ConsoleSession.kt:32": [
+      "* （页面永远停在「启动中」、输入框永久禁用，而壳侧一切正常）。现在状态是显式契约，文案只用于显示。"
+    ],
+    "ControlAudit.kt:34": [
+      "object ControlAudit {"
+    ],
+    "ControlCarrier.kt:110": [
+      "}"
+    ],
+    "ControlCarrier.kt:47": [
+      "private const val SHIZUKU_CACHE_MS = 5_000L"
+    ],
+    "ControlCarrier.kt:84": [
+      "heartbeat = { if (a11y != null) DeviceControlService.heartbeat(app) },"
+    ],
+    "ControlCarrier.kt:86": [
+      "poller = created"
+    ],
+    "ControlPoller.kt:158": [
+      "}"
+    ],
+    "ControlPoller.kt:167": [
+      "if (!firstRun) {"
+    ],
+    "ControlPoller.kt:49": [
+      "private const val LONG_POLL_MS = 5000"
+    ],
+    "ControlPoller.kt:65": [
+      "internal const val HEARTBEAT_INTERVAL_MS = 5_000L"
+    ],
+    "ControlPoller.kt:96": [
+      "}"
+    ],
+    "ControlProtocolV2.kt:196": [
+      "t.add(sym(row.text.trim()))"
+    ],
+    "ControlProtocolV2.kt:21": [
+      "* 与引擎侧解码器 `plugins/dsh-android-manage/src/protocol-v2.ts` **逐字同规则**，"
+    ],
+    "ControlProtocolV2.kt:46": [
+      "val SUPPORTED_OPS = listOf("
+    ],
+    "ControlProtocolV2.kt:96": [
+      "fun encode("
+    ],
+    "DevSection.tsx:152": [
+      ": { text: tr('清理未完成——请重试；仍失败可复制日志反馈', 'Clearing did not finish; retry, or copy the log and report it.'), ...(j?.reason === undefined ? {} : { code: j.reason }) })"
+    ],
+    "DevSection.tsx:220": [
+      "} catch {"
+    ],
+    "DevSection.tsx:31": [
+      "*  权限缺失时偏好已回落 false —— 展示值只能以该回读为准，不得沿用上次的 UI 值。 */"
+    ],
+    "DevSection.tsx:60": [
+      "desc: tr("
+    ],
+    "DevSection.tsx:72": [
+      "*/"
+    ],
+    "DeviceControlService.kt:452": [
+      "data class Fact(val id: Int, val active: Boolean, val focused: Boolean, val hasRoot: Boolean)"
+    ],
+    "DeviceControlService.kt:607": [
+      "}"
+    ],
+    "DeviceControlService.kt:678": [
+      "\"snapshot\" -> handleSnapshot(args)"
+    ],
+    "DeviceControlService.kt:703": [
+      "\"browserViewport\" -> BrowserHostHolder.control(op, args)"
+    ],
+    "DeviceControlService.kt:852": [
+      "}"
+    ],
+    "DeviceControlService.kt:964": [
+      "*/"
+    ],
+    "DownloadSaver.kt:101": [
+      "throw java.io.IOException(\"HTTP \" + code)"
+    ],
+    "DownloadSaver.kt:61": [
+      "* 回退 MediaStore.Downloads。仅接受引擎同源 URL；流式写入并设大小上限。"
+    ],
+    "EngineAuth.kt:46": [
+      "private const val PREFS = \"dsh_engine_auth\""
+    ],
+    "EngineManager.kt:1314": [
+      "// 诊断落盘失败不得影响补丁应用本身（下面那行开发者日志仍会尝试）。"
+    ],
+    "EngineManager.kt:1316": [
+      "LogCollector.log(TAG, perfLine)"
+    ],
+    "EngineManager.kt:1442": [
+      "\"当前版本 Hard 插件清单缺失或与运行时快照不匹配；拒绝启动引擎，profile 未修改\","
+    ],
+    "EngineManager.kt:1463": [
+      "val restartForHardBundleRepair = hardBundleRepair.changed"
+    ],
+    "EngineManager.kt:1464": [
+      "// 通过闸门 A：码与确诊项已在入口清过（见函数头注释），此处无需重复。"
+    ],
+    "EngineManager.kt:1552": [
+      "return refuse(null, \"引擎进程在监听前退出，请查看本轮 engine.log\")"
+    ],
+    "EngineManager.kt:238": [
+      ""
+    ],
+    "EngineManager.kt:790": [
+      "refreshLedgerFile().takeIf { it.exists() }?.readText()"
+    ],
+    "EngineManager.kt:813": [
+      "try {"
+    ],
+    "EngineProbe.kt:51": [
+      "* 这样 WatchdogV2 一行都不用改，破坏性阶梯语义完全不动——「修缺陷」不制造安全回归。"
+    ],
+    "EngineService.kt:116": [
+      "super.onDestroy()"
+    ],
+    "EngineService.kt:123": [
+      "serviceEpoch.get()?.let { retireEpoch(it) }"
+    ],
+    "EngineService.kt:129": [
+      "* Start the engine if not running, then arm the watchdog. v2 (PRD F2-4):"
+    ],
+    "EngineService.kt:134": [
+      "*/"
+    ],
+    "EngineService.kt:140": [
+      "private fun scheduleStartup(epoch: ServiceEpoch, delayMs: Long) {"
+    ],
+    "EngineService.kt:207": [
+      "val bootAgeMs = nowMs - EngineManager.lastStartAttemptAt"
+    ],
+    "EngineService.kt:37": [
+      "/** 上一拍开始时刻（§6.3 标准拍折算用；0 = 尚未拍过一次，按一个标准拍处理）。 */"
+    ],
+    "EngineService.kt:40": [
+      "private val serviceEpoch = java.util.concurrent.atomic.AtomicReference<ServiceEpoch?>(null)"
+    ],
+    "EngineService.kt:43": [
+      "private val restartDeadConfirmations = 2"
+    ],
+    "EngineService.kt:70": [
+      "// Root maintenance/transaction recovery must never wait on the Service main thread."
+    ],
+    "EngineStartFlow.kt:1143": [
+      "waitedMs = 0L"
+    ],
+    "EngineStartFlow.kt:1150": [
+      "return"
+    ],
+    "EngineStartFlow.kt:206": [
+      "// 现场：新机首装首启 `shell-stall` 记 `stalledMs=352525`（352s），而同一轮页面在首个 HTTP"
+    ],
+    "EngineStartFlow.kt:317": [
+      "//"
+    ],
+    "EngineStartFlow.kt:345": [
+      "/** 失败条目（MainActivity 按当前界面语言取短句）。 */"
+    ],
+    "EngineStartFlow.kt:349": [
+      "internal fun clearClientPluginTreeFailureLatch() {"
+    ],
+    "EngineStartFlow.kt:350": [
+      "clientPluginTreeFailed = false"
+    ],
+    "EngineStartFlow.kt:427": [
+      "val now = System.currentTimeMillis()"
+    ],
+    "EngineStartFlow.kt:445": [
+      "UpdateManager(activity).checkAndApply { st ->"
+    ],
+    "EngineStartFlow.kt:497": [
+      "}"
+    ],
+    "EngineStartFlow.kt:549": [
+      "Thread { activity.engineManager.mirrorDiagnosticsToShared(\"startup-retries-exhausted\") }"
+    ],
+    "EngineStartFlow.kt:700": [
+      "// 相位已由本函数入口切到 Starting（启动即有反馈），这里不再重复切换——"
+    ],
+    "EngineStartFlow.kt:724": [
+      "activity.guideRenderer.progressText.visibility = View.GONE"
+    ],
+    "EngineStartFlow.kt:96": [
+      "// of leaving the user on ERR_CONNECTION_REFUSED."
+    ],
+    "FileIncoming.kt:301": [
+      "} catch (_: Exception) {"
+    ],
+    "FileIncoming.kt:32": [
+      "fun tmpWorkspace(context: Context): File ="
+    ],
+    "FileIncoming.kt:342": [
+      "/** 拷贝在途计数（cleanupTmp 让路依据，避免删半个文件）。 */"
+    ],
+    "ForegroundPageRecoveryWiringTest.kt:47": [
+      "val monitors = flow.substringBefore(\"fun startUpdateCheck()\")"
+    ],
+    "GeneralSettings.tsx:43": [
+      "export type GeneralSettingsProps = PropsRuntime<'settings.general.item'>"
+    ],
+    "GlobalActionCatalog.kt:23": [
+      "val TABLE: List<Entry> = listOf("
+    ],
+    "GlobalActionCatalog.kt:33": [
+      "Entry(\"menu\", AccessibilityService.GLOBAL_ACTION_MENU, 31),"
+    ],
+    "GlobalActionCatalog.kt:47": [
+      "fun available(ids: Set<Int>, sdk: Int): List<String> ="
+    ],
+    "GuidePageRenderer.kt:363": [
+      "// 旧实现的更新状态是本类的私有字段，视图一被 showWeb() 藏起来状态就不可达，这正是"
+    ],
+    "GuidePageRenderer.kt:781": [
+      ")"
+    ],
+    "LogCollector.kt:395": [
+      "emitBootSegments(context, \"note=listen\")"
+    ],
+    "LogCollector.kt:458": [
+      "/**"
+    ],
+    "LogCollector.kt:740": [
+      "val firstLine = when (state) {"
+    ],
+    "LogCollector.kt:755": [
+      "// 该字段与 firstLine **并存**（不替换），且只在真出现时写，不给每条失败加噪声。"
+    ],
+    "LogCollector.kt:780": [
+      "private fun appendBounded(ctx: Context, name: String, line: String, maxBytes: Long) ="
+    ],
+    "LogCollector.kt:785": [
+      "try {"
+    ],
+    "MainActivity.kt:1030": [
+      "pageRecovery.pause()"
+    ],
+    "MainActivity.kt:1054": [
+      "webView.destroy()"
+    ],
+    "MainActivity.kt:1057": [
+      "// EngineService owns the child lifecycle. An Activity can be recreated by"
+    ],
+    "MainActivity.kt:1076": [
+      "* ③ 都没有 → 关掉本回调后重新 dispatch，落回 Activity 默认 finish。"
+    ],
+    "MainActivity.kt:1164": [
+      "// agree on the language from the first frame."
+    ],
+    "MainActivity.kt:1167": [
+      "override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {"
+    ],
+    "MainActivity.kt:145": [
+      "/**"
+    ],
+    "MainActivity.kt:191": [
+      "/** 崩溃标记：记录未捕获异常摘要，下次启动测试界面提示（不吞异常）。 */"
+    ],
+    "MainActivity.kt:296": [
+      "internal fun startEngineFlow(splash: Boolean = false) {"
+    ],
+    "MainActivity.kt:306": [
+      "// 否则刚被 latch 挡下的 showWeb 会让这一次显式启动看不到任何结果。"
+    ],
+    "MainActivity.kt:354": [
+      "guideRenderer.applyGuidePhase(phase, title, hint).also {"
+    ],
+    "MainActivity.kt:422": [
+      "loadConfirmedEnginePage()"
+    ],
+    "MainActivity.kt:475": [
+      "android.webkit.CookieManager.getInstance().setCookie(EngineProbe.ENGINE_URL, authCookie)"
+    ],
+    "MainActivity.kt:502": [
+      "enginePageFailed = false"
+    ],
+    "MainActivity.kt:514": [
+      "true // onResume must not access the dead WebView after exposing the native recovery outlet."
+    ],
+    "MainActivity.kt:544": [
+      "pageRecovery.restoreRecreationBudget(savedInstanceState?.getBoolean(\"dsh.renderer-recreation-attempted\", false) ?: false)"
+    ],
+    "MainActivity.kt:565": [
+      "LogCollector.start(this)"
+    ],
+    "MainActivity.kt:569": [
+      "WindowCompat.setDecorFitsSystemWindows(window, false)"
+    ],
+    "MainActivity.kt:605": [
+      "}"
+    ],
+    "MainActivity.kt:642": [
+      "webSystemLeftInset = pxToCssPx(maxOf(bars.left, cutout.left), density)"
+    ],
+    "MainActivity.kt:719": [
+      "private fun consumeNotifyRoute(intent: Intent?) {"
+    ],
+    "MainActivity.kt:769": [
+      "} catch (_: Throwable) {"
+    ],
+    "MainActivity.kt:772": [
+      "}"
+    ],
+    "MainActivity.kt:78": [
+      "/** System insets in CSS px, cached until the engine page is ready to receive them. */"
+    ],
+    "MainActivity.kt:782": [
+      "if (!RepairState.active && RepairState.required(this)) {"
+    ],
+    "MainActivity.kt:784": [
+      "// Resume passive observation of the one already authorized attempt. Do not spawn or reset retries."
+    ],
+    "MainActivity.kt:788": [
+      "showGuide()"
+    ],
+    "MainActivity.kt:793": [
+      "if (!userClosedEngine) engineFlow.startEngineService() // Native fallback/recreation does not disable task protection."
+    ],
+    "MainActivity.kt:803": [
+      "showGuide()"
+    ],
+    "MainActivity.kt:812": [
+      "pendingAuthRejectedUrl = null"
+    ],
+    "MainActivity.kt:815": [
+      "if (initialAuthRecoveryPending) startInitialEngineAuthRecovery()"
+    ],
+    "MainActivity.kt:822": [
+      "// 0.14.1 批 3（P3-2）：渠道**展示名**随用词更新同步（幂等；未变则零写入）。"
+    ],
+    "MainActivity.kt:850": [
+      "}"
+    ],
+    "MainActivity.kt:880": [
+      "deliverRecoveryNotice()"
+    ],
+    "MainActivity.kt:923": [
+      "} catch (t: Throwable) {"
+    ],
+    "MobileChrome.tsx:35": [
+      "?? null"
+    ],
+    "MobileChrome.tsx:82": [
+      "/>"
+    ],
+    "MobileChrome.tsx:85": [
+      "}"
+    ],
+    "MuxClient.kt:45": [
+      "private const val GUID = \"258EAFA5-E914-47DA-95CA-C5AB0DC85B11\""
+    ],
+    "MuxClient.kt:46": [
+      "private const val MAX_FRAME = 8 * 1024 * 1024"
+    ],
+    "MuxClient.kt:91": [
+      "var failures = 0"
+    ],
+    "NotificationContractTest.kt:206": [
+      "val index = uiSource(\"src/client/index.ts\")"
+    ],
+    "NotificationContractTest.kt:242": [
+      "assertTrue(\"必须有一次性迁移入口\", code.contains(\"fun ensureSuppressForegroundMigrated(\"))"
+    ],
+    "NotifyActionReceiver.kt:82": [
+      "override fun onReceive(context: Context, intent: Intent?) {"
+    ],
+    "NotifyActionReceiver.kt:89": [
+      "LogCollector.log(NotifyDecisionQueue.TAG, \"notify action ignored (no eventId): \" + action)"
+    ],
+    "NotifyBridge.kt:165": [
+      "LogCollector.log(TAG, \"settled(eventId=\" + eventId + \" kind=\" + k + \" remote=\" + remote + \" tracked=\" + (p != null) + \")\")"
+    ],
+    "NotifyBridge.kt:28": [
+      "const val STREAM_ID = \"dsh-notify-responder\""
+    ],
+    "NotifyBridge.kt:328": [
+      "for (attempt in 0..1) {"
+    ],
+    "NotifyCenter.kt:1048": [
+      "*   用静默渠道 + 静默标志投递（条目仍可见），不再 heads-up。"
+    ],
+    "NotifyCenter.kt:145": [
+      ""
+    ],
+    "NotifyCenter.kt:161": [
+      "/**"
+    ],
+    "NotifyCenter.kt:188": [
+      "private fun flash(msg: String) {"
+    ],
+    "NotifyCenter.kt:257": [
+      "* @return 迁移后的生效值"
+    ],
+    "NotifyCenter.kt:33": [
+      "const val PREFS = \"dsh-notify\""
+    ],
+    "NotifyCenter.kt:370": [
+      "/** S3-2：被本次迁移**替代**的旧候选（调用方负责删除，避免同名重复渠道）。 */"
+    ],
+    "NotifyCenter.kt:401": [
+      "!fact.userSetImportance -> continue // 历史代码建错 → 下一个候选（S3）"
+    ],
+    "NotifyCenter.kt:527": [
+      "return renamed"
+    ],
+    "NotifyCenter.kt:550": [
+      "* @param manager - 系统通知管理器。"
+    ],
+    "NotifyCenter.kt:612": [
+      "row.put(\"guidance\", if (ch != null && ch.importance < face.importance && ch.hasUserSetImportance()) {"
+    ],
+    "NotifyCenter.kt:631": [
+      "* 现在两侧同源：本方法（自检面用）与页面侧 `describeImportance` 覆盖同一档位集合，且都不回数字。"
+    ],
+    "NotifyCenter.kt:676": [
+      ""
+    ],
+    "NotifyCenter.kt:829": [
+      "\"report\" -> Face.REPORT"
+    ],
+    "NotifyCenter.kt:84": [
+      "* （他人已答 / 引擎撤销）或本机提交结算。常量保留为 0，让这条决定**显式可 grep**。"
+    ],
+    "NotifyCenter.kt:850": [
+      "}"
+    ],
+    "NotifyDecisionQueue.kt:192": [
+      "fun enqueue(context: Context, decision: Decision): Boolean {"
+    ],
+    "NotifyDecisionQueue.kt:194": [
+      "LogCollector.log(TAG, \"decision ignored (requestId LRU): \" + decision.requestId)"
+    ],
+    "NotifyDecisionQueue.kt:28": [
+      "const val FILE_NAME = \"notify-decisions.ndjson\""
+    ],
+    "NotifyDecisionQueue.kt:310": [
+      "}"
+    ],
+    "NotifyDecisionQueue.kt:323": [
+      "// 提交者不会收到；不结算则通知停在「正在发送」（NT-16 判据）。"
+    ],
+    "NotifyProbe.kt:21": [
+      "const val FILE_NAME = \"notify-responder.log\""
+    ],
+    "NotifyStore.kt:118": [
+      "*"
+    ],
+    "NotifyStore.kt:127": [
+      "* @return 最近一条 report 的原始 ndjson 行；内存与文件都没有时为 null。"
+    ],
+    "NotifyStore.kt:18": [
+      "*  2. **偏移持久化在 prefs**（不用清空文件）：引擎是唯一的 append 写者，壳侧只读不截断，"
+    ],
+    "NotifyStore.kt:197": [
+      "// 启动即消费一次（进程离线期间的积压行：偏移持久化保证不重复投递）。"
+    ],
+    "NotifyStore.kt:233": [
+      ""
+    ],
+    "NotifyStore.kt:36": [
+      "const val FILE_NAME = \".notify.ndjson\""
+    ],
+    "NotifyStore.kt:398": [
+      "heartbeat(app, trigger, offset, len)"
+    ],
+    "NotifyStore.kt:66": [
+      "private const val KEY_OFFSET = \"notify.offset\""
+    ],
+    "NotifySuppressQueue.kt:83": [
+      "val kept = existing.filterNot {"
+    ],
+    "OverlayController.kt:22": [
+      "private const val PREFS = \"dsh-overlay\""
+    ],
+    "OverlayHalo.kt:113": [
+      "return"
+    ],
+    "OverlayHalo.kt:143": [
+      "svc.main.post {"
+    ],
+    "OverlayLiveFeed.kt:160": [
+      "else -> \"\""
+    ],
+    "OverlayLiveFeed.kt:166": [
+      "svc.panel.dropPendingFor(s)"
+    ],
+    "OverlayLiveFeed.kt:26": [
+      "private fun liveFile(): File = File(File(svc.filesDir, \"home/.dsh\"), \".live.ndjson\")"
+    ],
+    "OverlayLiveFeed.kt:28": [
+      "fun startWatcher() {"
+    ],
+    "OverlayPanel.kt:1060": [
+      "svc.main.postDelayed({"
+    ],
+    "OverlayPanel.kt:112": [
+      "when (j.optString(\"type\")) {"
+    ],
+    "OverlayPanel.kt:1174": [
+      "}"
+    ],
+    "OverlayPanel.kt:1177": [
+      "// 「if (!sessionBusy) return」——静默返回，什么都不发生。现在视觉与行为一致："
+    ],
+    "OverlayPanel.kt:177": [
+      "}"
+    ],
+    "OverlayPanel.kt:179": [
+      "\"emit\" -> {"
+    ],
+    "OverlayPanel.kt:204": [
+      ""
+    ],
+    "OverlayPanel.kt:24": [
+      "*  状态模板 template_thinking/template_tool）+ 待答卡（MuxClient 提问/审批官方风格卡片渲染 + POST /api/respond 应答）。 */"
+    ],
+    "OverlayPanel.kt:308": [
+      "// 用文字入口而非新图标：与状态行「查看汇报」同一先例（本仓不为一个入口新建 drawable，"
+    ],
+    "OverlayPanel.kt:309": [
+      "// 也不需要新色值——文字取主题 chevron 强调色）。热区同 S2-18 口径（≥44dp）。"
+    ],
+    "OverlayPanel.kt:387": [
+      "}"
+    ],
+    "OverlayPanel.kt:423": [
+      "background = GradientDrawable().apply {"
+    ],
+    "OverlayPanel.kt:489": [
+      "*  只替换标签部分、保留同一后缀提示——既保证失败态不显示「已完成」，又让提示语只有一处真源。"
+    ],
+    "OverlayPanel.kt:616": [
+      ""
+    ],
+    "OverlayPanel.kt:69": [
+      "//   审批 outcome={kind:\"result\",value:\"allowed-once\"|\"rejected\"}（值=审批词汇原字符串）；"
+    ],
+    "OverlayPanel.kt:73": [
+      "@Volatile private var eventsClientId: String = \"\"   // ready 帧分配；应答与流实例绑定"
+    ],
+    "OverlayPanel.kt:818": [
+      "gravity = Gravity.CENTER"
+    ],
+    "OverlayPanel.kt:824": [
+      "setTextColor(textColor)"
+    ],
+    "OverlayPanel.kt:835": [
+      "setMargins(0, 0, 0, (4 * dp).toInt())"
+    ],
+    "OverlayPanel.kt:87": [
+      "* 审批「批准一次」的二次确认态（P0-9）。"
+    ],
+    "OverlayPanel.kt:904": [
+      "}"
+    ],
+    "OverlayPanel.kt:947": [
+      "qPage = (qPage + 1).coerceAtMost(n - 1)"
+    ],
+    "OverlayReport.kt:164": [
+      "* 为什么不直接量栏体：ScrollView 在栏内是 `weight=1`（要随拖拽伸缩），而 weight 子项在"
+    ],
+    "OverlayReport.kt:180": [
+      "return bar.measuredHeight"
+    ],
+    "OverlayReport.kt:238": [
+      "* 内容为空时 reportLines 给占位行，窗口照常出现，用户不会得到「长按没反应」的假象。"
+    ],
+    "OverlayReport.kt:244": [
+      "val sw = svc.resources.displayMetrics.widthPixels"
+    ],
+    "OverlayReport.kt:252": [
+      "return false"
+    ],
+    "OverlayReport.kt:348": [
+      "* 缺陷现场：有摘要、无正文（`body` 字段缺失的旧条目）时，[reportBodyText] 按设计回落 summary，"
+    ],
+    "OverlayReport.kt:370": [
+      "* 但**不得低于 300dp**（横屏 1600x900 时 40% 只有 240dp，比下限 140dp 只多 100dp），"
+    ],
+    "OverlayService.kt:106": [
+      "/** 完成位（会话维、带消费标记）。**必须放在服务级字段**：面板收起态要能存活"
+    ],
+    "OverlayService.kt:143": [
+      "internal fun onAuthoritativeIdle(key: String) = completion.onAuthoritativeIdle(key, COMPLETION_DEFAULT_LABEL)"
+    ],
+    "OverlayService.kt:155": [
+      "super.onConfigurationChanged(newConfig)"
+    ],
+    "OverlayService.kt:166": [
+      "// 隐藏态：球/光环不在 WindowManager 里，updateViewLayout/syncHalo 对它们只会抛异常"
+    ],
+    "OverlayService.kt:216": [
+      "* 划掉任务 = 主动关闭：自停，由 onDestroy 统一撤窗（三条路径都走同一个收口）。"
+    ],
+    "OverlayService.kt:232": [
+      "recall.hide()"
+    ],
+    "OverlayService.kt:252": [
+      "setImageDrawable(icon)"
+    ],
+    "OverlayService.kt:299": [
+      "val halo = View(this).apply { background = this@OverlayService.halo.newHaloDrawable(Halo.IDLE) }"
+    ],
+    "OverlayService.kt:382": [
+      "}"
+    ],
+    "OverlayService.kt:415": [
+      "// 块H-A1：结束本次完成态展示（完成位已在 showPanel 消费时清空，故下次打开回常态）。"
+    ],
+    "OverlayService.kt:427": [
+      "/**"
+    ],
+    "OverlayService.kt:436": [
+      "*"
+    ],
+    "OverlayService.kt:449": [
+      "emitFrame()"
+    ],
+    "OverlayService.kt:470": [
+      "rp.y = spot[1]"
+    ],
+    "OverlayService.kt:473": [
+      "haloView?.let { h -> haloParams?.let { hp -> try { wm.addView(h, hp) } catch (_: Exception) {} } }"
+    ],
+    "OverlayService.kt:499": [
+      "MotionEvent.ACTION_MOVE -> {"
+    ],
+    "OverlayService.kt:502": [
+      "if (moved) {"
+    ],
+    "OverlayService.kt:504": [
+      "p.y = (startY + dy).toInt()"
+    ],
+    "OverlayService.kt:509": [
+      "}"
+    ],
+    "OverlayService.kt:512": [
+      "MotionEvent.ACTION_UP -> {"
+    ],
+    "OverlayService.kt:547": [
+      ""
+    ],
+    "OverlayService.kt:574": [
+      "* 临时工作区 workspaceId（0.13.5）：读 `home/.dsh/storages/workspace.json`，取 title=临时工作区 的条目"
+    ],
+    "OverlayService.kt:580": [
+      "val file = java.io.File(filesDir, \"home/.dsh/storages/workspace.json\")"
+    ],
+    "OverlayService.kt:621": [
+      "onTurnStart()"
+    ],
+    "OverlayService.kt:669": [
+      "// S2-14（本批修）：**待答态同样要排除**。旧判据只看完成文案，于是球处在"
+    ],
+    "OverlayService.kt:683": [
+      "probeHandle?.let { main.removeCallbacks(it) }"
+    ],
+    "OverlayService.kt:737": [
+      "// 注释此前就写着「不再静默 return」，而代码里这一行一直在静默返回（P0-6 复核发现："
+    ],
+    "OverlayService.kt:765": [
+      "if (code == 200) {"
+    ],
+    "OverlayService.kt:775": [
+      "}"
+    ],
+    "OverlayService.kt:783": [
+      "if (code == 200) {"
+    ],
+    "OverlayService.kt:85": [
+      "// ── 引擎维/会话维状态（协作类经 internal 共享） ──────────────────"
+    ],
+    "PluginMounts.kt:259": [
+      "var entryIndent = 0"
+    ],
+    "PluginMounts.kt:470": [
+      "* 向下到下一个顶层条目之前。块内自带注释（缩进行）随之删除；块**之前**的说明注释（列 0 的 `#`）"
+    ],
+    "ScreenScope.kt:31": [
+      "}"
+    ],
+    "ScreenScope.kt:49": [
+      "}"
+    ],
+    "ShellOps.kt:123": [
+      "// 判据：只在**通道级失败**（code 以 shizuku- 开头 / root-grant-required / 未绑定）时回退——"
+    ],
+    "ShellOps.kt:132": [
+      "return viaSu.put(\"op\", \"shExec\").put(\"transport\", \"su\")"
+    ],
+    "ShellOps.kt:197": [
+      "// 会被第一个 `-d` 整行洗白），且命令词匹配前先归一化目标屏参数（否则 `input -d 0 tap 1 2`"
+    ],
+    "ShellOps.kt:319": [
+      "*    参数、参数缺席、或参数值不在注册表里（无参 `screencap`、`-d 0`、`-d <未知>`、"
+    ],
+    "ShellOps.kt:451": [
+      "i += if (i + 1 < text.length && text[i + 1] == ch) 2 else 1"
+    ],
+    "ShellOps.kt:556": [
+      "continue"
+    ],
+    "ShellOps.kt:588": [
+      "internal fun displayOptionsIn(text: String): List<Pair<String, String>> ="
+    ],
+    "ShellOps.kt:91": [
+      "}"
+    ],
+    "ShellOps.kt:94": [
+      "\"shExec\" -> exec(context, args)"
+    ],
+    "ShellOps.kt:99": [
+      ".put(\"__error\", \"未知特权 shell 操作 $op\")"
+    ],
+    "ShellState.kt:38": [
+      "const val PREFS = \"dsh_settings\""
+    ],
+    "ShellState.kt:99": [
+      "fun isPrefEnabled(context: Context): Boolean = MainActivity.DevLogPrefs.isEnabled(context)"
+    ],
+    "ShizukuProbe.kt:77": [
+      "return out.put(\"ok\", false).put(\"code\", \"shizuku-not-running\")"
+    ],
+    "ShizukuTransport.kt:806": [
+      "if (remote == null) return refusal ?: unavailableShell()"
+    ],
+    "ShizukuTransport.kt:821": [
+      "return try {"
+    ],
+    "ShizukuTransport.kt:98": [
+      "val valid = runCatching { binder.pingBinder() }.getOrDefault(false)"
+    ],
+    "ShizukuUserService.kt:207": [
+      "putBoolean(\"ok\", result.complete && result.exitCode == 0)"
+    ],
+    "ShizukuUserService.kt:30": [
+      "private const val MAX_TIMEOUT_MS = 600_000"
+    ],
+    "ShizukuUserService.kt:70": [
+      "init {"
+    ],
+    "SnapshotFs.kt:177": [
+      "fun move("
+    ],
+    "SnapshotFs.kt:83": [
+      "fun deletePathStrict("
+    ],
+    "SnapshotTransaction.kt:190": [
+      "try {"
+    ],
+    "SnapshotTransaction.kt:196": [
+      "// ① 完整内容先落 tmp（同一个 filesDir，rename 必在同一文件系统内）。"
+    ],
+    "SnapshotTransaction.kt:313": [
+      "* **绝不无条件删**：半程事务（marker 为 SWAPPING 但被丢/不可读）的 `previous` 是**唯一**"
+    ],
+    "SnapshotTransaction.kt:546": [
+      "* 符号链接三动作（默认 java.nio）。注入原因见 [LinkPrimitives]：链接类缺陷在本机"
+    ],
+    "SnapshotTransaction.kt:626": [
+      ")"
+    ],
+    "SnapshotTransaction.kt:688": [
+      "* `userFacingFiles` 的语义），所以 `cordis.patch.yml` 与 `node_modules` 里的第三方包在升级时"
+    ],
+    "SnapshotTransaction.kt:798": [
+      "SnapshotFs.deletePath(previousProfiles)"
+    ],
+    "UndoGate.kt:165": [
+      "* 调用方已经把「只花一次预算」花在自己身上（clientPluginTreeRecoverySpent），这里只回答"
+    ],
+    "UndoGate.kt:278": [
+      "* 落一条闸门观测（best-effort，绝不抛）。**不经 DevLogPrefs 闸门**——它必须在默认配置下可见。"
+    ],
+    "UndoGate.kt:279": [
+      "* 超限轮转一代，与 boot-diag.log 同口径。"
+    ],
+    "UpdateCheckerTest.kt:364": [
+      "\"0000000000000000000000000000000000000000000000000000000000000005  plugins/dsh-android-manage-0.3.0.tgz  51234\","
+    ],
+    "UpdateCheckerTest.kt:393": [
+      "assertTrue(\"非 apk 资产的摘要同样要收下（下载前校验快照/插件不是本函数的事，但数据不能丢）\", facts.sha256.containsKey(\"snapshot-arm64.tar.xz\"))"
+    ],
+    "UpdateCheckerTest.kt:426": [
+      "(x as UpdateChecker.CheckResult.Available).sha256,"
+    ],
+    "UpdateManager.kt:84": [
+      "if (!actual.equals(expectedSha, ignoreCase = true)) {"
+    ],
+    "UpdateManagerPolicyTest.kt:58": [
+      "assertTrue(flow.substringAfter(\"fun startUpdateCheck()\").substringBefore(\"fun shutdownToGuide()\")"
+    ],
+    "VdisplayController.kt:124": [
+      "stale"
+    ],
+    "VdisplayController.kt:133": [
+      "private val Record.displayId: Int get() = this.display.display.displayId"
+    ],
+    "VdisplayController.kt:233": [
+      "})"
+    ],
+    "VdisplayController.kt:306": [
+      "* The arbitration is a pure function so it can be unit-tested without an Android display:"
+    ],
+    "VdisplayController.kt:326": [
+      "// 一块 VirtualDisplay 在系统里真实占位）。若按会话各持一块，第 2 个会话必然撞上限。"
+    ],
+    "VdisplayController.kt:372": [
+      "//   ✅ `PUBLIC | OWN_CONTENT_ONLY | SUPPORTS_TOUCH | DESTROY_CONTENT_ON_REMOVAL | ROTATES_WITH_CONTENT`"
+    ],
+    "VdisplayController.kt:40": [
+      "private const val MAX_VIRTUAL_DISPLAYS = 1"
+    ],
+    "VdisplayController.kt:418": [
+      "if (ownerSessionId == null && session != null) ownerSessionId = session"
+    ],
+    "VdisplayController.kt:483": [
+      "return status(context.applicationContext)"
+    ],
+    "VdisplayController.kt:529": [
+      "runCatching { record.display.setSurface(record.reader.surface) }"
+    ],
+    "VdisplayController.kt:554": [
+      "context.applicationContext,"
+    ],
+    "VdisplayController.kt:721": [
+      "val amTail = result.optString(\"stdout\", result.optString(\"error\", \"\")).trim().takeLast(400)"
+    ],
+    "VdisplayController.kt:753": [
+      "}"
+    ],
+    "VdisplayController.kt:766": [
+      "/**"
+    ],
+    "VdisplayController.kt:84": [
+      "*"
+    ],
+    "VdisplayHost.kt:214": [
+      "bindRefused = true"
+    ],
+    "VdisplayHost.kt:54": [
+      "private var attached = false"
+    ],
+    "VdisplayHost.kt:70": [
+      "root.context.applicationContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager"
+    ],
+    "VdisplayOps.kt:20": [
+      "VdisplayController.reclaimIdle(context.applicationContext)"
+    ],
+    "VdisplayOps.kt:21": [
+      "return when (op) {"
+    ],
+    "WatchdogV2.kt:109": [
+      ""
+    ],
+    "WatchdogV2.kt:146": [
+      ""
+    ],
+    "WatchdogV2.kt:236": [
+      "* 最近一次探活是否**超时**（而非连接被拒）。"
+    ],
+    "WatchdogV2.kt:258": [
+      "*"
+    ],
+    "WatchdogV2.kt:29": [
+      "/** FX-212.3：标记文件消费偏移的 prefs 键（跨进程重启不重放历史标记）。 */"
+    ],
+    "WatchdogV2.kt:3": [
+      "import android.app.ActivityManager"
+    ],
+    "WatchdogV2.kt:96": [
+      "}"
+    ],
+    "WebUiChrome.kt:37": [
+      "* 定案靠设备层 A/B。本仓实测（Medium_Phone 1080x2400 / 420dpi / 手势条）：改前导航条 inset"
+    ],
+    "app/build.gradle.kts:126": [
+      "androidTestImplementation(\"androidx.test.ext:junit:1.2.1\")"
+    ],
+    "app/build.gradle.kts:127": [
+      "androidTestImplementation(\"androidx.test:runner:1.6.2\")"
+    ],
+    "app/build.gradle.kts:88": [
+      "jvmTarget = \"17\""
+    ],
+    "app/src/main/AndroidManifest.xml:158": [
+      "android:windowSoftInputMode=\"adjustResize\" />"
+    ],
+    "app/src/main/AndroidManifest.xml:65": [
+      "0.14.8 #413：targetSdk 26+ 的 manifest 接收器收不到**隐式**广播（设备实测 0 个接收者），"
+    ],
+    "app/src/main/AndroidManifest.xml:98": [
+      "<!-- 0.13.0 F2/M3.4：开机自启接收器（恢复用户上次同意的运行状态；restart 后需已启动过）。 -->"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AdbKeyboardReceiver.kt:25": [
+      "* 实例——即使某天平台把隐式广播重新投递给 manifest 接收器，也不会提交两遍。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AdbKeyboardService.kt:166": [
+      "var instance: AdbKeyboardService? = null"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:319": [
+      "/**"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:333": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:375": [
+      "fun setOverlayEnabled(enable: Boolean): Boolean = onSetOverlayEnabled(enable)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:423": [
+      "fun browserHostViewport(viewport: String): String = onBrowserHostViewport(viewport)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/AndroidBridge.kt:425": [
+      "/** Close (destroy) the BrowserHost page; the workbench can be opened fresh afterwards. */"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ApkUpdateAction.kt:228": [
+      "const val STATE_UP_TO_DATE = \"up-to-date\""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ApkUpdateAction.kt:245": [
+      "/**"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BackGate.kt:38": [
+      "const val DISPATCH_SCRIPT: String = \"window.__dshBack && window.__dshBack()\""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BackGate.kt:52": [
+      "fun decide(canGoBack: Boolean, pageStackAvailable: Boolean): BackDecision = when {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BootReceiver.kt:24": [
+      "override fun onReceive(context: Context, intent: Intent) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1087": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1101": [
+      "// 其文档 URL 是 **about:blank**，**不是** data: ——所以只判 data: 的旧守卫会漏掉它："
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1565": [
+      "private fun navigateOp(args: JSONObject, captured: ControlTarget): JSONObject {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1581": [
+      ".put(\"tabs\", tabSummaries())"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1589": [
+      "navigationTarget = ControlTarget(workspace, tab)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:1661": [
+      "val tab = ensureTab(null)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:187": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:304": [
+      "* 正确模型：切到别的对话就看不到、也碰不到别人的页面；各自独立开页、独立计代次、"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:384": [
+      "workspace.modelTabId = null"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt:821": [
+      "val raw = args.optString(\"url\", \"\")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ConsoleSession.kt:32": [
+      "* （页面永远停在「启动中」、输入框永久禁用，而壳侧一切正常）。现在状态是显式契约，文案只用于显示。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlAudit.kt:34": [
+      "object ControlAudit {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:107": [
+      ".put(\"op\", op)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:110": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:70": [
+      "shizukuCheckedAt = 0L"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlCarrier.kt:86": [
+      "poller = created"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlPoller.kt:125": [
+      "fun stop() {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlPoller.kt:158": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlPoller.kt:65": [
+      "internal const val HEARTBEAT_INTERVAL_MS = 5_000L"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ControlProtocolV2.kt:215": [
+      ".put(\"o\", broadcast(out))"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:353": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:409": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:444": [
+      "*"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:496": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:607": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:634": [
+      "*/"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:652": [
+      "if (path.isEmpty()) return null"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:661": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:678": [
+      "\"snapshot\" -> handleSnapshot(args)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:701": [
+      "\"browserState\" -> BrowserHostHolder.control(op, args)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:718": [
+      "// 特权 shell 通道同样是 native/privileged 面（0.14.0 §6：替换内置 adb），分发在 ShellOps；"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:745": [
+      "* 三条都不带 `screenId` ⇒ 默认 `real` ⇒ 被本范围门拦死；而 `virtual-only` 是缺省范围（fail-closed），"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:770": [
+      "* 虚拟屏的 displayId 一律由壳侧注册表裁决，不接受调用方指定。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DeviceControlService.kt:852": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/DownloadSaver.kt:101": [
+      "throw java.io.IOException(\"HTTP \" + code)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineAuth.kt:172": [
+      "* 日志出口脱敏（0.13.8 #184；0.14.1 改为用 [REDACT_RE]）：把启动令牌替换为"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:193": [
+      "// （shouldDegradeRefresh）此后永久跳过刷新。账本语义是「这份快照自己起不来」。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:196": [
+      "refreshLedgerFile().writeText(SnapshotRefreshPolicy.afterFailure(readRefreshLedger(), fingerprint))"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:207": [
+      "* 否则六处 `return false` 各写一次记账必然漏。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:68": [
+      "if (context.assets.open(asset).use { it.readBytes() }.let { b ->"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineManager.kt:99": [
+      "* 0.14.7 / task-9：**解码之前的**内嵌资产摘要预检。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineService.kt:348": [
+      "// 急救 CLI 与已有快照仍保留给用户手动恢复。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:294": [
+      ")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:408": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:427": [
+      "val now = System.currentTimeMillis()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:550": [
+      ".apply { isDaemon = true; name = \"dsh-repair-diagnostics\"; start() }"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:670": [
+      "probeRunning = {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/EngineStartFlow.kt:700": [
+      "// 相位已由本函数入口切到 Starting（启动即有反馈），这里不再重复切换——"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FactoryProfilePatch.kt:79": [
+      "* （同一个包重新 insert 一次，只为塞 config）。该写法引入**服务供给单点**："
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:32": [
+      "fun tmpWorkspace(context: Context): File ="
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:326": [
+      "LogCollector.log("
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:332": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:35": [
+      "private val SAFE_PREFIXES = listOf("
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:379": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:467": [
+      "try {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/FileIncoming.kt:97": [
+      "* 会「永远拒绝」）；**返回值保留 dir 原始形态**——引擎侧 DSH_HOME 契约是 filesDir 的"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/GlobalActionCatalog.kt:33": [
+      "Entry(\"menu\", AccessibilityService.GLOBAL_ACTION_MENU, 31),"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/GlobalActionCatalog.kt:47": [
+      "fun available(ids: Set<Int>, sdk: Int): List<String> ="
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/LogCollector.kt:458": [
+      "/**"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:1030": [
+      "pageRecovery.pause()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:1113": [
+      "onBackPressedDispatcher.onBackPressed()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:137": [
+      "/** 覆盖层所在的根视图；超时兜底的 post/removeCallbacks 都挂在它上面。 */"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:160": [
+      "// 页面尚未显示时 guideView 在根视图里是可见的；视频盖在它上面不改变任何布局。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:193": [
+      "/** 用户主动关闭后，前台监控与任何尚未结束的启动线程不得重新展示 WebUI。 */"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:205": [
+      ").show()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:206": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:255": [
+      "* §2.4：ES2022 类静态块（`static{}`）需要 Chromium 94+；低于此值的产物会在**解析期**整体"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:266": [
+      "const val ACTION_UPDATE = \"com.dsharnessmobile.shell.action.UPDATE\""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:296": [
+      "internal fun startEngineFlow(splash: Boolean = false) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:391": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:605": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:667": [
+      "configureWebView()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:719": [
+      "private fun consumeNotifyRoute(intent: Intent?) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:771": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:812": [
+      "pendingAuthRejectedUrl = null"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:815": [
+      "if (initialAuthRecoveryPending) startInitialEngineAuthRecovery()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:89": [
+      "private val pickToken: String = EngineManager.ensurePickToken()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:923": [
+      "} catch (t: Throwable) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/MuxClient.kt:172": [
+      "sendFrame(out, 0x1, streamOpen.toByteArray(Charsets.UTF_8))"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyActionReceiver.kt:51": [
+      "fun outcomeFor("
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyBridge.kt:200": [
+      "// 整条应答流反复重连，之后所有提问/审批通知一起消失（只留一行 Log.w）。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyBridge.kt:207": [
+      "when (value.optString(\"type\")) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyBridge.kt:304": [
+      ")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:141": [
+      "companion object {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:145": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:161": [
+      "/**"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:345": [
+      "/**"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:49": [
+      "private const val KEY_SUPPRESS_FOREGROUND = \"suppressForeground\""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:589": [
+      "for (face in Face.values()) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyCenter.kt:828": [
+      "\"todo\" -> Face.TODO"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyDecisionQueue.kt:266": [
+      "* 超出墙钟预算 -> FAILED + 可见「提交失败，点击重试」。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyStore.kt:321": [
+      "dedupeKey = j.optString(\"dedupeKey\", \"\"),"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyStore.kt:360": [
+      "id = q.optString(\"id\", \"q\" + i),"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifyStore.kt:68": [
+      "@Volatile"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/NotifySuppressQueue.kt:119": [
+      "return deliver to expired"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayLiveFeed.kt:26": [
+      "private fun liveFile(): File = File(File(svc.filesDir, \"home/.dsh\"), \".live.ndjson\")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayPanel.kt:87": [
+      "* 审批「批准一次」的二次确认态（P0-9）。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayReport.kt:180": [
+      "return bar.measuredHeight"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayReport.kt:233": [
+      "}"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:155": [
+      "super.onConfigurationChanged(newConfig)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:274": [
+      "val root = FrameLayout(this).apply { addView(ball, FrameLayout.LayoutParams(ballSize, ballSize)) }"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:299": [
+      "val halo = View(this).apply { background = this@OverlayService.halo.newHaloDrawable(Halo.IDLE) }"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:574": [
+      "* 临时工作区 workspaceId（0.13.5）：读 `home/.dsh/storages/workspace.json`，取 title=临时工作区 的条目"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/OverlayService.kt:706": [
+      "code = -1"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/PluginMounts.kt:41": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/PublicRepoProvision.kt:1": [
+      "package com.dsharnessmobile.shell"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:197": [
+      "// 会被第一个 `-d` 整行洗白），且命令词匹配前先归一化目标屏参数（否则 `input -d 0 tap 1 2`"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:249": [
+      "/**"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:319": [
+      "*    参数、参数缺席、或参数值不在注册表里（无参 `screencap`、`-d 0`、`-d <未知>`、"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:524": [
+      "i += 1"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ShellOps.kt:586": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/ShizukuProbe.kt:71": [
+      "+ \"本应用清单尚未声明 rikka.shizuku.ShizukuProvider，属已知未落地项。\")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/SnapshotExtractor.kt:81": [
+      "* (dsh's credentials provider fails loud on world-readable secrets) and"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/SnapshotTransaction.kt:283": [
+      "//   ① 非容忍类 `Throwable`（OutOfMemoryError / StackOverflowError 等）**刻意**仍然原样抛出；"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/SourceSettings.kt:88": [
+      "val prefix = engine.usrDir"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/UndoGate.kt:136": [
+      "GateDecision.ARM -> {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/UndoGate.kt:240": [
+      "val legacy = raw.toLongOrNull()"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/UndoGate.kt:278": [
+      "* 落一条闸门观测（best-effort，绝不抛）。**不经 DevLogPrefs 闸门**——它必须在默认配置下可见。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/UpdateManager.kt:69": [
+      "throw IllegalStateException(\"已有运行时事务或未归属的恢复现场正在进行\")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:306": [
+      "* The arbitration is a pure function so it can be unit-tested without an Android display:"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:322": [
+      "val session = args?.optString(\"session\", \"\")?.takeIf { it.isNotBlank() }"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:324": [
+      "//"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:372": [
+      "//   ✅ `PUBLIC | OWN_CONTENT_ONLY | SUPPORTS_TOUCH | DESTROY_CONTENT_ON_REMOVAL | ROTATES_WITH_CONTENT`"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:474": [
+      "\"真实屏幕不允许镜像，不能作为查看器目标。\""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:495": [
+      "val record = recordOf(requested)"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:60": [
+      "val display: VirtualDisplay,"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:608": [
+      "* @param target - 虚拟屏别名；缺省取当前选中/第一块。"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:84": [
+      "*"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayController.kt:95": [
+      "private fun touch(alias: String?) {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayFloat.kt:76": [
+      "fun show(): Boolean {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayHost.kt:157": [
+      "fullscreen = false"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayHost.kt:207": [
+      "lastReason = if (attached) \"\" else result.optString(\"code\", \"attach-failed\")"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VdisplayOps.kt:15": [
+      "fun handle(context: Context, op: String, args: JSONObject): JSONObject {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/VirtualDisplayProbe.kt:97": [
+      "fun runMatrix(context: Context, width: Int = 480, height: Int = 800, dpi: Int = 160): JSONObject {"
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/WatchdogV2.kt:109": [
+      ""
+    ],
+    "app/src/main/java/com/dsharnessmobile/shell/WebUiChrome.kt:19": [
+      "fun immersivePrefs(): Boolean = ImmersiveMode.isEnabled(activity)"
+    ],
+    "app/src/main/res/xml/file_paths.xml:3": [
+      "外部阅读器打开文件需要 content://。安全边界（与 MainActivity.OPEN_READER_ROOTS 同步）："
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/AcceptRoutingTest.kt:24": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/AcceptRoutingTest.kt:45": [
+      "assertFalse(isImageOnly(listOf(\"*/*\")))"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/AdbLiveProbeTest.kt:18": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/AdbLiveProbeTest.kt:60": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ApiLevelGuardTest.kt:209": [
+      "// ── java.util 工厂方法 ──"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ApiLevelGuardTest.kt:282": [
+      "\"（DirectoryStream 是 Iterable，Kotlin 的 toList() 是 stdlib 扩展，无 API 级别依赖）。命中：\\n\" +"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ApkArtifactCheckTest.kt:25": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ApkArtifactCheckTest.kt:36": [
+      ")"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BackGateTest.kt:126": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BackGateTest.kt:21": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BootFailLogTest.kt:160": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BootFailLogTest.kt:39": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BootPageConsoleRouteTest.kt:113": [
+      "*/"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BootPageConsoleRouteTest.kt:114": [
+      "private fun extractRuntimeForTest(line: String): String {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BootPageConsoleRouteTest.kt:39": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostCleartextConsistencyTest.kt:12": [
+      "import org.junit.Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostCleartextConsistencyTest.kt:42": [
+      "setFeature(\"http://xml.org/sax/features/external-general-entities\", false)"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostCleartextConsistencyTest.kt:49": [
+      "val document = nsc()"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicyTest.kt:10": [
+      "import org.junit.Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicyTest.kt:129": [
+      "\"http://8.8.8.8/style.css\","
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserHostNavigationPolicyTest.kt:62": [
+      "assertEquals(\"影视飓风\", java.net.URLDecoder.decode(query, \"UTF-8\"))"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayContractTest.kt:49": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayContractTest.kt:66": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayPolicyTest.kt:27": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/BrowserOverlayPolicyTest.kt:43": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/CallSiteContractTest.kt:294": [
+      "?: throw AssertionError(\"I-A3：找不到 setHalo 的唯一委托 `internal fun setHalo(h: Halo) = halo.setHalo(h)`\")"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/CallSiteContractTest.kt:54": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ControlProtocolV2Test.kt:50": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ControlProtocolV2Test.kt:76": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/DiagnosticsMirrorTest.kt:20": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/DiagnosticsMirrorTest.kt:43": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootBudgetTest.kt:16": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootBudgetTest.kt:28": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootInstrumentationTest.kt:20": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/EngineBootInstrumentationTest.kt:45": [
+      "assertEquals(\"1.5GB 设备：一半 768 高于下限，保留下限之外的真实推导\", 768, engineHeapMb(1536))"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/FactoryProfilePatchTest.kt:228": [
+      "val result = FactoryProfilePatch.repairRetiredEntries("
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/FactoryProfilePatchTest.kt:50": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingCleanupTest.kt:17": [
+      "class FileIncomingCleanupTest {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingCleanupTest.kt:25": [
+      ""
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingSafetyTest.kt:25": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/FileIncomingSafetyTest.kt:92": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/GlobalActionCatalogTest.kt:25": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/GlobalActionCatalogTest.kt:50": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/GlobalActionCatalogTest.kt:63": [
+      "val api31 = GlobalActionCatalog.available(GlobalActionCatalog.TABLE.map { it.id }.toSet(), 31)"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/LogRedactionTest.kt:23": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/LogRedactionTest.kt:46": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/LogRotationTest.kt:24": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/LogRotationTest.kt:39": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/MuxHandshakeAuthTest.kt:17": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/MuxHandshakeAuthTest.kt:37": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotificationContractTest.kt:170": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotificationContractTest.kt:81": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyActionOutcomeTest.kt:14": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyActionOutcomeTest.kt:53": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyCenterChannelTest.kt:15": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyCenterChannelTest.kt:33": [
+      "assertEquals(NotificationManager.IMPORTANCE_LOW.coerceAtMost(2), 2)"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyDecisionQueueTest.kt:16": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyDecisionQueueTest.kt:82": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyFormDecisionTest.kt:14": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyFormDecisionTest.kt:26": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyProtocolTest.kt:131": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifyProtocolTest.kt:18": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifySuppressQueueTest.kt:24": [
+      "assertFalse(NotifySuppressQueue.commitJournal(pending, emptyMap()) { false })"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/NotifySuppressQueueTest.kt:71": [
+      ""
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayCompletionNoticeTest.kt:113": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayCompletionNoticeTest.kt:28": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayHaloInvariantTest.kt:192": [
+      "* **关于「恒等式本身恒真」的诚实说明**（task-14 自查发现，必须写清）："
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/OverlayHaloInvariantTest.kt:92": [
+      "*/"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ProcIoTest.kt:27": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ProcIoTest.kt:82": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ProfilePackageManifestTest.kt:23": [
+      "@Test fun malformedJsonIsRejectedAndBlankUserUsesFactoryDocument() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ProfilePackageManifestTest.kt:8": [
+      "@Test fun userPinsAndUnknownFieldsWinWhileFactoryDependenciesAndBundlesAreAdded() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:103": [
+      "fun interruptedOwnerMarkerPreparationDoesNotBlockRetryOrDeleteUnknownTemp() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:130": [
+      "fun retryAfterActivationCompletesPublicCleanupUsingOwnerMarker() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:14": [
+      "fun partialCopyFailureCanRetryFromIntactPublicSource() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:166": [
+      "fun unownedSiblingStageIsNeverDeletedOrAdopted() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:186": [
+      "fun relativeMigrationPathsFailBeforeWritingIntoTheProcessWorkingDirectory() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:45": [
+      "fun nonEmptyPrivateConflictIsPreservedAndPublicSourceBackedUp() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:65": [
+      "fun nonDirectoryPrivateCollisionIsPreservedAndPublicSourceRemains() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ReverseMigrationTest.kt:82": [
+      "fun unreadablePublicDirectoryCannotBeAcceptedAsAnEmptyCopy() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ScreenScopeTest.kt:15": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ScreenScopeTest.kt:8": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScopeTargetTest.kt:121": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScopeTargetTest.kt:21": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScreenCommandFixtureTest.kt:44": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/ShellOpsScreenCommandFixtureTest.kt:54": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotExtractorTest.kt:18": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotExtractorTest.kt:83": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotFileModeTest.kt:10": [
+      "fun identifiesOnlyElfAndShebangPayloadsAsDirectExecutables() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotFileModeTest.kt:7": [
+      "class SnapshotFileModeTest {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotRefreshStageTest.kt:12": [
+      "fun badArchiveAfterPartialWriteDiscardsStageAndRetainsLiveRuntime() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotRefreshStageTest.kt:38": [
+      "fun secondRepairValidationFailureAlsoDiscardsStageBeforeStopping() {"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotTransactionTest.kt:319": [
+      "assertTrue("
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotUserDataTest.kt:14": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/SnapshotUserDataTest.kt:84": [
+      "assumeTrue(\"The host must permit symbolic-link creation for this regression test\", false)"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/UndoGateDecisionTest.kt:20": [
+      "private val t0 = 1_000_000L"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/UndoGateDecisionTest.kt:61": [
+      "),"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerSuffixTest.kt:18": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerSuffixTest.kt:54": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerTest.kt:15": [
+      "* ② 资产命名（**与线上发布链产物名逐字一致**）；"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/UpdateCheckerTest.kt:60": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/VdisplayArbitrationTest.kt:14": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/VdisplayArbitrationTest.kt:30": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/W3ShellContractTest.kt:107": [
+      "// `AdbLiveProbeTest.kt`（TTL 内复用 / 过期重探 / 失败不冒充实测成功 / TCP 探测区分端口，4 项全绿）。"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/W3ShellContractTest.kt:52": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/W3ShellContractTest.kt:85": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogLadderTest.kt:189": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogLadderTest.kt:25": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogMarkerConsumeTest.kt:159": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogMarkerConsumeTest.kt:45": [
+      "/** 生产消费循环的忠实模型：CAP 有界读 + 只推进整行 + len < offset 归零。 */"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WatchdogMarkerConsumeTest.kt:69": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WindowPickTest.kt:22": [
+      "@Test"
+    ],
+    "app/src/test/java/com/dsharnessmobile/shell/WindowPickTest.kt:40": [
+      "@Test"
+    ],
+    "apply-patches.mjs:1568": [
+      "check: (s) => s.includes('dsh-mobile exclusive publish (F7)')"
+    ],
+    "apply-patches.mjs:1596": [
+      "}"
+    ],
+    "apply-patches.mjs:519": [
+      "el('p', '{className:\"dshm-summary\"}', 'k(o,a)'),"
+    ],
+    "attachment-picker-menu.ts:184": [
+      "return node.matches(SLOT_SELECTOR) || node.querySelector(SLOT_SELECTOR) !== null"
+    ],
+    "attachment-picker-menu.ts:215": [
+      "if (!entry.anchor.isConnected || !entry.trigger.isConnected) this.mounted.splice(index, 1)"
+    ],
+    "back-stack.spec.ts:259": [
+      ""
+    ],
+    "back-stack.ts:103": [
+      "* D8: the menu is mounted on document.body and removed on close, so its presence is exactly"
+    ],
+    "back-stack.ts:286": [
+      "* @returns whether an ancestor step was found and triggered."
+    ],
+    "back-stack.ts:347": [
+      "}"
+    ],
+    "back-stack.ts:35": [
+      "* Failure direction: the stack only ever pops through reconciliation (a layer's"
+    ],
+    "back-stack.ts:426": [
+      "* switch is also pushed from its subscription; a DOM change that leaves the same panel"
+    ],
+    "back-stack.ts:445": [
+      "return top.close()"
+    ],
+    "back-stack.ts:521": [
+      "* It is not a dialog, so nothing else in this stack sees it: without this"
+    ],
+    "back-stack.ts:551": [
+      "}"
+    ],
+    "back-stack.ts:94": [
+      "*/"
+    ],
+    "back-stack.ts:95": [
+      "const RIGHT_FULLSCREEN_SELECTOR ="
+    ],
+    "browser-auto-place.ts:239": [
+      "if (!changed && !this.pending.has(owner)) return"
+    ],
+    "browser-auto-place.ts:45": [
+      "export interface BrowserHostStatusLike {"
+    ],
+    "browser-auto-place.ts:85": [
+      "export interface BrowserAutoPlaceScheduler {"
+    ],
+    "browser-tab.tsx:54": [
+      "return width >= 240 && width <= 3840 && height >= 240 && height <= 3840 ? { width, height } : undefined"
+    ],
+    "build-and-env.md:48": [
+      "**维护文档对账**：Gradle 版本/依赖与活动补丁清单由 `node scripts/check-maintenance-docs.mjs --write` 生成；改声明或 registry 后更新生成区并运行不带 `--write` 的检查。该检查属于维护一致性检查，可按输入路径在 PR 中显示结果，不作为 APK 功能与数据安全门禁的替代。"
+    ],
+    "build-apk-013.ps1:211": [
+      "# 「模拟器优先」是铁律 2（本地构建 → MuMu 实测），两者经常并行，撑满等于自己踩自己的验收环境。"
+    ],
+    "build-apk-013.ps1:229": [
+      "Write-Host \"== 执行地图覆盖与锚点门禁 ==\""
+    ],
+    "build-apk-013.ps1:37": [
+      "# 注入集产物重建（0.14.2 P1 实锤，task-54 F-1）：本地链此前**没有任何构建步**，直接让 inject-all.py"
+    ],
+    "build-release.ps1:109": [
+      "$snapSrc = Join-Path $root \"dsh-mobile-apk\\snapshot\""
+    ],
+    "build-release.ps1:89": [
+      "# Release output is regenerated as a unit. Old APKs must not survive into this version's"
+    ],
+    "build-snapshot-013.mjs:1029": [
+      "// 两者都不是：上游 0.1.7-rc.1 全仓已无此名（被改名/删除），而设备基座的引擎树还带着它们"
+    ],
+    "build-snapshot-013.mjs:294": [
+      "// keepUnpublished 断言：登记表内包必须仍在树内（防未来误删）"
+    ],
+    "build-snapshot-013.mjs:300": [
+      "}"
+    ],
+    "build-snapshot-013.mjs:31": [
+      "// DSH_NO_WSL_REEXEC=1 跳过（调试/无 WSL 环境回退到旧的 D: 工作区）。"
+    ],
+    "build-snapshot-013.mjs:315": [
+      "//"
+    ],
+    "build-snapshot-013.mjs:366": [
+      "log('引擎树补丁行为回归 arkweb-resource-protocol-H1: PASS')"
+    ],
+    "build-snapshot-013.mjs:40": [
+      "try {"
+    ],
+    "build-snapshot-013.mjs:982": [
+      "const mapPart = SLIM.sourcemapDelete ? `find \"${wslPath(join(STAGE, 'root', 'usr'))}\" -name '*.map' -delete 2>/dev/null || true` : ''"
+    ],
+    "check-build-chain-abort.mjs:53": [
+      "// ── A. 唯一自增点：Deny-Abi helper ─────────────────────────────────────────"
+    ],
+    "check-inject-completeness.mjs:2": [
+      "// check-inject-completeness.mjs — 注入面成员完整性门禁（0.0.13 → 0.13.8-b P0 修复；坑 63 的活体复现防线）。"
+    ],
+    "check-inject-completeness.mjs:28": [
+      "const result = spawnSync(process.execPath, ['--test', join(HERE, 'check-inject-completeness.test.mjs'), join(HERE, 'build-injection-staging.test.mjs')], { stdio: 'inherit' })"
+    ],
+    "check-inject-completeness.mjs:37": [
+      "const check = (label, ok, detail) => {"
+    ],
+    "check-inject-completeness.mjs:98": [
+      "if (rel.endsWith('.map') || rel.endsWith('/')) continue   // 目录条目（lib/、lib/types/）不是成员"
+    ],
+    "check-patch-mirror.mjs:109": [
+      "const regSet = new Set(regIds)"
+    ],
+    "check-patch-mounts.mjs:28": [
+      "const TOP_ITEM = /^-(?:\\s|$)/"
+    ],
+    "check-release-gates.mjs:136": [
+      "//      有产物即**真检**（超预算 exit 1），无产物则明确标 `SKIP(real-data)` 并退 `--self-test`"
+    ],
+    "check-release-gates.mjs:28": [
+      "* 本迭代要求的门禁集合（唯一声明处）。"
+    ],
+    "check-snapshot-asset.ps1:26": [
+      "$h2 = (Get-FileHash $SnapshotPath -Algorithm SHA256).Hash.ToLower()"
+    ],
+    "check-snapshot-builder-output.mjs:139": [
+      "try { slim = JSON.parse(readFileSync(SLIM, 'utf8')) } catch (e) {"
+    ],
+    "composer-insets.css.ts:13": [
+      "padding-bottom: max("
+    ],
+    "composer-menu.css.ts:25": [
+      "html[data-dsh-mobile-form] [data-composer-card] [data-dsh-popup] {"
+    ],
+    "composer-popup-guard.ts:140": [
+      "export function composerPopupMaxHeight("
+    ],
+    "composer-popup-guard.ts:165": [
+      "}"
+    ],
+    "contract.ts:136": [
+      "export const BROWSER_TOOL_CONTRACTS: readonly ToolContract[] = ["
+    ],
+    "contract.ts:41": [
+      "export const BROWSER_OPS = {"
+    ],
+    "control-policy.ts:126": [
+      "if (input.adbReady) return { backend: 'adb', reason: '无障碍服务未开启，回退到 ADB 通道' }"
+    ],
+    "control-policy.ts:79": [
+      "export const A11Y_OPS: readonly ControlOp[] = ["
+    ],
+    "control-queue.ts:128": [
+      ""
+    ],
+    "control-queue.ts:139": [
+      "* 绝不返回「可能成功」的模糊结果。"
+    ],
+    "control-queue.ts:140": [
+      "*/"
+    ],
+    "control-queue.ts:227": [
+      ""
+    ],
+    "control-queue.ts:230": [
+      ""
+    ],
+    "control-queue.ts:347": [
+      "webServer.register({"
+    ],
+    "device-smoke.ps1:24": [
+      "[System.IO.File]::WriteAllText((Join-Path $here \"golden/last-run.json\"), $raw, [System.Text.UTF8Encoding]::new($false))"
+    ],
+    "docs/AGENTS/0.13.7-CERTIFICATION.md:11": [
+      "| 统一补丁（vendor） | 通过 | 双 ABI 均 `apply-patches: ALL OK（13/13，mode=check）`（新增 undo-E8；attachment-formats 已退役） |"
+    ],
+    "docs/AGENTS/ACCESSIBILITY-API.md:167": [
+      "③ 长按已接，展开/折叠/复制/翻页/拖拽等节点动作仍未暴露给模型；④ `takeScreenshotOfWindow`(34) 单窗口观察未接；"
+    ],
+    "docs/AGENTS/ACCESSIBILITY-API.md:99": [
+      "| `MEDIA_PLAY_PAUSE` / `MENU` | 36 |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:12": [
+      ""
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:136": [
+      "| .AdbKeyboardService | service（BIND_INPUT_METHOD，exported=true） | AdbKeyboardService.kt | @xml/input_method 注册 IME |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:15": [
+      "| 文件 | 职责一句话 | 被引用 |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:151": [
+      "└─ androidPrivilege.screenAccess(screenId)  ← reads native dsh_screen_scope.xml every operation"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:17": [
+      "| MainActivity.kt | 主 WebView 宿主/生命周期/桥接线/insets（手机/宽屏动态top单层消费）/BrowserHost 与 VdisplayHost 生命周期编排 | 几乎所有协作类（构造注入） |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:18": [
+      "| GuidePageRenderer.kt | 引导页纯代码 UI 渲染 + GuidePhase 状态机 + 结构化启动诊断/端口重试与SafeMode分流 + WebUI/引导页切换 + APK 自更新交互 | MainActivity |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:27": [
+      "| ScreenScope.kt | 0.14 新增：ScreenScope/ScreenTargets/ScreenScopePrefs——用户屏幕范围的 native 真源（损坏/未知回落 virtual-only） | AndroidBridge、DeviceControlService |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:29": [
+      ""
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:45": [
+      "| OverlayController.kt | 悬浮球开关持久化 + 服务起停 + SYSTEM_ALERT_WINDOW 权限引导（偏好 ∧ 权限 ∧ 服务在场） | AndroidBridge lambda、MainActivity、OverlayService（注释） |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:65": [
+      "| ConsoleSession.kt | 快照 bash 子进程（stdin 管道 + Listener 回调，随 Activity 生死） | ConsoleActivity |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:68": [
+      ""
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:70": [
+      "|---|---|---|"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:71": [
+      "| AdbKeyboardService.kt | 内嵌 ADBKeyboard 协议 IME（android_ui_input 中文输入；仅活跃时提交） | 运行期注册 AdbKeyboardReceiver（隐式广播）+ 注销 |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:76": [
+      "| ControlPoller.kt | 无障碍控制队列客户端（引擎侧 exact 路由长轮询 + 心跳 + 回填；协议版本/能力声明） | EngineStartFlow、DeviceControlService |"
+    ],
+    "docs/AGENTS/ARCHITECTURE.md:90": [
+      "| ShellState.kt | ST 真源收敛：沉浸式/开发者日志两处「展示值 ≠ 事实」的统一读写面（仅偏好 ∧ 运行时合取） | MainActivity、WebUiChrome、AndroidBridge |"
+    ],
+    "docs/AGENTS/RUNTIME-PATCHES.md:56": [
+      ""
+    ],
+    "docs/AGENTS/build-and-env.md:32": [
+      "cd ..\\dsh-client-ui-responsive && npm test && npm run build"
+    ],
+    "docs/AGENTS/build-and-env.md:48": [
+      "**维护文档对账**：Gradle 版本/依赖与活动补丁清单由 `node scripts/check-maintenance-docs.mjs --write` 生成；改声明或 registry 后更新生成区并运行不带 `--write` 的检查。该检查属于维护一致性检查，可按输入路径在 PR 中显示结果，不作为 APK 功能与数据安全门禁的替代。"
+    ],
+    "docs/AGENTS/build-and-env.md:54": [
+      "**模型目录跨 job 交接**：快照 job 的生成 `lib/catalog-snapshot.json` 未跟随归档 artifact 上传，后续干净 checkout 不能依赖它。Release job 从实际输入 arm64 快照提取 pi-ai package metadata 与 `dist/providers/data`，运行 `gen-model-catalog.mjs` 后再注入。目录的 `engineRootHint` 使用快照内相对路径，避免将 runner 的本地绝对路径写进发布内容；本地正式构建仍由快照生成器生成同源目录。"
+    ],
+    "docs/AGENTS/emulator-test-protocol.md:29": [
+      "## 1. 适用范围（按风险选择证据；A/B 两轨何时必跑）"
+    ],
+    "docs/AGENTS/emulator-test-protocol.md:39": [
+      "| L2 | Snapshot transactions, signatures, bridge contracts, or a gate's acceptance/rejection criteria | Immediate code, CDP, and ADB validation of the affected behavior |"
+    ],
+    "docs/AGENTS/emulator-test-protocol.md:4": [
+      "> 一句话：**任一层红都说明这个系统有问题**——代码层红是代码有问题，CDP 层绿而人做不到是交互逻辑错，"
+    ],
+    "docs/AGENTS/emulator-test-protocol.md:57": [
+      ""
+    ],
+    "docs/AGENTS/emulator-test-protocol.md:61": [
+      ""
+    ],
+    "docs/AGENTS/emulator-test-protocol.md:96": [
+      "已知会制造**假失败**的环境残留（先清再判）："
+    ],
+    "docs/AGENTS/gotchas.md:103": [
+      ""
+    ],
+    "docs/AGENTS/gotchas.md:178": [
+      "含 `undefined` 成员的整值被拒收（不是丢字段，是整条结果失败）。铁律：可选键缺省**整键不发**，"
+    ],
+    "docs/AGENTS/gotchas.md:44": [
+      "35. **requestLegacyExternalStorage 对 targetSdk≥30 应用无效（#120/MT 调研，2026-09-02 实锤）**：该 flag 仅对「targetSdk≤29 + 运行在 Android 10」生效；targetSdk≥30（含 34）应用即使运行在 Android 10 设备上 flag 也被忽略（SO 63365334 / cgeo #10386 / 小米适配指南多源实锤）→ Android 10 上 SAF 树授权不解锁 FUSE 原始路径、bash 走不了 ContentResolver → 非 root 下「读用户任意目录作工作区」不可达成。落地：SDK 26-28（无分区存储）运行时 READ/WRITE 权限放行；SDK 29 保留拒绝但显式 reason（`__dsh_pick_refused__:android-10`）而非伪装取消；SDK 30+ 维持 All Files Access。"
+    ],
+    "docs/AGENTS/gotchas.md:74": [
+      ""
+    ],
+    "docs/AGENTS/modules.md:36": [
+      "| **ProfilePackageManifest.kt** | profile 根 `package.json` 的纯并集合并器 | Snapshot 刷新和用户数据恢复共用；user JSON 为基保留 pin/未知字段，补入工厂新增 dependency/bundle，解析失败返回拒绝信号。 |"
+    ],
+    "docs/AGENTS/modules.md:39": [
+      "| **CoordBasisPolicy.kt**（0.14.2 新增，141 行） | issue #258 修：无障碍 `nx`/`ny` 归一化的**基准尺寸**解析（单一真源） | `resolve(Reading)` 是**纯函数**（输入可注入，纯 JVM 单测免 Robolectric）；优先级 = `maximumWindowMetrics.bounds`（API 30+，多窗口下仍给整屏）> `Display.getRealMetrics()`（26-29 唯一整屏途径，已废弃但必须留）> 当前窗口 bounds（**最后兜底**，显式标 `WIRE_WINDOW_CURRENT` 回显，便于同类缺陷自证）；三 wire 值 = `screen-max-window` / `screen-real-metrics` / `window-current`，`Basis.isScreenScope` 即「基准是不是整屏」。真因：分屏/自由窗口/悬浮窗下 Android 返回**窗口**尺寸而非整屏（实报 HUAWEI BTK-W00 2200x1440、窗口 bounds=(1438,106) 733x1389，`nx=0.712` 算出 522 落在屏幕左侧背景应用 ⇒ DSH 自身浮窗整块点不到）。四路统一：`DeviceControlService.coordBasis()`（:579）为唯一入口，`screenSize()`（:581）委托它，click（:1105）/longClick（:1167）/快照 `screen` 字段（:556）/滚动兜底手势（:1300）共用；`withBasis()`（:593）把实际基准并进返回值（`basis`/`basisWidth`/`basisHeight`）。反证用例 `CoordBasisPolicyTest`（227 行 / 9 例，含真实缺陷数值与「不得等于窗口尺寸」双向断言 + 静态断言四条消费路径都走真源） |"
+    ],
+    "docs/archive/known-gaps-pre-0.14.5-2026-10-07.md:170": [
+      "不是 a11y 能力缺失。F1（`bridge/index.ts:832-838` 按 `args.screenId` 经 `screenAccessResolved` 判定）"
+    ],
+    "dsh-client-ui-responsive/src/client/android-bridge.ts:17": [
+      "export interface AndroidShellBridge {"
+    ],
+    "dsh-client-ui-responsive/src/client/android-bridge.ts:82": [
+      "*  key 只能是 `shizuku-download` / `shizuku-tutorial`——页面不传 URL，URL 表在壳侧。"
+    ],
+    "dsh-client-ui-responsive/src/client/dev-section/notify-settings.tsx:66": [
+      "*"
+    ],
+    "dsh-client-ui-responsive/src/client/dev-section/phone-control.tsx:180": [
+      "? parsed.result as Record<string, unknown> : undefined"
+    ],
+    "dsh-client-ui-responsive/src/client/dev-section/runtime-cache.tsx:91": [
+      "return SKIP_LABEL[reason] ?? tr('原因未在本版登记（可复制日志反馈）', 'This reason is not listed yet; copy the log and report it')"
+    ],
+    "dsh-client-ui-responsive/src/client/enter-guard.ts:63": [
+      "if (window.innerWidth > MOBILE_FORM_MAX_WIDTH) return"
+    ],
+    "dsh-client-ui-responsive/src/client/index.ts:192": [
+      "return () => { marker.detach() }"
+    ],
+    "dsh-client-ui-responsive/src/client/index.ts:352": [
+      "// Android general-settings rows (issue #59): immersive status-bar toggle."
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/attachment-picker-menu.ts:184": [
+      "return node.matches(SLOT_SELECTOR) || node.querySelector(SLOT_SELECTOR) !== null"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/back-stack.ts:334": [
+      "private layers: BackLayer[] = []"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/form-marker.ts:45": [
+      "private observer: MutationObserver | null = null"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/form-marker.ts:88": [
+      ".filter(dialog => dialog.closest('[data-shell-overlay]') === null)"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/incoming-draft.ts:175": [
+      "const cwd = window.androidBridge?.incomingWorkspacePath?.() ?? ''"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-adapter.ts:203": [
+      ": window.androidBridge?.browserHostViewport?.(payload)"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-presentation.ts:20": [
+      "* Android 原生视图在 DOM 之门（portals）之上，浮层开着时原生页会盖住它 ——"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-presentation.ts:44": [
+      "const OCCLUSION_ATTRIBUTES = ['role', 'aria-modal', 'aria-hidden', 'class', 'style', 'hidden',"
+    ],
+    "dsh-client-ui-responsive/src/client/mobile/native-browser-presentation.ts:61": [
+      "readonly clipsX: boolean"
+    ],
+    "dsh-client-ui-responsive/tests/attachment-picker-menu.spec.ts:80": [
+      "plus.addEventListener('click', upstream)"
+    ],
+    "dsh-client-ui-responsive/tests/back-stack.spec.ts:259": [
+      ""
+    ],
+    "dsh-client-ui-responsive/tests/incoming-draft.spec.ts:166": [
+      "expect(document.documentElement.getAttribute('data-dsh-incoming-draft-poll')).toBe('exhausted')"
+    ],
+    "dsh-host-web-compat/lib/index.js:136": [
+      "// 别把两件事混成一条归因：补它是因为同一次审计发现它落在产品声明的支持范围里。"
+    ],
+    "dsh-host-web-compat/lib/index.js:137": [
+      "// 在售快照（0.2.1-rc.2 树，93 个 client.js）逐文件实测：findLast 命中 ui-chat 6 处、"
+    ],
+    "dsh-host-web-compat/lib/index.js:286": [
+      "try{"
+    ],
+    "dsh-host-web-compat/lib/index.js:295": [
+      "for(var i=0;i<b.entries.length;i++){"
+    ],
+    "dsh-host-web-compat/lib/index.js:302": [
+      "r.declaredInjectEntries=decl;   // [] = 图里确实没有声明 inject 的条目（真值）"
+    ],
+    "dsh-host-web-compat/lib/index.js:307": [
+      "var out=[];"
+    ],
+    "dsh-host-web-compat/lib/index.js:328": [
+      "ml.__dshCreateCalled=false;"
+    ],
+    "dsh-host-web-compat/lib/index.js:360": [
+      "// 只认「boot 页 + failedItem」这一对 DOM 事实，不认任何文案（文案会随上游改版失效）。"
+    ],
+    "dsh-host-web-compat/lib/index.js:381": [
+      "if(!page||typeof page.querySelectorAll!=='function')return out;"
+    ],
+    "dsh-host-web-compat/lib/index.js:389": [
+      "}"
+    ],
+    "dsh-host-web-compat/lib/index.js:398": [
+      "if(window.__dshBootReadyPublished)return;"
+    ],
+    "dsh-host-web-compat/lib/index.js:400": [
+      "if(bootPagePresent())return;   // 启动页仍在场 ⇒ 尚未真正就绪（健康启动末尾它会被卸载）"
+    ],
+    "dsh-host-web-compat/lib/index.js:409": [
+      "// 失败原文（契约 §1 第 4 条 detail.reason 的取值面）。上游 BootPage.render() 的投影顺序是"
+    ],
+    "dsh-host-web-compat/lib/index.js:411": [
+      "// 只写 id 的那一条取到最后一项也无害（仍是可以照着排查的原文）。折叠与 200 字符截断由调用方做。"
+    ],
+    "dsh-host-web-compat/lib/index.js:416": [
+      "var items=root.querySelectorAll('[class*=failedItem]');"
+    ],
+    "dsh-host-web-compat/lib/index.js:430": [
+      "var ids=failedIds();"
+    ],
+    "dsh-host-web-compat/lib/index.js:480": [
+      "function show(report){"
+    ],
+    "dsh-host-web-compat/lib/index.js:552": [
+      "setTimeout(tick,500);"
+    ],
+    "dsh-host-web-compat/lib/index.js:770": [
+      "}"
+    ],
+    "dsh-host-web-compat/lib/index.js:783": [
+      "var path=el.getAttribute&&el.getAttribute('title');"
+    ],
+    "dsh-host-web-compat/lib/index.js:794": [
+      "// Tool-row file links (issue #66): the chat tool rows (ui-tool ToolRow) render"
+    ],
+    "dsh-host-web-compat/lib/index.js:802": [
+      "// 上游 ui-tool ToolRow.tsx:217-225 给同一个 button.fileLink 挂了自己的 onClick={openFile}，"
+    ],
+    "dsh-host-web-compat/lib/index.js:895": [
+      "}"
+    ],
+    "dsh-host-web-compat/scripts/boot-watchdog.test.mjs:231": [
+      "// 判据取**求值后**的脚本体（源码切片测不出模板串语义），并在 VM 里跑出真实行为："
+    ],
+    "dsh-host-web-compat/scripts/smoke-injections.mjs:50": [
+      "// 接线契约是**两条** transform：① polyfill+主题桥+picker（共用 pick-token 幂等判据）；"
+    ],
+    "dsh-shell-termux/src/index.ts:184": [
+      "for (const k of TermuxBashExecutor.FENCE_KEYS) delete user[k]"
+    ],
+    "dsh-shell-termux/src/index.ts:39": [
+      "export const REQUIRED_TOOLCHAIN = ['bash', 'coreutils', 'findutils', 'grep', 'ripgrep'] as const"
+    ],
+    "dsh-shell-termux/src/index.ts:42": [
+      "export const PROBE_BINARIES = ['bash', 'ls', 'cat', 'grep', 'find', 'sed', 'cp', 'mv', 'rm', 'mkdir', 'rg'] as const"
+    ],
+    "facts.ts:104": [
+      "const value: FactsRead = fromShell ?? {"
+    ],
+    "facts.ts:50": [
+      "const raw = env.DSH_BROWSER_FACTS"
+    ],
+    "form-marker.ts:83": [
+      "* Dialogs inside the frame's own overlay layer (this plugin's export-result"
+    ],
+    "form-marker.ts:88": [
+      ".filter(dialog => dialog.closest('[data-shell-overlay]') === null)"
+    ],
+    "form-marker.ts:96": [
+      "document.documentElement.toggleAttribute(SETTINGS_OPEN_TAG, settings !== null)"
+    ],
+    "incoming-draft.ts:150": [
+      ""
+    ],
+    "incoming-draft.ts:86": [
+      "/** Fetch eligible queue metadata and hydrate each blank-session attachment once. */"
+    ],
+    "index.js:2198": [
+      "* @returns compact facts and child-local failures; complete child event arrays are released after extraction.",
+      "* Collect each related child's own descriptor through existing historical codecs.",
+      "const incidental = new Set([",
+      "function signature(pattern) {",
+      "if (ANIM_KEYS.every((k) => now[k] === '0')) {",
+      "let total = 0;",
+      "return true;",
+      "}",
+      "};"
+    ],
+    "index.ts:1038": [
+      "// D8：拒绝分支的通用信号——本工具此前是 13 个工具里唯一漏发的。",
+      "const ok = gate.ok && op === 'shExec' && entry !== undefined && command !== undefined && entry.allows(command)"
+    ],
+    "index.ts:1052": [
+      "+ '模型侧请经工具调用（工具层会绑定会话）；插件侧请显式传 { session }。',",
+      "//"
+    ],
+    "index.ts:1063": [
+      "/**",
+      "if (verb === 'tap') {"
+    ],
+    "index.ts:1074": [
+      "internal?: 'sf-token-lookup' | 'animation-scales'): Promise<ControlResult> {",
+      "payload.x = args.x"
+    ],
+    "index.ts:112": [
+      "* @returns 状态载荷。",
+      "*/",
+      ".dsh-vdisplay-shutdown{margin-left:auto;border-color:var(--dsw-alias-border-l4);color:var(--dsw-alias-label-secondary)}",
+      "// 块G F4b（0.14.1）：`web_dump` 同型移出——它读的是**壳自有 WebView**（DSH 自己的 Web UI，",
+      "export type { ScreenAccessDecision, ScreenId, UserScreenScope } from './screen-scope.js'",
+      "import { createIncomingDraftRuntime } from './mobile/incoming-runtime.ts'",
+      "private readonly termuxVersion: string",
+      "sessionIds?: readonly unknown[]",
+      "try {"
+    ],
+    "index.ts:125": [
+      "* @param req - 请求事实（method/headers）。",
+      "* 手动关机（0.14.0）：销毁本机全部虚拟屏，与设置页「强制销毁」同口径。",
+      "* 缺陷形态（用户两轮阻碍之一）：各调用点传的是**手搓的子集**，例如",
+      "/** Required services: composition, copy/theme faces, the runtime sessions, and the frame's panel actions. */",
+      "const missing: string[] = missingBinaries.includes('bash')",
+      "export interface AdbStatus {",
+      "type IncomingState = 'received' | 'session-created'",
+      "type: 'object',",
+      "}"
+    ],
+    "index.ts:1255": [
+      "",
+      "/**"
+    ],
+    "index.ts:1416": [
+      "+ '需 danger-full-access；无障碍未开启时改用 android_ui_tree（uiautomator，返回同形节点清单）。',",
+      "description:"
+    ],
+    "index.ts:142": [
+      "",
+      "* permission presets read. Enforcement is the Android app domain, not a",
+      "// **必须用异步面**：`virtual-N` → displayId 要经壳侧 vdInfo 注册表解析，同步面做不到，",
+      "additionalProperties: false,",
+      "const candidate = bridge[method]",
+      "entryId: string",
+      "scope(id: unknown): unknown | undefined",
+      "}"
+    ],
+    "index.ts:1438": [
+      "// 原样带出，让模型在同一轮改用坐标路径，而不是停在「取树失败」。",
+      "? '壳侧轮询：未知'"
+    ],
+    "index.ts:1444": [
+      "text: [",
+      "text: `无障碍取树失败：${r.error ?? '未知'}——重 UI/播放页常见；建议：① android_ui_global back 退回上一级再 dump；`"
+    ],
+    "index.ts:1463": [
+      "const dec = decodeV2(data)",
+      "gates?.a11yEnabled ? '结论：设备控制可用（走无障碍通道）——下一步用 android_ui_dump 拿语义清单'"
+    ],
+    "index.ts:1558": [
+      "description:",
+      "ny: { type: 'number', description: '归一化 Y（0-1，相对物理屏高；= 截图内像素 y ÷ 截图高）——无 ref 时使用' },"
+    ],
+    "index.ts:1612": [
+      "// 也不要「静默点到别的屏」——后者比拒绝难排查得多。",
+      "type WsReq = {"
+    ],
+    "index.ts:165": [
+      "",
+      "* ADS 授权持久面（0.13.0 F1.7 设置页闭环，2026-08-23；Shizuku 对照收紧）：",
+      "* 所以 `ResizeObserver` 与 `window.resize` 都不触发；旧实现唯一的兜底是 1s 轮询，",
+      "* 随后整轮都在错误前提下排查。**对模型不可发现的参数等于不存在的参数。**",
+      "//",
+      "TERMUX_VERSION: this.termuxVersion,",
+      "try {"
+    ],
+    "index.ts:1664": [
+      "const TASK_DONE_MARKER = (process.env.DSH_HOME ?? '/data/user/0/com.dsharnessmobile.shell/files/home/.dsh') + '/.task-done.ndjson'",
+      "const wd = (wr.data ?? {}) as { ok?: boolean; error?: string; via?: string; target?: { tag?: string; text?: string } }"
+    ],
+    "index.ts:1669": [
+      "const verdict = await verifyClick(undefined, exec as ExecLike)",
+      "} catch { /* 标记失败不阻断（通知不是关键路径） */ }"
+    ],
+    "index.ts:1899": [
+      "denied: false,",
+      "if (wsvc) {"
+    ],
+    "index.ts:251": [
+      "",
+      "? '——本机未给出整屏尺寸，本次按**当前窗口**换算，多窗口下可能偏左'",
+      "? snap.screens.find((s) => s.kind === 'virtual')?.alias",
+      "additionalProperties: false,",
+      "const bashVersion = await this.readBashVersion()",
+      "const disposeStyle = injectStyle('trajectory-details', TRAJECTORY_DETAILS_CSS)",
+      "path: real,",
+      "return {",
+      "writeModeSource: { type: 'string', description: '档位来源：sandboxPolicy.session / sandboxPolicy.default / env-fallback' },"
+    ],
+    "index.ts:263": [
+      "/**",
+      "/** First line of `bash --version`, or undefined when bash cannot report it. */",
+      "/** 持久会话 id 形态（命令面铸 session-<uuid>；计数形态 session-N 是存储层原语产物，需自愈重建）。 */",
+      "// text-overflow: ellipsis，而 banner 里的状态胶囊与复制按钮不可收缩，把命令挤进窄",
+      "browserWebViewAvailable: { type: 'boolean', required: true },",
+      "const d = (data ?? {}) as { basis?: unknown; basisWidth?: unknown; basisHeight?: unknown }",
+      "if (typeof data.displayId === 'number') out.displayId = data.displayId",
+      "window.addEventListener('resize', publishBounds)",
+      "},"
+    ],
+    "index.ts:281": [
+      "",
+      "// its 100% height (the layout viewport does not shrink on Android 16",
+      "// 无线调试」的实时事实）；旧壳无该键 → 回落 paired（旧的间接证明语义）。",
+      "displayId: { type: 'integer' },",
+      "output: {",
+      "}",
+      "} catch {",
+      "} catch { /* 审计目录不可建：落审计失败不改变删除结果 */ }",
+      "},"
+    ],
+    "index.ts:295": [
+      "* 上游 attachSession（workspace/workspace/src/entity.ts:124-143）把会话 header 的 cwd",
+      "* 扫描计划 → UI 载荷。**绝不下发绝对路径**：只给稳定 id、类别、`$DSH_HOME`/`$DSH_FILES_DIR`",
+      "? writeMode === 'danger-full-access'",
+      "const bridge = new ThemeBridge()",
+      "const realInScope = scope === 'real-only' || scope === 'all'",
+      "let ctxRef: Context | undefined",
+      "name: 'android_vdisplay_create',",
+      "}"
+    ],
+    "index.ts:298": [
+      "* @returns 只读载荷。",
+      "* 因此：优先复用「path 自身即 canonical」的条目；否则删除同目录 + sessionIds 为空 +",
+      "* 装配：档位工具 + 只读面板状态路由。",
+      "+ '「虚拟屏」查看器，真实屏不受影响。失败时返回结构化 code/guidance（能力缺项、通道未就绪等），'",
+      "// watchStageVisibility 事件通道负责，不再依赖这一拍。",
+      ": undefined",
+      "const virtuals: Array<{ screenId: string; displayId?: number }> = []",
+      "}, 'ui-responsive: theme bridge')"
+    ],
+    "index.ts:31": [
+      "",
+      "/**",
+      "/** Default grace period passed to probe spawns. */",
+      "// 块 E：白名单扫描/执行/标签（设计与判据见 runtime-cache.ts 头注释）。",
+      "const DEFAULT_ENGINE_PORT = 4145",
+      "function isEnglish(): boolean {",
+      "import { ExportResultDialog } from './ExportResultDialog.tsx'",
+      "import { detailRecord, pageRows, writeDetailStore } from './detail-store.js'",
+      "type UserScreenScope,"
+    ],
+    "index.ts:313": [
+      "",
+      "const authOptions = (): AuthOptions => ({",
+      "const sameDir = entries.filter((w) => canonicalPath(w.path) === canonical)",
+      "export const A11Y_FRESH_MS = 20_000",
+      "{",
+      "}",
+      "}))",
+      "}, DevSection))"
+    ],
+    "index.ts:368": [
+      "/\\bwipe(data|system)?\\b/,",
+      "ctx.effect(() => installAboutEntry(), 'ui-responsive: about entry')",
+      "denied: boolean",
+      "ensureChain = next.then(() => 0, () => 0)",
+      "for (const t of tools(ctx, svc)) ctx.tools.register(t)",
+      "if (typeof a.screenId === 'string' && a.screenId !== '') payload.target = a.screenId",
+      "}, tr('关闭全部', 'Close all'))),"
+    ],
+    "index.ts:380": [
+      "): Promise<ShotValue> {",
+      "* 随 fiber 释放回收）。sidebarRightTabs 缺席时只告警不抛错（fail-closed，不阻断客户端启动）。",
+      "// 市场插件据此打开它的浮层；该浮层由 market-J-fullpage 补丁做成整页（满屏 + 返回页头）。",
+      "auth: authOptions,",
+      "const workspaceId = await incomingWorkspaceId()",
+      "if (!Number.isInteger(d) || d < 0 || d > 20_000) return rejectInput('swipe 的 duration 需为 0-20000 毫秒') as never",
+      "if (words.some((w) => DANGER_WORDS.has(w))) return true"
+    ],
+    "index.ts:393": [
+      "",
+      "const routed = exec.agent?.session?.requestHeader?.()?.config",
+      "const sidebar = ctx.get('sidebarRight') as SidebarRightController | undefined",
+      "if (looksDangerous(command)) return true",
+      "if (raw.length === 0 || raw.length > 500) return rejectInput('text 长度需为 1-500 字符') as never",
+      "meta: { cwd: tmpWorkspace() },",
+      "sendMobileRouteRejection(res, rejection)"
+    ],
+    "index.ts:394": [
+      "// ── Frame-wide entries ──────────────────────────────────────────────────",
+      "const c = command.toLowerCase()",
+      "const provider = routed?.provider ?? exec.agent?.options?.provider",
+      "if (sidebar === undefined) return () => {}",
+      "payload.text = raw",
+      "return",
+      "})"
+    ],
+    "index.ts:42": [
+      "* documented default; a present but non-decimal or out-of-range value is invalid. This is read per",
+      "const d = join(tmpWorkspace(), '.sessions')",
+      "export const PROBE_BINARIES = ['bash', 'ls', 'cat', 'grep', 'find', 'sed', 'cp', 'mv', 'rm', 'mkdir', 'rg'] as const",
+      "import { TrajectoryPanelsObserver } from './trajectory-panels-observer.ts'",
+      "interface SandboxPolicyFace {",
+      "method?: string",
+      "}",
+      "} from './control-queue.js'",
+      "} from './ime-broadcast.js'"
+    ],
+    "index.ts:428": [
+      "*   比较必拒——正是\"B7 前缀混用\"的运行时表现）；ws 侧 realpath 失败按原样参与比较；",
+      "/** 特权执行面的授权上下文。 */",
+      "ctx.effect(() => injectStyle('tap-highlight', TAP_HIGHLIGHT_CSS), 'ui-responsive: clear WebView tap highlight')",
+      "if (collapsedNow()) { pending = true; return }",
+      "res.end(JSON.stringify({ ok: false, error: 'GET only' }))",
+      "text: `截图已内联返回（${channelNote}；设备物理分辨率 ${width}x${height}，${ref.bytes} 字节，临时文件已删除）。`",
+      "wsvc.register({"
+    ],
+    "index.ts:432": [
+      "const wsLex = resolve(ws)",
+      "ctx.effect(() => injectStyle('sidebar-reorder', SIDEBAR_REORDER_CSS), 'ui-responsive: sidebar reorder feedback')",
+      "if (req.method !== undefined && req.method !== 'GET') {",
+      "return fallback('；内联读图失败（' + String((e as Error).message) + '），请用 read_image 读该路径')",
+      "seenActive = false",
+      "}",
+      "},"
+    ],
+    "index.ts:444": [
+      "// Follow symlinks before the containment check so a workspace link cannot escape it.",
+      "// background thread and reports through window.__dshExportResult. The bridge",
+      "const TIER_REQUIRED_OPS: readonly string[] = [",
+      "if (!s.ok) return `（生效校验不可用：${s.error}）`",
+      "return () => {}",
+      "sendJson(res, 200, await readVdToolSnapshot(faceOf()))",
+      "}"
+    ],
+    "index.ts:453": [
+      "",
+      "/**",
+      "id: 'open',",
+      "name: 'shell.overlay',",
+      "}"
+    ],
+    "index.ts:472": [
+      "// ── Native \"open with\" wiring ───────────────────────────────────────────",
+      "// 侧边栏终端的屏上九键条（0.14.2 T4）。",
+      "allows: (command) => command.trim() === \"dumpsys SurfaceFlinger | grep -E '^(Virtual Display |    name=)'\",",
+      "async function readAnimScales(): Promise<Record<string, string>> {",
+      "},"
+    ],
+    "index.ts:477": [
+      "// registration is gone and no other site re-adds it. The component file stays",
+      "// 从而让「终端底边 <= 键条顶边」成为布局不变量而非调数值的结果。",
+      "],",
+      "return out",
+      "},"
+    ],
+    "index.ts:517": [
+      "'当前模型不声明图像输入时回退为返回文件路径（此时再用 read_image）。' +",
+      "*",
+      "for (const t of tools()) ctx.tools.register(t)",
+      "return () => { marker.detach() }"
+    ],
+    "index.ts:584": [
+      "",
+      "const timeout = setTimeout(() => {",
+      "if (!priv.execAdbLine) return { imagePath: '', denied: false, text: '无障碍截屏未返回文件路径，且 ADB 通道未接通（无法回落）' }",
+      "name: 'sidebar.right.pane.tab', key, locale: namespace, store,"
+    ],
+    "index.ts:69": [
+      "*/",
+      "/** 只信任实际监听端口对应的回环 authority；env 非法时返回空表（调用方一律拒绝）。 */",
+      "bindSession?(session: unknown): void",
+      "export interface IncomingRes {",
+      "export {",
+      "extraPath?: string[]",
+      "import { MOBILE_TABLE_CSS } from './mobile/mobile-table.css.ts'",
+      "}"
+    ],
+    "index.ts:909": [
+      "'  '.repeat(Math.min(depth, 12)) + `${String(n.id)}`,",
+      "*  - off：心跳不新鲜 / prefs 未声明 a11yEnabled（fail-closed）。"
+    ],
+    "index.ts:924": [
+      "/** 两个树工具共用的 output。render 的**参数类型写成 unknown**（逆变安全）；返回值用字面量类型。 */",
+      "a11ySource(): 'heartbeat' | 'off' {"
+    ],
+    "index.ts:945": [
+      "if (!cap.ok) return { ok: false, denied: true, screen: { w: 0, h: 0 }, rotation: 0, count: 0, rawCount: 0, nodes: [], text: cap.text }",
+      "pollingFacts(): { active: boolean; ageMs: number | null } {"
+    ],
+    "index.ts:949": [
+      "",
+      "}"
+    ],
+    "index.ts:991": [
+      "// 供模型/用户确认工具绑定的是哪台设备（127.0.0.1:5555 与 emulator 并存时实测踩坑）。",
+      "}"
+    ],
+    "inject-all.py:174": [
+      "added_files = 0"
+    ],
+    "inject-all.py:273": [
+      "else:"
+    ],
+    "inject-all.py:304": [
+      "continue"
+    ],
+    "inject-all.py:32": [
+      "PROFILES = (\"web\", \"headless\")"
+    ],
+    "inject-all.py:336": [
+      "push(data, base + \"/\" + rel, now)"
+    ],
+    "inject-snapshot.py:106": [
+      "for pkg in need_add:"
+    ],
+    "keyboard-boundary.ts:48": [
+      "this.media = typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 767px)') : null"
+    ],
+    "keyboard-boundary.ts:67": [
+      "const frame = document.querySelector<HTMLElement>('[data-dsh-frame]')"
+    ],
+    "keyboard-boundary.ts:94": [
+      "const ime = Number.parseFloat(rootStyle.getPropertyValue('--dsh-android-ime-bottom')) || 0"
+    ],
+    "lossless-json.ts:30": [
+      "export function toLosslessJson(value: unknown): LosslessJson {"
+    ],
+    "mobile-form.css.ts:21": [
+      "--dsh-mobile-top-inset: max(env(safe-area-inset-top, 0px), var(--dsh-android-system-top, 0px));"
+    ],
+    "mobile-form.css.ts:25": [
+      "Reserve the measured top inset once for all three columns, including the"
+    ],
+    "mobile-form.css.ts:26": [
+      "absolute fullscreen panel anchored in rightbarCol. A 100% grid row would"
+    ],
+    "mobile-form.css.ts:55": [
+      "top: 0;"
+    ],
+    "mobile-settings.css.ts:15": [
+      "* sheet keys on that tag plus the phone-form flag: pure attribute selectors,"
+    ],
+    "native-browser-adapter.ts:202": [
+      "const raw = kind === 'identity' ? window.androidBridge?.browserHostIdentity?.(payload)"
+    ],
+    "native-browser-adapter.ts:203": [
+      ": window.androidBridge?.browserHostViewport?.(payload)"
+    ],
+    "native-browser-presentation.ts:61": [
+      "readonly clipsX: boolean"
+    ],
+    "notify-projection.ts:37": [
+      "export function turnEndKind(reason: unknown): TurnEndKindOrUnknown {"
+    ],
+    "notify-projection.ts:55": [
+      "export function reportOutcomeLabel(kind: TurnEndKindOrUnknown): string {"
+    ],
+    "notify-settings.tsx:66": [
+      "*"
+    ],
+    "open-path.ts:33": [
+      "const raw = bridge.openPathChooser(path, mode)"
+    ],
+    "phone-control.tsx:170": [
+      "const OWNERSHIP_UNREADABLE: RootOwnershipStatus = {"
+    ],
+    "phone-control.tsx:180": [
+      "? parsed.result as Record<string, unknown> : undefined"
+    ],
+    "phone-control.tsx:196": [
+      "if (result === undefined) return { ok: false, text: tr('属主维护结果不可读，不能确认修复完成；请复制诊断日志。', 'The ownership result is unreadable, so the repair is unconfirmed. Copy the diagnostics.') }"
+    ],
+    "phone-control.tsx:206": [
+      "if (result.ok === true && completeCounts && result.truncated === false && result.deadlineExceeded === false"
+    ],
+    "phone-control.tsx:220": [
+      "requesting: false,"
+    ],
+    "phone-control.tsx:240": [
+      "* （未安装 → 未启动 → 未授权 → 未绑定 → 就绪），用户据此知道自己在第几步。"
+    ],
+    "phone-control.tsx:363": [
+      "return window.androidBridge?.getVdisplayFloatEnabled?.() ?? true"
+    ],
+    "plugins/dsh-android-bridge/src/capability-gate.ts:12": [
+      "* （dsh/packages/core/tools/src/index.ts:1061-1088 / :804-807；tool-subagent/src/index.ts:664-706）。"
+    ],
+    "plugins/dsh-android-bridge/src/capability-gate.ts:250": [
+      "* 解除请求组的掩蔽并**持久化**；返回本次解锁的组与仍未解锁的组。"
+    ],
+    "plugins/dsh-android-bridge/src/control-policy.ts:79": [
+      "export const A11Y_OPS: readonly ControlOp[] = ["
+    ],
+    "plugins/dsh-android-bridge/src/control-queue.ts:139": [
+      "* 绝不返回「可能成功」的模糊结果。"
+    ],
+    "plugins/dsh-android-bridge/src/control-queue.ts:347": [
+      "webServer.register({"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1034": [
+      "const entry = INTERNAL_PRIVILEGED[internal]"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1045": [
+      "}"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1224": [
+      "// 审查 §5.1 / S-5：特权面在**服务面**复查档位与危险命令（工具壳的同名检查保留为 UX 快速路径）。"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:135": [
+      "/** 已配对（第三道人门；0.14 起 = 真实 adb pair 握手成功） */"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1457": [
+      "const ready = typeof caps?.shizuku === 'boolean' ? caps.shizuku : undefined"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1458": [
+      "return 'Shizuku 特权通道：' + shizukuLine(ready)"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1558": [
+      "description:"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1564": [
+      "parameters: {"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1593": [
+      "// 块G F2：命令带 `-d <id>` 时按**目标屏**判定（目标确为已注册虚拟屏则放行）。"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:1612": [
+      "type WsReq = {"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:234": [
+      "controlToken: mToken?.[1] || undefined,"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:251": [
+      ""
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:368": [
+      "/\\bwipe(data|system)?\\b/,"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:472": [
+      "allows: (command) => command.trim() === \"dumpsys SurfaceFlinger | grep -E '^(Virtual Display |    name=)'\","
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:569": [
+      "* 服务面：ctx.androidPrivilege —— 授权状态机（供 dsh-android-manage 等消费）。"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:645": [
+      "* `TIER_REQUIRED_OPS` 内，注释明写「读面/管理面不纳入」），让回执把 caps 带回来。"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:755": [
+      "* 而虚拟屏段落在 **第 ~9,500 字节之后**，超出壳侧 capture 路径的 8 KiB inline 窗口（其余进 spool"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:829": [
+      "* 0.13.5 W4 重构（PRD-0.13.2 §3.3 B3）：授权面从「ADB 三道人门」改为"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:909": [
+      "*  - off：心跳不新鲜 / prefs 未声明 a11yEnabled（fail-closed）。"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:949": [
+      "}"
+    ],
+    "plugins/dsh-android-bridge/src/index.ts:991": [
+      "}"
+    ],
+    "plugins/dsh-android-bridge/src/lossless-json.ts:1": [
+      "/**"
+    ],
+    "plugins/dsh-android-bridge/src/notify-projection.ts:68": [
+      "return '被中断（进程重启）'"
+    ],
+    "plugins/dsh-android-bridge/src/route-auth.ts:4": [
+      "export const CONTROL_TOKEN_HEADER = 'x-dsh-control-token'"
+    ],
+    "plugins/dsh-android-bridge/src/screen-scope.ts:200": [
+      "/** `sh -c '<内层>'` 形式的嵌套执行体（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。 */"
+    ],
+    "plugins/dsh-android-bridge/src/screen-scope.ts:242": [
+      "j += 1"
+    ],
+    "plugins/dsh-android-bridge/src/screen-scope.ts:366": [
+      "// `uiautomator dump` 没有目标屏参数：dump 的就是**默认屏**的语义树 ⇒ 无法自证，恒拒。"
+    ],
+    "plugins/dsh-android-bridge/src/screen-scope.ts:405": [
+      "*/"
+    ],
+    "plugins/dsh-android-bridge/src/screen-scope.ts:70": [
+      "*/"
+    ],
+    "plugins/dsh-android-bridge/src/shell-ops.ts:120": [
+      "export function translateAdbLine(line: string): ShellLineTranslation {"
+    ],
+    "plugins/dsh-android-bridge/test/privilege-status.test.mjs:1": [
+      "// android_privilege_status 返回面回归（0.14.0-preview）："
+    ],
+    "plugins/dsh-android-bridge/test/screen-scope.test.mjs:336": [
+      ""
+    ],
+    "plugins/dsh-android-bridge/test/screen-scope.test.mjs:779": [
+      "assert.deepEqual(adbCommandDisplayTokens('input\\t-d 0 tap 1 2'), ['0'], '制表符是合法分隔符')"
+    ],
+    "plugins/dsh-android-browser/src/contract.ts:14": [
+      "export const BROWSER_TOOLS = {"
+    ],
+    "plugins/dsh-android-browser/src/contract.ts:42": [
+      "caps: 'browserCaps',"
+    ],
+    "plugins/dsh-android-browser/src/facts.ts:66": [
+      "const reply = await control.controlExec(BROWSER_OPS.caps, {}, timeoutMs)"
+    ],
+    "plugins/dsh-android-browser/src/facts.ts:99": [
+      "export async function readFacts(options: { env?: NodeJS.ProcessEnv; control?: ControlFace; cacheTtlMs?: number } = {}): Promise<FactsRead> {"
+    ],
+    "plugins/dsh-android-browser/src/index.ts:274": [
+      "render: (_args, v: Record<string, unknown>) => ["
+    ],
+    "plugins/dsh-android-browser/src/tier.ts:57": [
+      "export function resolveBrowserTier(facts: BrowserFacts): BrowserTierReport {"
+    ],
+    "plugins/dsh-android-browser/src/tools.ts:136": [
+      "function renderLoadState(v: Record<string, unknown>): string {"
+    ],
+    "plugins/dsh-android-browser/src/tools.ts:254": [
+      "const call = async (op: string, args: Payload, timeoutMs = 15_000): Promise<CallResult> => {"
+    ],
+    "plugins/dsh-android-browser/src/tools.ts:262": [
+      "const reply = await control.controlExec(op, payload, timeoutMs)"
+    ],
+    "plugins/dsh-android-browser/src/tools.ts:281": [
+      "// 浏览器面**不做任何授权校验**（0.14.0 实锤缺陷修复）。"
+    ],
+    "plugins/dsh-android-browser/src/tools.ts:33": [
+      "const lastSnapshots = new Map<string, SnapshotMemory>()"
+    ],
+    "plugins/dsh-android-browser/src/tools.ts:407": [
+      "const state = opened.data"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:20": [
+      "// FX-205.1：三条 exact 路由与 dsh-android-bridge 控制队列共用同一枚壳侧控制令牌"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:216": [
+      "function purgeStaleUnclaimed(mode: 'boot' | 'ttl'): number {"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:238": [
+      "function enqueueSession(path: string): { ok: boolean; entryId?: string; message: string } {"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:302": [
+      "async function resolveIncomingWorkspace(): Promise<string | undefined> {"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:36": [
+      "function tmpWorkspace(): string {"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:43": [
+      "mkdirSync(d, { recursive: true })"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:431": [
+      "function safeResolveInside(ws: string, path: string): string | null {"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:481": [
+      "const items = readItems()"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:525": [
+      "const wsvc = (ctx as unknown as { webServer?: { register(r: unknown): () => void } }).webServer"
+    ],
+    "plugins/dsh-android-file-open/src/index.ts:527": [
+      "// FX-205.1：鉴权依赖实时求值——令牌随壳侧 prefs 变化（重装/清数据后自愈），"
+    ],
+    "plugins/dsh-android-file-open/src/route-auth.ts:47": [
+      "*/"
+    ],
+    "plugins/dsh-android-linux-env/src/index.ts:30": [
+      "import { PROBE_BINARIES, REQUIRED_TOOLCHAIN, TOOLCHAIN_REPRESENTATIVE } from '@dsh-android/dsh-shell-termux'"
+    ],
+    "plugins/dsh-android-linux-env/src/index.ts:337": [
+      "// 只供页面放进 `data-detail` 与审计，两端都不上正文。"
+    ],
+    "plugins/dsh-android-linux-env/src/index.ts:349": [
+      "// 服务与用户显式确认决定，本插件不下载、不解包、不替用户启用。"
+    ],
+    "plugins/dsh-android-linux-env/src/index.ts:353": [
+      "})"
+    ],
+    "plugins/dsh-android-linux-env/src/index.ts:388": [
+      "kind: 'exact',"
+    ],
+    "plugins/dsh-android-linux-env/src/index.ts:72": [
+      "const policy = serviceOf<SandboxPolicyFace>(ctx, 'sandboxPolicy')"
+    ],
+    "plugins/dsh-android-linux-env/src/runtime-cache.ts:40": [
+      "export const CURRENT_ENGINE_LOG = 'engine.log'"
+    ],
+    "plugins/dsh-android-linux-env/src/runtime-cache.ts:469": [
+      "*"
+    ],
+    "plugins/dsh-android-manage/src/ime-broadcast.ts:61": [
+      "export function adbKeyboardBroadcast(action: string, msg: string | null | undefined, auth: string): string {"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1071": [
+      "if (!nums.slice(0, 4).every((n) => Number.isInteger(n) && n! >= 0 && n! <= 99999) || !Number.isInteger(nums[4]) || nums[4]! < 0 || nums[4]! > 60000) {"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:114": [
+      "// 留在本集合里的后果是确定的过度拦截：guard 的 requested 恒为 undefined → decideScreenAccess"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1268": [
+      "env_prepare: '无障碍通道下动画与输入法这两项都不需要本工具',"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1300": [
+      "return out as { ok: boolean; denied: boolean; text: string; actionMode?: string; screenId?: string; guidance?: string }"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:133": [
+      "* 修法不是逐个补字段（下次加字段还会漏），而是**唯一入口收完整实参**。"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1341": [
+      "return priv.controlExec(op, args, timeoutMs)"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:137": [
+      "// 为什么在这里绑：本插件的私有面调用点有 40+ 处（分散在各 helper 里，多数拿不到 exec），"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:138": [
+      "// 逐个改签名噪声大且必漏；而 guard 是每个工具入口的唯一必经点，语义正是「这次调用属于谁」。"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1494": [
+      "? v2.screen"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1507": [
+      "v2,"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1519": [
+      "const detail = publishDetail(pruned.nodes, {"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:152": [
+      "}"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1537": [
+      "note: `无障碍通道（backend=a11y，协议 ${v2 ? 'V2 列式' : 'V1'}）：id 仅在最近一次 dump 内有效；页面变化后请重新 dump`,"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1899": [
+      "denied: false,"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:1999": [
+      "const sendKb = async (action: string, msg?: string): Promise<KbSend> => {"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:2031": [
+      "resultCode = res.code"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:2283": [
+      "return {"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:2286": [
+      "}"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:394": [
+      "const provider = routed?.provider ?? exec.agent?.options?.provider"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:517": [
+      "'当前模型不声明图像输入时回退为返回文件路径（此时再用 read_image）。' +"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:571": [
+      "// → 回落 ADB screencap，而不是把「没有截图能力」当结论抛给模型。"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:580": [
+      "}"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:7": [
+      "* 工具集（全部经 ctx.androidPrivilege 前置校验 + 审计）："
+    ],
+    "plugins/dsh-android-manage/src/index.ts:728": [
+      "}"
+    ],
+    "plugins/dsh-android-manage/src/index.ts:901": [
+      "occ = `#${k}`"
+    ],
+    "plugins/dsh-android-manage/src/protocol-v2.ts:114": [
+      "if (!isIntArray(o)) return { ok: false, error: 'o 必须是整数数组（载荷行下标 → 原始行号映射）——壳侧编码器过旧，请更新 APK' }"
+    ],
+    "plugins/dsh-android-manage/test/a11y-routing.test.mjs:479": [
+      "test('F4b：virtual-only 下 android_web_dump 不得被屏幕范围门拒绝（它读的是壳自有 WebView）', async () => {"
+    ],
+    "plugins/dsh-android-vdisplay/src/client/index.ts:171": [
+      "*"
+    ],
+    "plugins/dsh-android-vdisplay/src/client/index.ts:194": [
+      "// 不藏起来的话弹层会被虚拟屏画面整块盖住（用户实报）。"
+    ],
+    "plugins/dsh-android-vdisplay/src/client/index.ts:83": [
+      "id: string"
+    ],
+    "plugins/dsh-android-vdisplay/src/client/index.ts:84": [
+      "kind: string"
+    ],
+    "plugins/dsh-android-vdisplay/src/client/index.ts:93": [
+      "interface SidebarRightController {"
+    ],
+    "plugins/dsh-android-vdisplay/src/index.ts:140": [
+      "items: {"
+    ],
+    "plugins/dsh-android-vdisplay/src/index.ts:162": [
+      "},"
+    ],
+    "plugins/dsh-android-vdisplay/src/index.ts:198": [
+      "* AI 自主建屏：把 vd* 生命周期 op 经控制队列投递给壳侧（neverA11y 的壳桥 op 借队列投递）。"
+    ],
+    "plugins/dsh-android-vdisplay/src/index.ts:92": [
+      "const trusted = loopbackAuthorities()"
+    ],
+    "plugins/dsh-android-vdisplay/src/index.ts:96": [
+      "if (origin !== undefined && origin !== '' && !trusted.some((authority) => origin.toLowerCase() === 'http://' + authority)) {"
+    ],
+    "plugins/dsh-android-vdisplay/src/status.ts:131": [
+      "viewers: VdViewer[]"
+    ],
+    "plugins/dsh-android-vdisplay/src/status.ts:14": [
+      "export const VD_OPS = ['vdCreate', 'vdDestroy', 'vdLaunch', 'vdMoveTask', 'vdInfo', 'vdLaunchApp', 'vdInput'] as const"
+    ],
+    "plugins/dsh-android-vdisplay/src/status.ts:186": [
+      "if (typeof raw.selected === 'string') out.selected = raw.selected"
+    ],
+    "plugins/dsh-android-vdisplay/src/status.ts:190": [
+      "/**"
+    ],
+    "plugins/dsh-android-vdisplay/test/tools-callable.test.mjs:122": [
+      "const expected = schema.properties[key].type"
+    ],
+    "protocol-v2.ts:235": [
+      "text: decodeEntities(at.text ?? '').trim(),"
+    ],
+    "protocol-v2.ts:349": [
+      "t.push(symOf(row.text)); s.push(symOf(row.desc))"
+    ],
+    "reference-menu.ts:133": [
+      "}"
+    ],
+    "reference-menu.ts:211": [
+      ""
+    ],
+    "reference-menu.ts:45": [
+      "const GESTURES = ['pointerdown', 'mousedown', 'click'] as const"
+    ],
+    "screen-scope.ts:200": [
+      "/** `sh -c '<内层>'` 形式的嵌套执行体（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。 */"
+    ],
+    "screen-scope.ts:203": [
+      "/** 去掉一层首尾成对的引号（`sh -c \"…\"` 的载荷取值）。不成对则原样返回。 */"
+    ],
+    "screen-scope.ts:25": [
+      "const SHELL_SCREEN_SCOPE_PREFS_DEFAULT = '/data/user/0/com.dsharnessmobile.shell/shared_prefs/dsh_screen_scope.xml'"
+    ],
+    "screen-scope.ts:293": [
+      "*/"
+    ],
+    "screen-scope.ts:405": [
+      "*/"
+    ],
+    "screen-scope.ts:549": [
+      "function realOnlyScreenScopeMessage(): string {"
+    ],
+    "screen-scope.ts:569": [
+      "}"
+    ],
+    "screen-scope.ts:70": [
+      "*/"
+    ],
+    "scripts/api-route-auth-policy.json:126": [
+      "\"id\": \"linux-environment-check\","
+    ],
+    "scripts/build-apk-013.ps1:141": [
+      "# 子进程无界读 grep 门禁（0.13.8 #173）：输出必须走 ProcIo.readBounded"
+    ],
+    "scripts/build-apk-013.ps1:145": [
+      ""
+    ],
+    "scripts/build-apk-013.ps1:166": [
+      ""
+    ],
+    "scripts/build-apk-013.ps1:174": [
+      "# 镜像前缀表双真源一致性：壳侧 UpdateChecker.MIRROR_PREFIXES 与下载站 MIRROR_TEMPLATES 必须逐条同序。"
+    ],
+    "scripts/build-apk-013.ps1:182": [
+      "Write-Host \"== 工具名承诺门禁 ==\""
+    ],
+    "scripts/build-apk-013.ps1:206": [
+      "node (Join-Path $Root \"scripts\\check-snapshot-builder-output.mjs\") 2>&1"
+    ],
+    "scripts/build-apk-013.ps1:211": [
+      "# 「模拟器优先」是铁律 2（本地构建 → MuMu 实测），两者经常并行，撑满等于自己踩自己的验收环境。"
+    ],
+    "scripts/build-apk-013.ps1:283": [
+      "if ($LASTEXITCODE -ne 0) { Deny-Abi $abi \"引擎 overlay 抽验失败\"; continue }"
+    ],
+    "scripts/build-apk-013.ps1:388": [
+      "Write-Host \"== 浏览器语法下限门禁（$abi）==\""
+    ],
+    "scripts/build-apk-013.ps1:427": [
+      "$licAssets = Join-Path $apkDir \"app\\src\\main\\assets\\licenses\""
+    ],
+    "scripts/build-apk-engine.mjs:33": [
+      "* gates, injection and artifact naming; this function owns assets, Gradle,"
+    ],
+    "scripts/build-apk-engine.test.mjs:121": [
+      "const debugOutput = join(f.apkDir, 'app', 'build', 'outputs', 'apk', 'debug')"
+    ],
+    "scripts/build-apk.mjs:197": [
+      "run('node', [gate('check-manifest-hardening.mjs')])"
+    ],
+    "scripts/build-apk.mjs:347": [
+      "// 只能在 CI 工作流里手动跑。"
+    ],
+    "scripts/build-apk.mjs:61": [
+      "const market = externalNamed('dshmarketplace-plugin')"
+    ],
+    "scripts/build-release.ps1:56": [
+      "Write-Output \"== 发布门禁接线断言（唯一接线面聚合入口）==\""
+    ],
+    "scripts/build-release.ps1:60": [
+      "# 真因（实测）：这两个输入 tar 由 build-apk-013.ps1 产出，而它**已经**对它们跑过自己的内联门禁集；"
+    ],
+    "scripts/build-snapshot-013.mjs:169": [
+      "// F4 安装链（2026-08-23）：清陈旧 pnpm 状态记录——base-dsh 提取自运行设备，其"
+    ],
+    "scripts/build-snapshot-013.mjs:297": [
+      "if (!existsSync(join(overlayPkgDir(name), 'package.json'))) {"
+    ],
+    "scripts/build-snapshot-013.mjs:31": [
+      "// DSH_NO_WSL_REEXEC=1 跳过（调试/无 WSL 环境回退到旧的 D: 工作区）。"
+    ],
+    "scripts/build-snapshot-013.mjs:456": [
+      "execSync(`node \"${generator}\" --engine-root \"${join(STAGE, 'root')}\" --out \"${outFile}\"`, { encoding: 'utf8', stdio: 'inherit' })"
+    ],
+    "scripts/build-snapshot-013.mjs:933": [
+      "copyFileSync(entity, link)"
+    ],
+    "scripts/build-snapshot-013.mjs:985": [
+      "${mapPart}"
+    ],
+    "scripts/check-boot-budget.mjs:609": [
+      "okOf(r, 'C1') === false, 'C1 ok=' + okOf(r, 'C1'))"
+    ],
+    "scripts/check-boot-budget.mjs:671": [
+      "{"
+    ],
+    "scripts/check-boot-budget.mjs:681": [
+      "const c5skip = absent.results.find((x) => x.id === 'C5')"
+    ],
+    "scripts/check-bounded-io.mjs:54": [
+      "// 只对「子进程/连接流」命中；HTTP 与文件流的读有各自超时语义，不在此列。"
+    ],
+    "scripts/check-bridge-symmetry.mjs:1": [
+      "#!/usr/bin/env node"
+    ],
+    "scripts/check-browser-syntax-floor.mjs:535": [
+      "problems.push(tag + ' 无法从降级调用行解析出 --stage 实参（判据失效，拒绝假绿）：' + degradeLine.l.trim())"
+    ],
+    "scripts/check-browser-syntax-floor.mjs:536": [
+      "} else {"
+    ],
+    "scripts/check-browser-syntax-floor.mjs:658": [
+      "'createSourceFile=' + (typeof ts.createSourceFile === 'function')"
+    ],
+    "scripts/check-contract.mjs:165": [
+      "for (const e of readdirSync(dir, { withFileTypes: true })) {"
+    ],
+    "scripts/check-gate-skips.mjs:40": [
+      "const declared = [...aggText.matchAll(/\\{ script: '([a-z0-9-]+\\.mjs)'/g)].map((m) => m[1])"
+    ],
+    "scripts/check-gate-skips.mjs:62": [
+      "*   - build-apk-013.ps1（pwsh）：行首（可带 $var =）node ... scripts\\check-x.mjs，跳过注释行"
+    ],
+    "scripts/check-inject-completeness.mjs:100": [
+      "}"
+    ],
+    "scripts/check-kotlin-test-count.mjs:106": [
+      "const head = readFileSync(full, 'utf8').slice(0, 2000)"
+    ],
+    "scripts/check-kotlin-test-count.mjs:129": [
+      "* 仲裁逻辑（fail-closed）："
+    ],
+    "scripts/check-kotlin-test-count.mjs:143": [
+      "*/"
+    ],
+    "scripts/check-kotlin-test-count.mjs:153": [
+      "const args = [':app:testDebugUnitTest', '--no-daemon', '--console=plain']"
+    ],
+    "scripts/check-patch-mirror.mjs:109": [
+      "const regSet = new Set(regIds)"
+    ],
+    "scripts/check-patch-mirror.mjs:160": [
+      "const full = join(dir, name)"
+    ],
+    "scripts/check-patch-mirror.mjs:170": [
+      "const onlyMine = mineData.filter((r) => !peerData.includes(r))"
+    ],
+    "scripts/check-patch-mirror.mjs:231": [
+      "'LICENSES/Shizuku-API-MIT.txt',"
+    ],
+    "scripts/check-patch-mirror.mjs:339": [
+      "'plugins/dsh-android-browser',"
+    ],
+    "scripts/check-patch-mirror.mjs:347": [
+      "'scripts/api-route-auth-policy.json',"
+    ],
+    "scripts/check-plugin-tests.mjs:33": [
+      "const full = resolve(path)"
+    ],
+    "scripts/check-plugin-tests.mjs:54": [
+      ""
+    ],
+    "scripts/check-release-gates.mjs:104": [
+      "// Kotlin 块注释嵌套静态检查（KDoc 里写 node_modules/** 会吞掉整个文件；dev-shell 实测）。"
+    ],
+    "scripts/check-release-gates.mjs:135": [
+      "//      `.deploy-tmp/boot-budget/{boot-segments.log,engine.log}` 顺序发现**设备原始产物**；"
+    ],
+    "scripts/check-release-gates.mjs:152": [
+      "// 构建并发上限（0.14.1 用户拍板的系统级约束）：构建期压缩/解压不得吃满全部逻辑核（原为 `xz -T0`"
+    ],
+    "scripts/check-release-gates.mjs:164": [
+      "// **之后**（同 job，结果目录已就位、无 SKIP），并去掉 build-apk.mjs 的 --allow-missing。"
+    ],
+    "scripts/check-release-gates.mjs:191": [
+      "//     且下方断言会核验该接管方真的调用了它（否则就是「移出去就没人跑」= 静默降级防线）。"
+    ],
+    "scripts/check-release-gates.mjs:212": [
+      "const SOURCE_GATES = ["
+    ],
+    "scripts/check-release-gates.mjs:246": [
+      "}"
+    ],
+    "scripts/check-release-gates.mjs:28": [
+      "* 本迭代要求的门禁集合（唯一声明处）。"
+    ],
+    "scripts/check-runtime-assets.mjs:126": [
+      "const dir = snapshotExtractDir()"
+    ],
+    "scripts/check-runtime-assets.mjs:96": [
+      "// 而它是 `tar -xO -f <160MB tar> <单个成员>`。**xz 不可随机寻址——取一个成员 = 全量解码一遍。**"
+    ],
+    "scripts/check-snapshot-builder-output.mjs:156": [
+      "const writesTar = text.includes(\"join(OUT_DIR, 'snapshot.tar.xz')\")"
+    ],
+    "scripts/check-tool-output-schema.mjs:153": [
+      "if (!prop || typeof prop !== 'object') return undefined"
+    ],
+    "scripts/check-tool-output-schema.mjs:7": [
+      "//   1) lib/ 时效检查：任一 src/*.ts 比 lib/*.js 新只是**触发**，真伪由重建哈希裁决"
+    ],
+    "scripts/deploy-device.ps1:31": [
+      "& (Join-Path $PSScriptRoot \"..\\web-restart.ps1\") -Serial $Serial 2>&1"
+    ],
+    "scripts/device-smoke.ps1:14": [
+      "$t1 = & $adb -s $Serial shell \"run-as com.termux sh /data/data/com.termux/files/home/run-t1.sh\" 2>&1 | Out-String"
+    ],
+    "scripts/device-smoke.ps1:9": [
+      "& (Join-Path $here \"t0-check.ps1\") -Serial $Serial"
+    ],
+    "scripts/inject-all.py:321": [
+      "for pkg in sorted(dsh_names - seen_dsh.get(prof, set())):"
+    ],
+    "scripts/lib/shell.mjs:31": [
+      "export const resolveTar = () => {"
+    ],
+    "scripts/make-snapshot.sh:8": [
+      "SNAP_PKG_ROOT=\"${DSH_SNAPSHOT_PKG_ROOT:-/data/user/0/com.dsharnessmobile.shell}\""
+    ],
+    "scripts/patches/apply-patches.mjs:122": [
+      "}"
+    ],
+    "scripts/patches/apply-patches.mjs:1568": [
+      "check: (s) => s.includes('dsh-mobile exclusive publish (F7)')"
+    ],
+    "scripts/patches/apply-patches.mjs:1583": [
+      "if (legacyStart < 0 || legacyEndMark < 0) {"
+    ],
+    "scripts/patches/apply-patches.mjs:865": [
+      ""
+    ],
+    "scripts/patches/data/client-index-loader-barrier.mjs:3": [
+      "export function planClientIndexLoaderBarrier(source) {"
+    ],
+    "scripts/patches/data/registry-scan-c4.mjs:11": [
+      "export function planClientRegistryScan(source) {"
+    ],
+    "scripts/patches/data/undo-safe-transaction-snippet.mjs:1": [
+      "// dsh-mobile safe mode transaction (S2) with CAS recovery failover, web-store resolver and factory-bundle filter (S5)."
+    ],
+    "scripts/patches/registry.json:211": [
+      "],"
+    ],
+    "scripts/plugin-dirs.json:1": [
+      "{"
+    ],
+    "scripts/profile-web.cordis.patch.yml:128": [
+      "- id: picker-native-surface"
+    ],
+    "scripts/profile-web.cordis.patch.yml:7": [
+      "disabled: true"
+    ],
+    "scripts/profile-web.cordis.patch.yml:81": [
+      "name: '@dsh-android/dsh-android-linux-env'"
+    ],
+    "scripts/source-build/check-dsh-source-snapshot.mjs:25": [
+      "import { collectPhysicalFiles, matchesPatchTarget, enginePatchTargets, verifyCanonicalEnginePatch } from './reconcile-engine-patch-copies.mjs'"
+    ],
+    "scripts/source-build/reconcile-engine-patch-copies.mjs:58": [
+      ""
+    ],
+    "scripts/t0-check.ps1:14": [
+      "if ($dump -match \"shell-termux[sS]{0,200}?disabled:s*true\") { Write-Output \"WARN: shell-termux appears disabled\"; $fail++ }"
+    ],
+    "scripts/verify-browser-host.mjs:55": [
+      "}"
+    ],
+    "scripts/verify-browser-host.mjs:98": [
+      "if (denied.ok !== false || denied.reason !== 'unsupported-url') {"
+    ],
+    "scripts/verify-browser-panel.mjs:123": [
+      "const sessA = await bridge('browserHostShow', { url: 'https://example.com/', session: 'session-A', newTab: true })"
+    ],
+    "scripts/verify-browser-panel.mjs:66": [
+      "const shellTabs = await status()"
+    ],
+    "scripts/verify-client-plugin-fail-recovery.mjs:1": [
+      "#!/usr/bin/env node"
+    ],
+    "scripts/verify-client-plugin-fail-recovery.mjs:11": [
+      "// 判据八条（每条独立记录 PASS/FAIL/INCONCLUSIVE；缺证据一律 INCONCLUSIVE，exit 2，绝不判绿）："
+    ],
+    "scripts/verify-state-sync.mjs:107": [
+      "export function prefsUpsertCommand(key, on, prefsName = 'dsh_settings') {"
+    ],
+    "scripts/verify-state-sync.mjs:244": [
+      "}"
+    ],
+    "scripts/verify-state-sync.mjs:247": [
+      "console.log('')"
+    ],
+    "scripts/verify-vdisplay-float.mjs:4": [
+      "// verify-vdisplay-viewer 已覆盖：自动露出（两相）/ 关闭不销毁 / 重开重挂 / 实时选择器 / 多查看器仲裁 / 销毁。"
+    ],
+    "scripts/verify-vdisplay-float.mjs:95": [
+      "// 非法档位：壳侧应拒绝（返回 false/ok:false）或保持原值不采纳。"
+    ],
+    "scripts/verify-vdisplay-viewer.mjs:161": [
+      "const hidden = await bridge(`window.androidBridge.vdisplayBounds(JSON.stringify({ left: ${stageRect.left}, top: ${stageRect.top}, width: ${stageRect.width}, height: ${stageRect.height}, viewportWidth: ${stageRect.vw}, viewportHeight: ${stageRect.vh}, visible: false, viewerId: 'files-sidebar', target: '${virtual}' }))`)"
+    ],
+    "scripts/verify-vdisplay-viewer.mjs:165": [
+      "const dump = adb(['shell', 'dumpsys', 'display'])"
+    ],
+    "scripts/verify-vdisplay-viewer.mjs:2": [
+      "// verify-vdisplay-viewer.mjs — 虚拟屏查看器回归（0.14.0 批：自动露出 / 关闭不销毁 / 重开重挂 / 实时选择器 / 多查看器仲裁）。"
+    ],
+    "scripts/verify-webview-015.mjs:11": [
+      "// 旧写法用它硬编码期望「不是手机形态」，而「16384 横屏」实测跑在 freeform 浮窗里只有"
+    ],
+    "scripts/verify-webview-015.mjs:43": [
+      ""
+    ],
+    "scripts/verify-webview-015.mjs:6": [
+      "//"
+    ],
+    "session-log-dialog-observer.ts:56": [
+      "target.classList.add(SESSION_LOG_DIALOG_HIDE_CLASS)"
+    ],
+    "session-log-dialog.css.ts:40": [
+      "[role=\"presentation\"].${SESSION_LOG_DIALOG_HIDE_CLASS},"
+    ],
+    "session-marker.ts:67": [
+      "else root.setAttribute(SESSION_ID_ATTRIBUTE, String(current))"
+    ],
+    "settings-document.ts:34": [
+      "} catch {"
+    ],
+    "settings-document.ts:65": [
+      ""
+    ],
+    "settings-document.ts:78": [
+      "// 打开的是**副本**，改它不会生效。文件名取自实际路径，不写死——活动文档可能是"
+    ],
+    "shell-ops.ts:17": [
+      "export const SHELL_OPS = ['shExec', 'shPull', 'shPush', 'shRemove'] as const"
+    ],
+    "snapshot-panels-observer.ts:47": [
+      "function snapshotOwners(overlay: HTMLElement): SnapshotOwners | null {"
+    ],
+    "snapshot-panels.css.ts:15": [
+      "z-index: 16;"
+    ],
+    "status.ts:135": [
+      "/**"
+    ],
+    "status.ts:14": [
+      "export const VD_OPS = ['vdCreate', 'vdDestroy', 'vdLaunch', 'vdMoveTask', 'vdInfo', 'vdLaunchApp', 'vdInput'] as const"
+    ],
+    "status.ts:141": [
+      "* 由**已取到的**状态载荷映射为工具快照（纯函数）。"
+    ],
+    "theme-bridge.ts:68": [
+      "globalObj.__dshThemeBridge = {"
+    ],
+    "theme-bridge.ts:81": [
+      "if (android.getSystemDark()) globalObj.__dshThemeBridge.setDark(true)"
+    ],
+    "tools.ts:1075": [
+      "bytes: typeof result.data.bytes === 'number' ? result.data.bytes : 0,"
+    ],
+    "tools.ts:119": [
+      "function loadStateOf(v: Record<string, unknown>): string {"
+    ],
+    "tools.ts:136": [
+      "function renderLoadState(v: Record<string, unknown>): string {"
+    ],
+    "tools.ts:193": [
+      "const sessionScope = new AsyncLocalStorage<string>()"
+    ],
+    "tools.ts:225": [
+      "render: (args: unknown, v: Record<string, unknown>) => {"
+    ],
+    "tools.ts:245": [
+      "execute: (args: unknown, exec: unknown) => {"
+    ],
+    "tools.ts:254": [
+      "const call = async (op: string, args: Payload, timeoutMs = 15_000): Promise<CallResult> => {"
+    ],
+    "tools.ts:26": [
+      "interface SnapshotMemory {"
+    ],
+    "tools.ts:262": [
+      "const reply = await control.controlExec(op, payload, timeoutMs)"
+    ],
+    "tools.ts:281": [
+      "// 浏览器面**不做任何授权校验**（0.14.0 实锤缺陷修复）。"
+    ],
+    "tools.ts:33": [
+      "const lastSnapshots = new Map<string, SnapshotMemory>()"
+    ],
+    "tools.ts:505": [
+      "reason: { type: 'string' },"
+    ],
+    "tools.ts:73": [
+      "/**"
+    ],
+    "trajectory-details.css.ts:16": [
+      "html[data-dsh-mobile-form] aside[aria-label=\"Event details\"] {"
+    ],
+    "trajectory-details.css.ts:44": [
+      "html[data-dsh-mobile-form] [class*=\"ledger\"].dsh-mobile-ledger-raised {"
+    ],
+    "trajectory-panels-observer.ts:43": [
+      "this.ledger.classList.toggle('dsh-mobile-ledger-raised', panel !== null)"
+    ],
+    "use-shell-state.ts:26": [
+      "export function useShellState<T>(getter: () => T, options: ShellStateOptions = {}): readonly [T, () => void] {"
+    ],
+    "vendor/dsh-undo-savepoint/lib/core.mjs:1180": [
+      "return { cfg: { ...cfg, autoDir, manualDir: join(dirname(autoDir), 'manual') } };"
+    ],
+    "verify-browser-host.mjs:4": [
+      "const argv = process.argv.slice(2)"
+    ],
+    "verify-browser-host.mjs:58": [
+      "const parsed = new URL(wsUrl)"
+    ],
+    "verify-browser-host.mjs:70": [
+      "async function resolveTarget(url, timeoutMs = 15_000) {"
+    ],
+    "verify-browser-panel.mjs:12": [
+      "const mainWs = argv.find((x) => x.startsWith('ws://'))"
+    ],
+    "verify-engine-log-copy.mjs:28": [
+      "const DIR = '/data/data/' + PKG + '/files'"
+    ],
+    "verify-engine-log-copy.mjs:30": [
+      "const adb = (args) => spawnSync('adb', ['-s', SERIAL, 'shell', 'run-as', PKG, ...args], { encoding: 'utf8' })"
+    ],
+    "verify-state-sync.mjs:106": [
+      "*/"
+    ],
+    "verify-state-sync.mjs:107": [
+      "export function prefsUpsertCommand(key, on, prefsName = 'dsh_settings') {"
+    ],
+    "verify-state-sync.mjs:161": [
+      "},"
+    ],
+    "verify-state-sync.mjs:246": [
+      "const ok = failed.length === 1 && failed[0].id.includes('ST-02') && failed[0].on === true"
+    ],
+    "verify-state-sync.mjs:248": [
+      "console.log('SELF-TEST ' + (ok ? 'PASSED' : 'FAILED')"
+    ],
+    "verify-state-sync.mjs:27": [
+      "* 静默改指到 B。并行跑两台设备时，A 的后续 CDP 解析会连到 B 且**不报错**（拿到一个合法 ws）。"
+    ],
+    "verify-vdisplay-viewer.mjs:106": [
+      "(await evaluate(wsUrl, 'document.querySelector(\\'[data-sidebar-right-expand]\\') !== null')) === true"
+    ],
+    "verify-vdisplay-viewer.mjs:81": [
+      "const base = await bridge('window.androidBridge.vdisplayStatus()')"
+    ],
+    "verify-webview-015.mjs:11": [
+      "// 旧写法用它硬编码期望「不是手机形态」，而「16384 横屏」实测跑在 freeform 浮窗里只有"
+    ],
+    "verify-webview-015.mjs:3": [
+      "// 取 ws 地址：adb forward tcp:29225 localabstract:webview_devtools_remote_<app-pid>"
+    ],
+    "verify-webview-015.mjs:6": [
+      "//"
+    ],
+    "verify-webview-015.mjs:60": [
+      "/**"
+    ],
+    "verify-webview-015.mjs:97": [
+      ""
+    ]
+  }
+}

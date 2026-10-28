@@ -164,11 +164,11 @@ const GATES = [
   // **之后**（同 job，结果目录已就位、无 SKIP），并去掉 build-apk.mjs 的 --allow-missing。
   // 发布链不再 --run 它（51.1s）：发布产物不含测试结果，判据在 CI 才是真检。
   { script: 'check-kotlin-test-count.mjs', ciApk: false, ciCoord: false, needsSnapshot: false, releaseSink: false, sink: 'apk-ci' },
-  // 执行地图覆盖与锚点（0.14.2 D7）：输入全在 apk 仓（app/src、plugins、EXECUTION-MAP.md），
-  // 故归属 apk 侧 CI + 两条链。**此前它只存在于 apk 仓 scripts/ 且只被 apk CI 调用**：
-  // 本地链与发布链的声明集里零命中 —— 即「改代码跑了 check-code-map 才算数」这条约定
-  // 在两条真正出包/发版的路径上都没有执行者，全靠人记得手跑。
-  // needsSnapshot=false：它读的是工作树与文档，不需要快照。
+  // Execution-map coverage and anchor checks (0.14.2 D7). Its inputs are APK source and docs,
+  // so this gate belongs to APK CI and both APK build chains, not coordination CI. The shared
+  // script remains in MIRROR_TOP so coordinated builds use the same source-line expectations.
+  // It also runs before packaging; needsSnapshot=false because it reads the tree and docs only.
+  // The APK workflow invokes this gate after Kotlin compilation and before package checks.
   { script: 'check-code-map.mjs', ciApk: true, ciCoord: false, needsSnapshot: false },
   // MCP client 运行期依赖闭包（0.14.2-fx-2 H-1）：真实用户诊断包 engine.log:138 六世代全崩在
   // `Cannot find package '@modelcontextprotocol/client'`——它**不在我们装配的行面上**（用户自己挂的
