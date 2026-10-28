@@ -333,6 +333,26 @@ function increasedLegacyReferences(anchors, baselineCounts) {
     .filter(([key, count]) => count > (baselineCounts[key] ?? 0))
 }
 
+/**
+ * 给迁移脚本（migrate-anchors.mjs）复用的推导入口。
+ *
+ * 刻意**导出而不是让迁移脚本自己再写一份**：两份实现必然分叉
+ * （实测过：自己复制的版本给出 1006/614，门禁本体给出 1349/251，同一批锚点两个答案）。
+ * 推导口径只能有一处。
+ *
+ * @param {string[]} lines 目标源码的行数组
+ * @param {number} line 1-based 行号
+ */
+export function deriveAnchorFor(lines, line) {
+  const idx = Math.min(Math.max(line - 1, 0), lines.length - 1)
+  const text = lines[idx]
+  if (text === undefined) return { ok: false, reason: '行号越界' }
+  return deriveSymbolAnchor(lines, line, contentHashOf(text))
+}
+
+/** 导出同一份文件定位逻辑（裸名唯一才返回），迁移脚本复用，避免第三份实现。 */
+export { makeFsView as makeFsViewForMigration }
+
 /** 按 `## <序号>. <标题前缀>` 切出章节正文（可见表格按章节解析，注释块作为兼容来源）。 */
 export function sectionOf(text, titlePrefix) {
   const lines = text.split('\n')
