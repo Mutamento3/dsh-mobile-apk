@@ -784,6 +784,19 @@ export function checkDoc(text, universe, fsView, anchorBaseline = ANCHOR_BASELIN
   for (const a of doc.anchors) {
     if (a.symbolForm) {
       seen.add(a.path + '#' + a.symbol)
+      // 硬规则：`#Symbol` 不带 `@hash` 的「整符号锚点」一律判错。
+      //
+      // 理由（2026-10-29 所有者裁定）：整符号锚点把判据绑在整个符号体的 hash 上。
+      // `#ShellOps` 是 5000 行 object，改其中任何一行都会让这条锚点红——
+      // 等于把「行号耦合」换成了「整文件耦合」，常态红不但没消，范围更大。
+      // 唯一正解是「符号范围 + 行内容唯一匹配」（path#Symbol@hash），
+      // 或者在不需要门禁约束时降级成普通 Markdown 链接（path#L<行号>）。
+      if (a.symbolHash === undefined) {
+        push('anchor-too-coarse', 'Symbol anchor without @hash is too coarse: ' + a.path + '#' + a.symbol
+          + '（整符号锚点 = 整个符号体的 hash，改符号内任何一行都会红；'
+          + '改成 path#Symbol@<行内容哈希>，或降级为 Markdown 链接 path#L<行号>）')
+        continue
+      }
       checkSymbolReference(a.path, a.symbol, a.symbolHash, a.line, 'anchor')
       continue
     }
@@ -996,13 +1009,16 @@ function selfTest() {
   // 行号变化、上方插代码、加空行、纯缩进变化 —— 一律绿。这是本方案存在的理由。
   const symSrc = ['header', 'fun alpha() {', '  return 1', '}', '', 'fun beta() {', '  return 2', '}']
   const curSym = (lines, s2) => { const h = symbolAt(lines, s2); return h.found ? h.body : null }
+  // 整符号锚点已被判错（anchor-too-coarse），自测也必须用 path#Symbol@hash 形式。
+  const HASH_RETURN1 = contentHashOf('  return 1')
   const sBase = {
     sourceLines: { 'app/a.kt:4': ['fun helper()'] },
     legacyReferenceCounts: { 'app/a.kt:4': 1 },
     symbols: { 'app/c.kt#alpha': curSym(symSrc, 'alpha') },
+    symbolHashes: { ['app/c.kt#alpha@' + HASH_RETURN1]: true },
   }
   const symDoc = '<!-- TABLE-ROW\n| K01 | 甲 | 一句话 | 入口 | 稳态控制 | - | - | app/a.kt | 低 |\n-->\n'
-    + '### K01 甲\n\n- **一句话**：x\n- 关键坐标：`app/c.kt#alpha`\n\n'
+    + '### K01 甲\n\n- **一句话**：x\n- 关键坐标：`app/c.kt#alpha@' + HASH_RETURN1 + '`\n\n'
     + '<!-- COUPLING\nK01 -> K01 | 自环 | app/a.kt:4\n-->\n'
     + head + 'app/a.kt\napp/b.kt\napp/c.kt\n-->\n'
   const symFs = (src) => mk({
@@ -1017,6 +1033,9 @@ function selfTest() {
     ['SYM 符号改名判红', symDoc, symFs(['header', 'fun renamed() {', '  return 1', '}', '', 'fun beta() {', '  return 2', '}']), 1, sBase],
     ['SYM 函数体改了判红', symDoc, symFs(['header', 'fun alpha() {', '  return 99', '}', '', 'fun beta() {', '  return 2', '}']), 1, sBase],
     ['SYM 未登记基线判红', symDoc, symFs(symSrc), 1, { sourceLines: { 'app/a.kt:4': ['fun helper()'] }, legacyReferenceCounts: { 'app/a.kt:4': 1 }, symbols: {} }],
+    // 反证：整符号锚点（不带 @hash）必须判红。文案是所有者裁定的原话——
+    // `#ShellOps` 那种 5000 行 object 的整符号锚点，改任何一行都会红。
+    ['SYM 整符号锚点（无 @hash）判红', symDoc.replace('app/c.kt#alpha@' + contentHashOf('  return 1'), 'app/c.kt#alpha'), symFs(symSrc), 1, sBase],
   )
 
   let pass = 0

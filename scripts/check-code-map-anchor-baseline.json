@@ -4459,6 +4459,16 @@
     "BrowserHost.kt#applyVisibility@51f2b2f2": true,
     "BrowserHost.kt#controlOp@f1d35281": true,
     "BrowserHost.kt#MAX_TABS@930c9bd7": true,
-    "BrowserHost.kt#showPayload@bfaa29a3": true
+    "BrowserHost.kt#showPayload@bfaa29a3": true,
+    "plugins/dsh-android-bridge/src/screen-scope.ts#REAL_SCREEN_CONTROL_OPS@17afbf6c": true,
+    "plugins/dsh-android-bridge/src/screen-scope.ts#EVAL_PAYLOAD@3fdcb4fe": true,
+    "ShellOps.kt#INTERPRETER_WRAPPERS@b1af25f7": true,
+    "scripts/check-code-map.mjs#tableRows@5b711136": true,
+    "scripts/check-code-map.mjs#parseDoc@e2e7da2f": true,
+    "plugins/dsh-android-bridge/src/index.ts#shellControlToken@2ee24d23": true,
+    "ShellOps.kt#INPUT_COMMAND@6b740b06": true,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt#Workspace@2d8e2fc0": true,
+    "app/src/main/java/com/dsharnessmobile/shell/BrowserHost.kt#TAB_ID@295e9cbd": true,
+    "scripts/check-code-map.mjs#UNIVERSE@60d8a536": true
   }
 }
