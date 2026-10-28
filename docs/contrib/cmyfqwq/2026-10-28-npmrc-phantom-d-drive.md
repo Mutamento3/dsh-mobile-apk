@@ -64,3 +64,35 @@ npm 把 `cache` 当路径处理；在非 Windows 主机上 `D:/coding/...` 不�
 - 忽略规则生效：手工 `mkdir -p 'dsh-client-ui-responsive/D:/coding/x'` 后 `git status --porcelain`
   看不到它。
 - 未做设备验证：改动是仓库配置与忽略规则（L0/L1），不涉及 APK 行为。
+
+## 存量清理（同日另一 PR）
+
+上面删掉的是**生成源**，但此前已经提交进仓库的缓存还躺在 `main` 里：
+
+```
+$ git ls-tree -r -l origin/main | grep npm-cache | awk '{n++; s+=$4} END {printf "blobs=%d total=%.2f MB\n", n, s/1048576}'
+blobs=1273 total=244.71 MB
+```
+
+位置是 `dsh-client-ui-responsive/` 下的幻影目录。注意它的名字**不是** `D:/`：落库时那个冒号被写成了
+私用区字符 **U+F03A**（字节 `EF 80 BA`，`git ls-files` 会打印成 `D\357\200\272`），
+所以 `.gitignore` 里既有的 `D:/` 一条对它**不生效**——实测：
+
+```
+$ git check-ignore -v "dsh-client-ui-responsive/D<U+F03A>/coding/dsh-mobile/.npm-cache/_logs/x.log"
+(无输出)
+```
+
+清法：
+
+- `git rm -r` 掉整个幻影目录（1273 个文件，12016 行）；
+- `.gitignore` 补 `**/.npm-cache/` 兜住**任何位置**的 npm 缓存，不再依赖父目录名；
+- 只动 HEAD，不改写历史（改写会波及所有 fork 与 open PR，代价远大于收益；代价是仓库 clone 体积不会立刻变小）。
+
+复验：
+
+```
+$ git ls-files | grep -c '\.npm-cache/'          # 0
+$ git check-ignore -v "dsh-client-ui-responsive/D<U+F03A>/coding/dsh-mobile/.npm-cache/_logs/x.log"
+.gitignore:57:**/.npm-cache/	"dsh-client-ui-responsive/D\357\200\272/..."
+```
