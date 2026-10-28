@@ -220,8 +220,22 @@ function parenEnd(text: string, from: number): number {
   return -1
 }
 
-/** `sh -c '<内层>'` 形式的嵌套执行体（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。 */
-const SHELL_C_PAYLOAD = /(?:^|[ \t])(?:[^\s]*\/)?(?:sh|bash|mksh|ash|dash|zsh|busybox|toybox|su)[ \t]+(?:-[^\s]+[ \t]+)*-c[ \t]+([\s\S]*)$/
+/**
+ * `sh -c '<内层>'` 形式的嵌套执行体（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。
+ *
+ * 末段必须是「短选项**簇**且簇尾是 `c`」（`-[a-zA-Z]*c`），不能只认光杆 `-c`：
+ * `sh -lc '…'` / `sh -ec '…'` / `sh -xc '…'` / `su -lc '…'` 的 `c` 都在一个组合簇里，
+ * 光杆 `-c` 匹配不到 ⇒ 载荷不展开 ⇒ 该段无命令词 ⇒ 放行。小米 14 Pro（SDK 37，mksh）实测
+ * 四种簇形态**都会真的执行**引号里的脚本（`bash` 在设备上不存在，但 Linux 侧同样成立）；
+ * `-l -c` 分离写法旧实现本来就能认。
+ *
+ * 前置组还要能跳过**带独立参数的短选项**（`-o` / `+o` 各吃一个词）：
+ * `sh -o errexit -c '…'` 里 `errexit` 既不是 `-` 开头也不在选项簇里，旧前置组会卡在它上面
+ * ⇒ 整条不匹配 ⇒ 载荷不展开 ⇒ 放行。小米 14 Pro（mksh）实测 `sh -o errexit -c 'echo X'` 与
+ * `sh +o errexit -c 'echo X'` **都会真的执行**。`[+-]o` 必须排在 `-[^\s]+` **前面**，否则
+ * `-o` 会被整词分支先吃掉、剩下 `errexit` 无处可去。
+ */
+const SHELL_C_PAYLOAD = /(?:^|[ \t])(?:[^\s]*\/)?(?:sh|bash|mksh|ash|dash|zsh|busybox|toybox|su)[ \t]+(?:[+-]o[ \t]+\S+[ \t]+|-[^\s]+[ \t]+)*-[a-zA-Z]*c[ \t]+([\s\S]*)$/
 
 /**
  * `eval <payload>`：载荷会被 shell **再解释一遍**（等价于把那段文本当命令粘回来执行）。
