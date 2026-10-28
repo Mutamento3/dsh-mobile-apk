@@ -173,7 +173,9 @@ class Issue309StartRecoveryTest {
   @Test
   fun `refusal branch invokes the recovery with the confirmed evidence`() {
     val flow = code("EngineStartFlow.kt")
-    val branch = between(flow, "if (!activity.engineManager.startEngine()) {", "activity.runOnUiThread {")
+    // issue #684：调用点从 `if (!startEngine())` 改成「先取 outcome、再只对 REFUSED 走失败分支」。
+    // 断言锚点随实现形态更新，判据本身（恢复入口 + 确诊项 + userForced 旁路 + 取证顺序）不变。
+    val branch = between(flow, "if (startOutcome == EngineStartOutcome.REFUSED) {", "activity.runOnUiThread {")
     assertTrue(
       "拒启分支必须调恢复入口",
       branch.contains("maybeRecoverFromIncompleteLiveRuntime("),

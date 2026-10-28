@@ -227,6 +227,94 @@
       "ownedTargets": ["7", "11529215046816944610"],
       "expect": "deny-unparsed",
       "why": "看不懂的命令不放行：解析失败必须是显式拒绝态，而不是「没命中命令词 ⇒ 放行」。"
-    }
+    },
+    {
+      "name": "S-4a 双引号内的 $() 命令替换必须被扫（issue #674）",
+      "command": "echo \"$(screencap -p /sdcard/real.png)\"",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "deny-uncertified-target",
+      "why": "双引号不阻止命令替换执行：旧实现把双引号内整段当纯文本放进 buf，内层 screencap 从未成为独立段 ⇒ fail-open（真实屏产物落盘）。递归扫描后内层 screencap 无 -d ⇒ 真实屏 ⇒ 拒。"
+    },
+    {
+      "name": "S-4b 双引号内的反引号命令替换必须被扫（issue #674）",
+      "command": "echo \"`screencap -p /sdcard/real.png`\"",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "deny-uncertified-target",
+      "why": "与 S-4a 同源：反引号在双引号内同样执行。裸反引号（S-2f）早已覆盖，双引号包一层就逃逸 ⇒ 递归扫描后同样命中命令词面。"
+    },
+    {
+      "name": "S-4c sh -c 双引号载荷里的命令替换（带尾随词）（issue #674）",
+      "command": "sh -c \"echo $(input tap 1 2)\" x",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "deny-uncertified-target",
+      "why": "两层嵌套同时成立：sh -c 载荷解一层、载荷内 $( ) 再解一层。任一层漏掉都会让无目标屏参数的 input 放行。"
+    },
+    {
+      "name": "对照 双引号内纯文本（无替换）不得误拦",
+      "command": "echo \"screencap -p /sdcard/x.png\"",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "allow",
+      "why": "双引号内没有 $() / 反引号 ⇒ 不产生独立执行体；引号内文本被 stripQuotedText 抹掉 ⇒ 不命中命令词面。递归扫描不得把纯文本当成命令（防过度拦截）。"
+    },
+    {
+      "name": "S-5a eval 双引号载荷必须被展开（issue #674 同类漏拦）",
+      "command": "eval \"screencap -p /sdcard/real.png\"",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "deny-uncertified-target",
+      "why": "eval 会把引号内文本再解释一遍（等价于把那段当命令粘回来执行）。只认 sh/su -c 时，引号内容会被引号抹除逻辑吃掉 ⇒ 命令词面看不到 screencap ⇒ 一路放行。2026-10-28 自查实测复现。"
+    },
+    {
+      "name": "S-5b eval 单引号载荷同样要展开",
+      "command": "eval 'input tap 1 2'",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "deny-uncertified-target",
+      "why": "eval 的载荷在解释前不做末次引号剥离以外的处理：单引号只是让**外层** shell 不展开，eval 拿到的是 input tap 1 2 本身。两侧实现都必须按原文再扫一层。"
+    },
+    {
+      "name": "S-5c 分号后的 eval 也要展开（不得靠首段判定）",
+      "command": "echo ok; eval \"screencap -p /sdcard/real.png\"",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "deny-uncertified-target",
+      "why": "分隔符后的 eval 与前缀命令同等危险：切段之后每段都要过「再解释一层」的展开，不能只判第一段。"
+    },
+    {
+      "name": "对照 eval 内无屏命令不得误拦",
+      "command": "eval \"echo hi\"",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "allow",
+      "why": "展开 eval 载荷后仍需按命令词面判定：echo 不碰真实屏 ⇒ 放行（防把「凡是 eval 就拦」写成规则）。"
+    },
+    {
+      "name": "S-6a shell 注释不计入命令词面",
+      "command": "echo hi # screencap -p /sdcard/x.png",
+      "ownedTargets": ["7", "11529215046816944610"],
+      "expect": "allow",
+      "why": "`#` 位于词首（行首或空白之后）时 shell 把到行尾的内容当注释、不执行。不剥注释会把注释文本当命令词面 ⇒ 误拦合法命令（过度拦截）。词中间的 # 与反斜杠转义的 # 不是注释，另有分支处理。"
+    },
+    {"name": "S-7a 命令词位置的引号必须做 quote removal（安全侧漏拦）", "command": "\"screencap\" -p /sdcard/real.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "shell 在查找命令前会剥掉命令词位置的引号：dash 实测 `\"screencap\" -p /sdcard/x` 真的执行 screencap。旧实现把引号段一律抹平 ⇒ 命令词也被抹掉 ⇒ 整条放行。判据只能是「段内第一个词内」的引号保留内容，参数位置的引号仍须抹掉（见下一条对照）。"},
+    {"name": "S-7b 单引号包住命令词同样要剥（dash 实测会执行）", "command": "'screencap' -p /sdcard/real.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "与 S-7a 同源：单引号只影响展开，不影响它在命令位置被当作词。"},
+    {"name": "S-7c ANSI-C 引号包住命令词（$'…'）", "command": "$'screencap' -p /sdcard/real.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "bash/dash 都接受 $'…' 并把它当普通词；实测 `$'screencap' -p …` 会执行。词首判据要把 `$` 与紧随的引号一起看作命令词。"},
+    {"name": "对照 参数位置的引号仍在抹掉（防误拦回归）", "command": "echo \"screencap\" -p /sdcard/x.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "命令词是 echo，引号段是它的参数 ⇒ 抹掉正确。与 S-7a/b/c 成对，防止把「词首保留」写成「凡引号都保留」。"},
+    {"name": "S-8a 注释只在词首成立：转义空格后的 # 不是注释", "command": "echo\\ #; screencap -p /sdcard/real.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "`echo\\ #` 里的空格是**转义的**、属词内容 ⇒ `#` 是 echo 的参数而不是注释，screencap 照跑（dash 实测 `echo\\ #; echo REACHED` 会执行 REACHED）。旧实现用「buf 末尾是空白」判词首 ⇒ 把整行当注释 ⇒ 放行。"},
+    {"name": "对照 真正的词首 # 仍是注释（不得退回误拦）", "command": "echo hi # screencap -p /sdcard/x.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "普通空格后的 # 才是注释（dash 实测注释后面的命令不执行）。与 S-8a 成对。"},
+    {"name": "S-9a 短选项粘连 -d7 是合法 display 值（误拦回归）", "command": "screencap -d7 -p /sdcard/a.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "`-d` 是 getopt 短选项，`-d7` 与 `-d 7` 等价（本机 getopt/atoi 实测 optarg=7 ⇒ display 7）。旧实现要求 `[ \\t=]+` 分隔符，认不出粘连形态 ⇒ 已注册的虚拟屏反而被拒。"},
+    {"name": "S-9b -d=7 不是合法 display 值（真实屏 0，漏拦）", "command": "screencap -d=7 -p /sdcard/real.png", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "AOSP 用 atoi(optarg)，`atoi(\"=7\") == 0` ⇒ 实际抓的是 display 0（真实屏）。旧实现把 `=7` 里的 7 当凭据放行；新实现既不认它是 7，也因 malformed 形态 fail-closed。"},
+    {"name": "S-9c input 的 source 位置词不得让命令消失", "command": "input touchscreen tap 500 800", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "正式语法 `input [<source>] [-d ID] <command>`：`touchscreen` 是 source 位置词。旧命令词面要求动词紧跟 input ⇒ 整类命令进不了判定面 ⇒ 放行真实屏。"},
+    {"name": "S-9d input press 同族", "command": "input press", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "`press` 是 input 的命令之一，与 tap/keyevent 同族。"},
+    {"name": "S-9e input 的尾随 -d 不算凭据", "command": "input tap 1 2 -d 7", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "Android 的 input 只在 command **之前**解析 `-d`；尾随 `-d 7` 是 tap 的多余 argv，实际仍操作默认 display 0。旧实现全段扫描 ⇒ 尾随 owned 值成了通行证。"},
+    {"name": "对照 input 的 command 前 -d 仍是合法凭据", "command": "input -d 7 tap 1 2", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "与 S-9e 成对：位置合法且值已注册 ⇒ 放行。"},
+    {"name": "S-9f cmd activity 是 am start 的等价拼写", "command": "cmd activity start-activity -n com.example/.Main", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "`cmd activity start-activity` 与 `am start` 走同一个 ActivityManagerShellCommand，无 `--display` 时默认 display 0。只认 `am` 会把这条等价拼写整类放行。"},
+    {"name": "对照 cmd activity 带 --display 已注册值放行", "command": "cmd activity start-activity --display 7 -n com.example/.Main", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "与 S-9f 成对：`--display` 才是它的目标屏参数。"},
+    {"name": "S-10a sh -c 载荷带尾随 argv 仍要展开", "command": "sh -c 'screencap -p /sdcard/real.png' sh", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "`-c` 只吃**第一个词**当脚本，后面的是 $0/$1。旧实现要求整段剩余首尾同一个引号 ⇒ `'…' sh` 不成对 ⇒ 整段不展开 ⇒ 放行（实测 dash 会执行）。"},
+    {"name": "S-10b eval 载荷带尾随 argv 同样要展开", "command": "eval 'screencap -p /sdcard/real.png' foo", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "与 S-10a 同源。"},
+    {"name": "S-10c trap 载荷会被执行", "command": "trap 'screencap -p /sdcard/real.png' EXIT; true", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-uncertified-target", "why": "`trap <cmd> <signals>` 的第一个参数是命令；旧实现根本没把 trap 当「载荷再解释」入口。"},
+    {"name": "对照 sh -c 无害载荷仍放行", "command": "sh -c 'echo hi' sh", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "与 S-10a 成对：展开后载荷不碰真实屏。"},
+    {"name": "对照 trap 无害载荷仍放行", "command": "trap 'echo hi' EXIT", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "与 S-10c 成对。"},
+    {"name": "S-11a 管道喂 sh -s：载荷不可见", "command": "echo 'screencap -p /sdcard/x.png' | sh -s", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-unparsed", "why": "`sh -s` 从 stdin 读脚本，静态看不到载荷。旧实现只认「整段恰好是解释器名」，`-s` 放行；引擎侧连裸 `sh` 都没挡（两层漂移）。"},
+    {"name": "S-11b 脚本文件不可见", "command": "sh /tmp/x.sh", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-unparsed", "why": "脚本内容在运行时才读；`sh <file>` 与 `sh -s` 同属载荷不可见。"},
+    {"name": "S-11c source 点命令同样不可见", "command": ". /tmp/x.sh", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-unparsed", "why": "`.`/`source` 把文件内容当命令执行，静态不可判。"},
+    {"name": "S-11d env 包装的解释器", "command": "env sh", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-unparsed", "why": "包装器不改变「载荷不可见」这一事实。"},
+    {"name": "S-11e timeout 包装的解释器", "command": "timeout 5 sh -s", "ownedTargets": ["7", "11529215046816944610"], "expect": "deny-unparsed", "why": "包装器 + 数字参数都要跳过才认得出命令词。"},
+    {"name": "对照 sh 只是 echo 的参数（不得误拦）", "command": "echo sh -s", "ownedTargets": ["7", "11529215046816944610"], "expect": "allow", "why": "命令词是 echo，`sh -s` 只是它的参数 ⇒ 不执行。与 S-11a 成对，防止把「出现解释器名」写成「凡出现就拒」。"}
   ]
 }

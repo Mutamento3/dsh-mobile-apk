@@ -412,14 +412,17 @@ class EngineService : Service() {
           // §6.2：重启窗口算活动——noteWakeActivity 内部即按新租约重取唤醒锁
           // （有事件立即重取，不等下一拍），冷启动期间的 CPU 不会被放掉。
           noteWakeActivity()
-          val requested = engineManager.startEngine(force = plan.force)
+          // issue #684：让行（刷新中）不算「已发起」——日志要如实区分，否则排障时
+          // 「accepted=true 但进程不在」无法归因。
+          val startOutcome = engineManager.startEngine(force = plan.force)
+          val requested = startOutcome == EngineStartOutcome.STARTED
           if (!isEpochCurrent(epoch)) return
           val delayMs = WatchdogV2.nextDelayMs()
           epoch.nextRestartAllowedAt = now + delayMs
           LogCollector.log(
             "dsh-watchdog",
             "restart requested after confirmed failure #" + WatchdogV2.effectiveFailureCount() +
-              " (accepted=" + requested + ", next eligible in " + delayMs + "ms)",
+              " (accepted=" + requested + ", outcome=" + startOutcome + ", next eligible in " + delayMs + "ms)",
           )
         }
       }

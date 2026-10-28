@@ -96,15 +96,38 @@ export interface DisplayOption {
   flag: string
   /** 原始十进制串（未数值化）。 */
   value: string
+  /** 该选项在文本里的起始下标（用于「只认命令词之前」的家族，见 `input`）。 */
+  index: number
 }
 
-/** 扫描命令里出现的全部目标屏参数（含三种拼写，值原样字符串）。 */
+/**
+ * 扫描命令里出现的全部目标屏参数（含三种拼写，值原样字符串）。
+ *
+ * 短选项 `-d` 与长选项的**取值语法不同**，不能共用一个正则：
+ *   - `-d` 是 getopt 短选项 ⇒ `-d7`（粘连）与 `-d 7`（空格）合法，**`-d=7` 不合法**。
+ *     AOSP 用 `atoi(optarg)`，`atoi("=7") == 0` ⇒ 实际读/操作的是 display **0**（真实屏）。
+ *     旧实现用 `[ \t=]+` 让 `-d=7` 吃到了 `7`，于是拿它当"已注册虚拟屏 7"的凭据放行
+ *     （2026-10-28 自查，安全侧漏拦）；同时 `-d7` 因为缺分隔符反而认不出来（误拦）。
+ *   - 长选项 `--display` / `--display-id` 才接受 `=`。
+ */
+/**
+ * 「形似 display 选项但取值不是纯数字」的形态（`-d=7`、`-dx`）。
+ *
+ * 为什么要单独判：`-d=7` 的真实值是 `=7`（`atoi` 后为 0），所以它**不能**被当成"已认证 7"；
+ * 但也**不能**被当成"没有 display 选项"就放行 —— 它在不同工具下可能落到默认屏 0（真实屏）。
+ * 两侧都必须 fail-closed：段里一旦出现这种形态，直接拒。
+ */
+const MALFORMED_DISPLAY_OPTION = /(?:^|[ \t])-d(?:[ \t]*=[ \t]*\S|(?![0-9\s])\S)/
+
 export function displayOptionsIn(text: string): DisplayOption[] {
   const out: DisplayOption[] = []
-  for (const m of text.matchAll(/(?:^|[ \t])(-d|--display|--display-id)[ \t=]+(\d+)/g)) {
-    out.push({ flag: m[1], value: m[2] })
+  for (const m of text.matchAll(/(?:^|[ \t])-d[ \t]*(\d+)/g)) {
+    out.push({ flag: '-d', value: m[1], index: m.index ?? 0 })
   }
-  return out
+  for (const m of text.matchAll(/(?:^|[ \t])(--display|--display-id)[ \t=]+(\d+)/g)) {
+    out.push({ flag: m[1], value: m[2], index: m.index ?? 0 })
+  }
+  return out.sort((a, b) => a.index - b.index)
 }
 
 /**
@@ -200,6 +223,80 @@ function parenEnd(text: string, from: number): number {
 /** `sh -c '<内层>'` 形式的嵌套执行体（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。 */
 const SHELL_C_PAYLOAD = /(?:^|[ \t])(?:[^\s]*\/)?(?:sh|bash|mksh|ash|dash|zsh|busybox|toybox|su)[ \t]+(?:-[^\s]+[ \t]+)*-c[ \t]+([\s\S]*)$/
 
+/**
+ * `eval <payload>`：载荷会被 shell **再解释一遍**（等价于把那段文本当命令粘回来执行）。
+ *
+ * 为什么必须单独列：`eval "screencap -p /sdcard/real.png"` 的引号内容会被 `stripQuotedText`
+ * 抹掉，命令词面里看不到 `screencap` ⇒ 只靠 `sh -c` 那条正则时它**一路放行**（2026-10-28 自查实测）。
+ * 与 `sh -c` 同型处理：拿**原文**载荷、解一层引号、递归扫。前面的分界符覆盖 `;` / `&&` / `||` / 管道。
+ */
+const EVAL_PAYLOAD = /(?:^|[ \t;&|(])eval[ \t]+([\s\S]*)$/
+
+/**
+ * `trap <payload> <signals…>`：第一个参数是**要执行的命令**，退出/收到信号时 shell 会照跑。
+ * 与 `eval` / `sh -c` 并列进"载荷再解释"入口（2026-10-28 自查：`trap 'screencap …' EXIT` 实测可执行且被放行）。
+ */
+const TRAP_PAYLOAD = /(?:^|[ \t;&|(])trap[ \t]+([\s\S]*)$/
+
+/**
+ * 取 shell 文本的**第一个词**（quote-aware，去掉包裹它的引号）。
+ *
+ * 为什么载荷不能再用 `unwrapOneQuote(整个剩余)`：`sh -c 'screencap …' sh` 的剩余串是
+ * `'screencap …' sh`，首尾不同一个引号 ⇒ 旧实现判定"不成对"、整段不展开 ⇒ 载荷里的真实屏命令
+ * 一路放行（2026-10-28 自查，安全侧漏拦）。shell 只把 `-c` 的**第一个词**当脚本，尾随的是 $0/$1。
+ * `trap` 同理（第一个参数是要执行的命令，后面是信号名）。
+ */
+function firstShellWord(text: string): { word: string; rest: string } {
+  let i = 0
+  while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i += 1
+  if (i >= text.length) return { word: '', rest: '' }
+  const quote = text[i]
+  if (quote === '\'' || quote === '"') {
+    let j = i + 1
+    while (j < text.length) {
+      if (quote === '"' && text[j] === '\\') { j += 2; continue }
+      if (text[j] === quote) return { word: text.slice(i + 1, j), rest: text.slice(j + 1) }
+      j += 1
+    }
+    return { word: text.slice(i + 1), rest: '' } // 未闭合：按剩余全部当载荷（fail-closed 方向）
+  }
+  let j = i
+  while (j < text.length && !/[ \t;&|]/.test(text[j])) j += 1
+  return { word: text.slice(i, j), rest: text.slice(j) }
+}
+
+const INTERPRETER_NAMES = new Set(['sh', 'bash', 'mksh', 'ash', 'dash', 'zsh'])
+const INTERPRETER_WRAPPERS = new Set(['env', 'timeout', 'nohup', 'xargs', 'busybox', 'toybox', 'su', 'command', 'exec'])
+
+/**
+ * 该段的命令词是不是「载荷对判定器不可见」的解释器调用（#509 的放宽版）。
+ *
+ * 只有 `sh -c '<可见载荷>'` 能被展开后判定；其余形态的载荷都来自**运行时**，静态看不到：
+ *   - `sh -s` / `sh -e` / 无参 `sh`（读 stdin）；
+ *   - `sh /tmp/x.sh`、`. /tmp/x.sh`、`source x`（读脚本文件）；
+ *   - 经 `env` / `timeout` / `xargs` / `busybox` 包装的同族形态。
+ * 这些一律 deny-unparsed（fail-closed）。旧实现只有「整段恰好等于解释器名」这一条最窄规则，
+ * 且**只在壳侧**——引擎侧连 `| sh` 都放行（两层漂移，fixture 也没锁住）。
+ */
+export function interpreterPayloadUnparsed(segment: string): boolean {
+  let text = segment.trim()
+  for (let guard = 0; guard < 8; guard += 1) {
+    const { word, rest } = firstShellWord(text)
+    if (word.length === 0) return false
+    const base = word.replace(/^.*\//, '')
+    // 变量赋值前缀、包装器、包装器自己的选项/数字参数都不改变"命令词"。
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) { text = rest.trim(); continue }
+    if (INTERPRETER_WRAPPERS.has(base) || word.startsWith('-') || /^\d+$/.test(word)) {
+      text = rest.trim()
+      continue
+    }
+    if (base === '.' || base === 'source') return true
+    if (INTERPRETER_NAMES.has(base)) return !/(?:^|[ \t])-[^\s]*c[^\s]*(?:[ \t]|$)/.test(rest)
+    return false
+  }
+  return false
+}
+
 /** 去掉一层首尾成对的引号（`sh -c "…"` 的载荷取值）。不成对则原样返回。 */
 function unwrapOneQuote(text: string): string {
   const trimmed = text.trim()
@@ -224,11 +321,13 @@ export function splitCommandSegments(command: string): CommandSegments {
   const scan = (text: string, depth: number): void => {
     if (depth > MAX_NESTING) { unparsed = true; return }
     let buf = ''
-    const flush = (): void => { segments.push(buf); buf = '' }
+    // 词首状态（注释判定用，见下方 `#` 分支）。分隔符/空白把它置位，其它字符（含转义对）清除。
+    let atWordStart = true
+    const flush = (): void => { segments.push(buf); buf = ''; atWordStart = true }
     let i = 0
     while (i < text.length) {
       const ch = text[i]
-      if (ch === '\\') { buf += text.slice(i, i + 2); i += 2; continue }
+      if (ch === '\\') { buf += text.slice(i, i + 2); i += 2; atWordStart = false; continue }
       if (ch === "'") {
         const end = text.indexOf("'", i + 1)
         if (end < 0) { unparsed = true; buf += text.slice(i); i = text.length; continue }
@@ -237,8 +336,25 @@ export function splitCommandSegments(command: string): CommandSegments {
       if (ch === '"') {
         let j = i + 1
         while (j < text.length) {
-          if (text[j] === '\\') { j += 2; continue }
-          if (text[j] === '"') break
+          const inner = text[j]
+          if (inner === '\\') { j += 2; continue }
+          if (inner === '"') break
+          // 双引号内的 `$(...)` 与反引号**会执行**（单引号才不执行）：必须按原文递归扫，
+          // 否则 `echo "$(screencap -p /sdcard/real.png)"` 会把真实屏命令当纯文本放行（issue #674）。
+          if (inner === '`') {
+            const end = backtickEnd(text, j + 1)
+            if (end < 0) { unparsed = true; j = text.length; break }
+            scan(text.slice(j + 1, end), depth + 1)
+            j = end + 1
+            continue
+          }
+          if (inner === '$' && text[j + 1] === '(') {
+            const end = parenEnd(text, j + 2)
+            if (end < 0) { unparsed = true; j = text.length; break }
+            scan(text.slice(j + 2, end), depth + 1)
+            j = end + 1
+            continue
+          }
           j += 1
         }
         if (j >= text.length) { unparsed = true; buf += text.slice(i); i = text.length; continue }
@@ -256,6 +372,15 @@ export function splitCommandSegments(command: string): CommandSegments {
         scan(text.slice(i + 2, end), depth + 1)
         buf += ' '; i = end + 1; continue
       }
+      // shell 注释：`#` 只有在**词首**才开注释。词首＝未转义、未引用的 ASCII 空白 / `;` / `&` / `|`
+      // 之后（由 atWordStart 显式跟踪）——不能用「buf 末尾是 \s」判定：`echo\ #; screencap …` 里
+      // 那个空格是**转义的**（属于词内容），`#` 因此是 echo 的参数而不是注释，screencap 照跑
+      // （dash 实测：`echo\ #; echo REACHED` 会执行 REACHED）。同理 VT/FF/CR/NBSP 都不是分隔符。
+      if (ch === '#' && atWordStart) {
+        const lineEnd = text.indexOf('\n', i)
+        i = lineEnd < 0 ? text.length : lineEnd
+        continue
+      }
       if (ch === ';' || ch === '\n' || ch === '\r') { flush(); i += 1; continue }
       if (ch === '&' || ch === '|') {
         // `&&` / `||` 与单个 `&` / `|` 都是分隔符；两个字符都要吃掉。
@@ -263,6 +388,8 @@ export function splitCommandSegments(command: string): CommandSegments {
         i += text[i + 1] === ch ? 2 : 1
         continue
       }
+      if (ch === ' ' || ch === '\t') atWordStart = true
+      else atWordStart = false
       buf += ch; i += 1
     }
     flush()
@@ -274,9 +401,12 @@ export function splitCommandSegments(command: string): CommandSegments {
   const pending = segments.slice()
   for (let round = 0; pending.length > 0 && round < 16; round += 1) {
     const segment = pending.shift() as string
-    const payload = SHELL_C_PAYLOAD.exec(segment)
+    // `sh -c` 与 `eval` 都是「载荷会被再解释一遍」的入口，两者都要展开（issue #674 同类）。
+    const payload = SHELL_C_PAYLOAD.exec(segment) ?? EVAL_PAYLOAD.exec(segment) ?? TRAP_PAYLOAD.exec(segment)
     if (payload === null) continue
-    const inner = unwrapOneQuote(payload[1])
+    // 取载荷的**第一个词**（不是整段剩余）：`sh -c 'cmd' sh`、`eval 'cmd' foo`、`trap 'cmd' EXIT`
+    // 的尾随 argv 会让「整段首尾成对」判据失效，从而整段不展开（安全侧漏拦）。
+    const inner = firstShellWord(payload[1]).word
     if (inner.length === 0) continue
     const before = segments.length
     scan(inner, 1)
@@ -294,26 +424,44 @@ export function splitCommandSegments(command: string): CommandSegments {
 export function stripQuotedText(text: string): string {
   let out = ''
   let i = 0
+  // 只对**段内第一个词**（命令词位置）做 quote removal —— shell 在查找命令前会剥掉那里的引号，
+  // 所以 `"screencap" -p /sdcard/x` 真的会执行 screencap（dash 实测），旧实现把引号段一律抹平
+  // ⇒ 命令词位置上的引号内容也被抹掉 ⇒ 整条判 allow（2026-10-28 自查，安全侧漏拦）。
+  // 反之参数位置的引号必须继续抹掉：`echo "screencap"` 只是打印，抹掉才对
+  // （fixture「双引号内纯文本不得误拦」）。故判据是「第一个词内」，不是「每个词首」。
+  let inFirstWord = true
   while (i < text.length) {
     const ch = text[i]
     if (ch === '\\') {
       out += i + 1 < text.length ? text[i + 1] : ''
       i += 2
+      inFirstWord = false
       continue
     }
-    if (ch === "'" || ch === '"') {
-      const quote = ch
-      let j = i + 1
+    // `$'…'` / `$"…"`（ANSI-C 与本地化引号）在词首同样属于命令词：dash/bash 实测 `$'screencap' -p …` 会执行。
+    const ansiC = inFirstWord && ch === '$' && (text[i + 1] === "'" || text[i + 1] === '"')
+    if (ch === "'" || ch === '"' || ansiC) {
+      const quote = ansiC ? text[i + 1] : ch
+      let j = (ansiC ? i + 1 : i) + 1
       while (j < text.length) {
         if (quote === '"' && text[j] === '\\') { j += 2; continue }
         if (text[j] === quote) break
         j += 1
       }
       if (j >= text.length) { out += ' '; i = text.length; continue }
-      out += ' '
+      out += inFirstWord ? text.slice((ansiC ? i + 1 : i) + 1, j) : ' '
       i = j + 1
+      inFirstWord = false
       continue
     }
+    if (ch === ' ' || ch === '\t' || ch === ';' || ch === '&' || ch === '|' || ch === '\n' || ch === '\r') {
+      // 第一个词在此结束：之后的引号都是参数，回到「抹掉」语义。
+      inFirstWord = false
+      out += ch
+      i += 1
+      continue
+    }
+    inFirstWord = false
     out += ch
     i += 1
   }
@@ -322,7 +470,9 @@ export function stripQuotedText(text: string): string {
 
 /** 把目标屏参数整体抹成空白（命令词匹配前归一化，使 `input -d 0 tap …` 也进命令词面）。 */
 export function stripDisplayOptions(text: string): string {
-  return text.replace(/(?:^|[ \t])(?:-d|--display|--display-id)[ \t=]+\d+/g, ' ')
+  return text
+    .replace(/(?:^|[ \t])-d[ \t]*\d+/g, ' ')
+    .replace(/(?:^|[ \t])(?:--display|--display-id)[ \t=]+\d+/g, ' ')
 }
 
 // ── 命令词家族：每个家族自带「哪种拼写才算它的目标屏」 ──────────────────────────
@@ -359,7 +509,11 @@ const SCREEN_COMMAND_FAMILIES: readonly ScreenCommandFamily[] = [
   { name: 'screenrecord', pattern: /\bscreenrecord\b/i, targetFlags: ALL_DISPLAY_FLAGS },
   {
     name: 'input',
-    pattern: /\binput[ \t]+(?:tap|swipe|roll|draganddrop|motionevent|text|keyevent|keycombination)\b/i,
+    // 正式语法是 `input [<source>] [-d DISPLAY_ID] <command> [<arg>…]`：source 是位置词
+    // （touchscreen/keyboard/…），漏了它整类命令都进不了命令词面（`input touchscreen tap 500 800`
+    // 实测放行）。`press` 是 0.14 起的新命令，同族。
+    pattern:
+      /\binput[ \t]+(?:(?:touchscreen|keyboard|mouse|joystick|touchnavigation|trackball|stylus|dpad|gamepad|rotaryencoder)[ \t]+)?(?:tap|swipe|roll|draganddrop|motionevent|text|keyevent|keycombination|press)\b/i,
     targetFlags: ALL_DISPLAY_FLAGS,
   },
   { name: 'wm', pattern: /\bwm[ \t]+(?:size|density|overscan)\b/i, targetFlags: ALL_DISPLAY_FLAGS },
@@ -369,6 +523,14 @@ const SCREEN_COMMAND_FAMILIES: readonly ScreenCommandFamily[] = [
   // `am` 的显示参数是 `--display`；`-d` 是 Intent data，**不得**作为目标屏凭据（见上）。
   { name: 'am', pattern: /\bam[ \t]+(?:start|start-activity|force-stop|kill)\b/i, targetFlags: ['--display', '--display-id'] },
   { name: 'monkey', pattern: /\bmonkey\b/i, targetFlags: ['--display', '--display-id'] },
+  // `cmd activity <start-activity|start|force-stop|kill>` 与 `am start` 走同一个
+  // ActivityManagerShellCommand（无 `--display` 时默认 display 0）——只认 `am` 会把这条等价
+  // 拼写整类放行（2026-10-28 自查）。`--display` 才是它的目标屏参数。
+  {
+    name: 'cmd-activity',
+    pattern: /\bcmd[ \t]+activity[ \t]+(?:start-activity|start|force-stop|kill|stop-app)\b/i,
+    targetFlags: ['--display', '--display-id'],
+  },
 ]
 
 /** 命令（归一化后）命中哪些命令词家族。 */
@@ -411,7 +573,10 @@ export function screenCommandVerdict(
   if (unparsed) return 'deny-unparsed'
   for (const segment of segments) {
     const bare = stripQuotedText(segment)
+    // 载荷不可见的解释器调用：静态判不了，fail-closed。
+    if (interpreterPayloadUnparsed(bare)) return 'deny-unparsed'
     const options = displayOptionsIn(bare)
+    if (MALFORMED_DISPLAY_OPTION.test(bare)) return 'deny-uncertified-target'
     const families = SCREEN_COMMAND_FAMILIES.filter(
       (family) => family.pattern.test(stripDisplayOptions(bare)),
     )
@@ -422,8 +587,12 @@ export function screenCommandVerdict(
     }
     for (const family of families) {
       if (family.targetFlags.length === 0) return 'deny-uncertified-target'
+      // `input` 的 `-d` 只在 **command 词之前**有意义：`input tap 1 2 -d 7` 里的 `-d 7` 是 tap 的
+      // 多余 argv，真实 input 仍操作默认 display 0（Android 的 input 只在 command 前解析 -d）。
+      // 旧实现做全段扫描 ⇒ 尾随 `-d <owned>` 反而成了"已认证"的通行证（2026-10-28 自查）。
+      const limit = family.name === 'input' ? inputCommandIndex(bare) : bare.length
       const owned = options
-        .filter((option) => family.targetFlags.includes(option.flag))
+        .filter((option) => family.targetFlags.includes(option.flag) && option.index < limit)
         .map((option) => option.value)
       // 该家族必须在**本段内**自证：参数缺席、或任一值不属于已注册虚拟屏 → 拒（不得只认证其中一个）。
       if (owned.length === 0) return 'deny-uncertified-target'
@@ -431,6 +600,15 @@ export function screenCommandVerdict(
     }
   }
   return 'allow'
+}
+
+/** `input` 家族里 command 词的位置（用作「只有它之前的 `-d` 才算凭据」的边界）。 */
+const INPUT_COMMAND_RE =
+  /\b(?:tap|swipe|roll|draganddrop|motionevent|text|keyevent|keycombination|press)\b/i
+
+function inputCommandIndex(text: string): number {
+  const m = INPUT_COMMAND_RE.exec(text)
+  return m === null ? text.length : (m.index ?? text.length)
 }
 
 /** 由注册表投影构造「该值是否属于已注册虚拟屏」的判据（两个 id 空间都按原样字符串比对）。 */

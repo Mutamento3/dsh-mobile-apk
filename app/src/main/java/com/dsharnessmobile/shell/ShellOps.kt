@@ -27,7 +27,25 @@ internal object ShellOps {
    * 取值不数值化：`screencap -d` 吃的是 SurfaceFlinger display token，设备实测虚拟屏形如
    * `11529215046816944610`——超出 `Long` 上界，数值化即失真（见坑 147）。
    */
-  private val DISPLAY_OPTION = Regex("""(?:^|[ \t])(-d|--display|--display-id)[ \t=]+(\d+)""")
+  /**
+   * 短选项 `-d` 与长选项的取值语法**不同**，不能共用一个正则（与引擎侧同源）：
+   *   - `-d` 是 getopt 短选项 ⇒ `-d7`（粘连）与 `-d 7`（空格）合法，**`-d=7` 不合法**：
+   *     AOSP 用 `atoi(optarg)`，`atoi("=7") == 0` ⇒ 实际读/操作的是 display **0**（真实屏）。
+   *     旧正则用 `[ \t=]+` 让 `-d=7` 吃到了 `7`，于是拿它当"已注册虚拟屏 7"的凭据放行（漏拦）；
+   *     同时 `-d7` 因为缺分隔符反而认不出来（误拦）。
+   *   - 长选项 `--display` / `--display-id` 才接受 `=`。
+   */
+  private val SHORT_DISPLAY_OPTION = Regex("""(?:^|[ \t])-d[ \t]*(\d+)""")
+  private val LONG_DISPLAY_OPTION = Regex("""(?:^|[ \t])(--display|--display-id)[ \t=]+(\d+)""")
+
+  /**
+   * 「形似 display 选项但取值不是纯数字」的形态（`-d=7`、`-dx`）。
+   *
+   * 为什么要单独判：`-d=7` 的真实值是 `=7`（`atoi` 后为 0），所以它**不能**被当成"已认证 7"；
+   * 也**不能**被当成"没有 display 选项"就放行 —— 它在不同工具下可能落到默认屏 0（真实屏）。
+   * 两侧都必须 fail-closed。注意 `-d7` 是合法粘连形态，前瞻要排除数字。
+   */
+  private val MALFORMED_DISPLAY_OPTION = Regex("""(?:^|[ \t])-d(?:[ \t]*=[ \t]*\S|(?![0-9\s])\S)""")
 
   /** 命令词家族：每个家族自带「哪种拼写才算它的目标屏」（与引擎侧 `SCREEN_COMMAND_FAMILIES` 同表）。 */
   private data class ScreenFamily(val name: String, val pattern: Regex, val targetFlags: List<String>)
@@ -39,8 +57,13 @@ internal object ShellOps {
     ScreenFamily("screenrecord", Regex("""\bscreenrecord\b""", RegexOption.IGNORE_CASE), ALL_DISPLAY_FLAGS),
     ScreenFamily(
       "input",
-      Regex("""\binput[ \t]+(?:tap|swipe|roll|draganddrop|motionevent|text|keyevent|keycombination)\b""",
-        RegexOption.IGNORE_CASE),
+      // 正式语法是 `input [<source>] [-d DISPLAY_ID] <command> [<arg>…]`：source 是位置词
+      // （touchscreen/keyboard/…），漏了它整类命令都进不了命令词面；`press` 是其新命令，同族。
+      Regex(
+        """\binput[ \t]+(?:(?:touchscreen|keyboard|mouse|joystick|touchnavigation|trackball|stylus|dpad|gamepad|rotaryencoder)[ \t]+)?""" +
+          """(?:tap|swipe|roll|draganddrop|motionevent|text|keyevent|keycombination|press)\b""",
+        RegexOption.IGNORE_CASE,
+      ),
       ALL_DISPLAY_FLAGS,
     ),
     ScreenFamily("wm", Regex("""\bwm[ \t]+(?:size|density|overscan)\b""", RegexOption.IGNORE_CASE), ALL_DISPLAY_FLAGS),
@@ -51,6 +74,15 @@ internal object ShellOps {
     ScreenFamily("am", Regex("""\bam[ \t]+(?:start|start-activity|force-stop|kill)\b""", RegexOption.IGNORE_CASE),
       listOf("--display", "--display-id")),
     ScreenFamily("monkey", Regex("""\bmonkey\b""", RegexOption.IGNORE_CASE), listOf("--display", "--display-id")),
+    // `cmd activity <start-activity|start|force-stop|kill>` 与 `am start` 走同一个
+    // ActivityManagerShellCommand（无 `--display` 时默认 display 0）——只认 `am` 会把这条等价拼写
+    // 整类放行。`--display` 才是它的目标屏参数。
+    ScreenFamily(
+      "cmd-activity",
+      Regex("""\bcmd[ \t]+activity[ \t]+(?:start-activity|start|force-stop|kill|stop-app)\b""",
+        RegexOption.IGNORE_CASE),
+      listOf("--display", "--display-id"),
+    ),
   )
 
   /** SurfaceFlinger 的虚拟屏 token 行 / 其后的 name= 行（设备实测形态，见坑 147）。 */
@@ -71,13 +103,80 @@ internal object ShellOps {
    * 由 SHELL_C_PAYLOAD 展开队列正常判定）。故裸解释器段一律按看不懂拒绝（fail-closed），
    * 与引擎侧 `screen-scope.ts` 的同构判据同批演进（fixture 权威源用例另行补充）。
    */
-  private val BARE_SHELL_SEGMENT =
-    Regex("""^(?:(?:[^\s/]*/)+)?(?:(?:xargs|busybox|toybox)[ \t]+)*(?:sh|bash|mksh|ash|dash|zsh)$""", RegexOption.IGNORE_CASE)
+  private val INTERPRETER_NAMES = setOf("sh", "bash", "mksh", "ash", "dash", "zsh")
+  private val INTERPRETER_WRAPPERS =
+    setOf("env", "timeout", "nohup", "xargs", "busybox", "toybox", "su", "command", "exec")
+
+  /**
+   * 该段的命令词是不是「载荷对判定器不可见」的解释器调用（#509 的放宽版，与引擎侧
+   * `interpreterPayloadUnparsed` 逐条同源）。
+   *
+   * 只有 `sh -c '<可见载荷>'` 能被展开后判定；其余载荷都来自**运行时**：
+   * `sh -s` / `sh -e` / 无参 `sh`（读 stdin）、`sh /tmp/x.sh`、`. /tmp/x.sh`、`source x`，
+   * 以及经 `env`/`timeout`/`xargs`/`busybox` 包装的同族形态 —— 一律 fail-closed。
+   * 旧实现只认「整段恰好等于解释器名」这一条最窄形态，`sh -s`/`sh file`/`.` 全部放行。
+   */
+  private fun interpreterPayloadUnparsed(segment: String): Boolean {
+    var text = segment.trim()
+    for (guard in 0 until 8) {
+      val parsed = firstShellWord(text)
+      val word = parsed.first
+      if (word.isEmpty()) return false
+      val base = word.substringAfterLast('/')
+      // 变量赋值前缀、包装器、包装器自己的选项/数字参数都不改变「命令词」。
+      if (Regex("""^[A-Za-z_][A-Za-z0-9_]*=""").containsMatchIn(word)) { text = parsed.second.trim(); continue }
+      if (base in INTERPRETER_WRAPPERS || word.startsWith("-") || Regex("""^\d+$""").matches(word)) {
+        text = parsed.second.trim()
+        continue
+      }
+      if (base == "." || base == "source") return true
+      if (base in INTERPRETER_NAMES) {
+        return !Regex("""(?:^|[ \t])-[^\s]*c[^\s]*(?:[ \t]|$)""").containsMatchIn(parsed.second)
+      }
+      return false
+    }
+    return false
+  }
+
+  /** 取 shell 文本第一个词（quote-aware，去包裹引号）与其剩余；与引擎侧 `firstShellWord` 同源。 */
+  private fun firstShellWord(text: String): Pair<String, String> {
+    var i = 0
+    while (i < text.length && (text[i] == ' ' || text[i] == '\t')) i += 1
+    if (i >= text.length) return "" to ""
+    val quote = text[i]
+    if (quote == '\'' || quote == '"') {
+      var j = i + 1
+      while (j < text.length) {
+        if (quote == '"' && text[j] == '\\') { j += 2; continue }
+        if (text[j] == quote) return text.substring(i + 1, j) to text.substring(j + 1)
+        j += 1
+      }
+      return text.substring(i + 1) to ""
+    }
+    var j = i
+    while (j < text.length && text[j] !in " \t;&|") j += 1
+    return text.substring(i, j) to text.substring(j)
+  }
 
   /** `sh -c '<内层>'` 形式（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。 */
   private val SHELL_C_PAYLOAD = Regex(
     """(?:^|[ \t])(?:[^\s]*/)?(?:sh|bash|mksh|ash|dash|zsh|busybox|toybox|su)[ \t]+(?:-[^\s]+[ \t]+)*-c[ \t]+([\s\S]*)$""",
   )
+
+  /**
+   * `eval <载荷>`：载荷会被 shell **再解释一遍**（等价于把那段文本当命令粘回来执行）。
+   *
+   * 为什么必须单独列：`eval "screencap -p /sdcard/real.png"` 的引号内容会被引号抹除逻辑吃掉，
+   * 命令词面里看不到 `screencap` ⇒ 只靠 [SHELL_C_PAYLOAD] 时它一路放行（2026-10-28 自查实测：
+   * 引擎侧同一形态也漏，两侧必须同改）。与 `sh -c` 同型：拿原文载荷、解一层引号、递归扫。
+   */
+  private val EVAL_PAYLOAD = Regex("""(?:^|[ \t;&|(])eval[ \t]+([\s\S]*)$""")
+
+  /**
+   * `trap <载荷> <信号…>`：第一个参数是**要执行的命令**，退出/收到信号时 shell 会照跑。
+   * 与 `eval` / `sh -c` 并列进「载荷再解释一遍」入口（引擎侧同名入口，fixture 双向锁死）。
+   */
+  private val TRAP_PAYLOAD = Regex("""(?:^|[ \t;&|(])trap[ \t]+([\s\S]*)$""")
 
   /**
    * 屏幕范围判定的结果码——与引擎侧 `ScreenCommandVerdict` 的字符串**逐字相同**，
@@ -220,15 +319,16 @@ internal object ShellOps {
     if (parsed.unparsed) return false
     for (segment in parsed.segments) {
       // 裸解释器段同 virtual-only：载荷不可见即不可证明（连「目标是不是物理屏 0」都无从核对）。
-      if (BARE_SHELL_SEGMENT.matches(stripQuotedText(segment).trim())) return false
+      if (interpreterPayloadUnparsed(stripQuotedText(segment))) return false
       val bare = stripQuotedText(segment)
       val options = displayOptionsIn(bare)
+      if (MALFORMED_DISPLAY_OPTION.containsMatchIn(bare)) return false
       val normalized = stripDisplayOptions(bare)
       val families = SCREEN_FAMILIES.filter { it.pattern.containsMatchIn(normalized) }
       for (family in families) {
-        val relevant = options.filter { it.first in family.targetFlags }
+        val relevant = options.filter { it.flag in family.targetFlags }
         if (family.targetFlags.isEmpty() && options.isNotEmpty()) return false
-        if (relevant.any { it.second != "0" }) return false
+        if (relevant.any { it.value != "0" }) return false
       }
     }
     return true
@@ -327,10 +427,13 @@ internal object ShellOps {
     for (segment in parsed.segments) {
       val bare = stripQuotedText(segment)
       // 裸解释器段：管道/重定向喂 shell 的载荷对判定器不可见（#509），fail-closed。
-      if (BARE_SHELL_SEGMENT.matches(bare.trim())) {
+      if (interpreterPayloadUnparsed(bare)) {
         return ScreenCommandVerdict.DENY_UNPARSED
       }
       val options = displayOptionsIn(bare)
+      if (MALFORMED_DISPLAY_OPTION.containsMatchIn(bare)) {
+        return ScreenCommandVerdict.DENY_UNCERTIFIED_TARGET
+      }
       val normalized = stripDisplayOptions(bare)
       val families = SCREEN_FAMILIES.filter { it.pattern.containsMatchIn(normalized) }
       if (families.isEmpty()) {
@@ -340,7 +443,13 @@ internal object ShellOps {
       }
       for (family in families) {
         if (family.targetFlags.isEmpty()) return ScreenCommandVerdict.DENY_UNCERTIFIED_TARGET
-        val owned = options.filter { it.first in family.targetFlags }.map { it.second }
+        // `input` 的 `-d` 只在 **command 词之前**有意义：`input tap 1 2 -d 7` 里的 `-d 7` 是 tap 的
+        // 多余 argv，真实 input 仍操作默认 display 0（Android 只在 command 前解析 -d）。全段扫描会让
+        // 尾随 `-d <owned>` 变成"已认证"的通行证（与引擎侧同源修法）。
+        val limit = if (family.name == "input") inputCommandIndex(bare) else bare.length
+        val owned = options
+          .filter { it.flag in family.targetFlags && it.index < limit }
+          .map { it.value }
         // 该家族必须在**本段内**自证：参数缺席、或任一值不属于已注册虚拟屏 → 拒（不得只认证其中一个）。
         if (owned.isEmpty()) return ScreenCommandVerdict.DENY_UNCERTIFIED_TARGET
         if (!owned.all { ownsTarget(it) }) return ScreenCommandVerdict.DENY_UNCERTIFIED_TARGET
@@ -348,6 +457,14 @@ internal object ShellOps {
     }
     return ScreenCommandVerdict.ALLOW
   }
+
+  private val INPUT_COMMAND =
+    Regex("""\b(?:tap|swipe|roll|draganddrop|motionevent|text|keyevent|keycombination|press)\b""",
+      RegexOption.IGNORE_CASE)
+
+  /** `input` 家族里 command 词的位置（「只有它之前的 `-d` 才算凭据」的边界）。 */
+  private fun inputCommandIndex(text: String): Int =
+    INPUT_COMMAND.find(text)?.range?.first ?: text.length
 
   /** 引号感知切段结果（与引擎侧 `CommandSegments` 同构）。 */
   internal class ParsedCommand(val segments: List<String>, val unparsed: Boolean)
@@ -371,9 +488,12 @@ internal object ShellOps {
         return
       }
       val buf = StringBuilder()
+      // 词首状态（注释判定用，见下方 `#` 分支）：分隔符/空白置位，其它字符（含转义对）清除。
+      var atWordStart = true
       fun flush() {
         segments.add(buf.toString())
         buf.setLength(0)
+        atWordStart = true
       }
       var i = 0
       while (i < text.length) {
@@ -381,6 +501,7 @@ internal object ShellOps {
         if (ch == '\\') {
           buf.append(text, i, minOf(i + 2, text.length))
           i += 2
+          atWordStart = false
           continue
         }
         if (ch == '\'') {
@@ -393,16 +514,42 @@ internal object ShellOps {
           }
           buf.append(text, i, end + 1)
           i = end + 1
+          atWordStart = false
           continue
         }
         if (ch == '"') {
           var j = i + 1
           while (j < text.length) {
-            if (text[j] == '\\') {
+            val inner = text[j]
+            if (inner == '\\') {
               j += 2
               continue
             }
-            if (text[j] == '"') break
+            if (inner == '"') break
+            // 双引号内的 `$(...)` 与反引号**会执行**（单引号才不执行）：必须按原文递归扫，
+            // 否则 `echo "$(screencap -p /sdcard/real.png)"` 会把真实屏命令当纯文本放行（issue #674）。
+            if (inner == '`') {
+              val end = backtickEnd(text, j + 1)
+              if (end < 0) {
+                unparsed = true
+                j = text.length
+                break
+              }
+              scan(text.substring(j + 1, end), depth + 1)
+              j = end + 1
+              continue
+            }
+            if (inner == '$' && j + 1 < text.length && text[j + 1] == '(') {
+              val end = parenEnd(text, j + 2)
+              if (end < 0) {
+                unparsed = true
+                j = text.length
+                break
+              }
+              scan(text.substring(j + 2, end), depth + 1)
+              j = end + 1
+              continue
+            }
             j += 1
           }
           if (j >= text.length) {
@@ -413,6 +560,7 @@ internal object ShellOps {
           }
           buf.append(text, i, j + 1)
           i = j + 1
+          atWordStart = false
           continue
         }
         if (ch == '`') {
@@ -441,6 +589,15 @@ internal object ShellOps {
           i = end + 1
           continue
         }
+            // shell 注释：`#` 只有在**词首**才开注释。词首＝未转义、未引用的 ASCII 空白 / `;` / `&` / `|`
+            // 之后（atWordStart 显式跟踪）—— 不能用「buf 末尾是空白」判定：`echo\ #; screencap …` 里
+            // 那个空格是**转义的**（属词内容），`#` 因此是 echo 的参数而不是注释，screencap 照跑
+            // （dash 实测 `echo\ #; echo REACHED` 会执行 REACHED）；VT/FF/CR/NBSP 也不是分隔符。
+            if (ch == '#' && atWordStart) {
+              val lineEnd = text.indexOf('\n', i)
+              i = if (lineEnd < 0) text.length else lineEnd
+              continue
+            }
         if (ch == ';' || ch == '\n' || ch == '\r') {
           flush()
           i += 1
@@ -451,6 +608,7 @@ internal object ShellOps {
           i += if (i + 1 < text.length && text[i + 1] == ch) 2 else 1
           continue
         }
+        if (ch == ' ' || ch == '\t') atWordStart = true else atWordStart = false
         buf.append(ch)
         i += 1
       }
@@ -467,8 +625,14 @@ internal object ShellOps {
     while (pending.isNotEmpty() && round < 16) {
       round += 1
       val segment = pending.removeFirst()
-      val payload = SHELL_C_PAYLOAD.find(segment) ?: continue
-      val inner = unwrapOneQuote(payload.groupValues[1])
+      // `sh -c` 与 `eval` 都是「载荷会被再解释一遍」的入口，两者都要展开（issue #674 同类）。
+      val payload = SHELL_C_PAYLOAD.find(segment)
+        ?: EVAL_PAYLOAD.find(segment)
+        ?: TRAP_PAYLOAD.find(segment)
+        ?: continue
+      // 取载荷的**第一个词**（不是整段剩余）：`sh -c 'cmd' sh` / `eval 'cmd' foo` / `trap 'cmd' EXIT`
+      // 的尾随 argv 会让「整段首尾成对」判据失效，从而整段不展开（安全侧漏拦，与引擎侧同源）。
+      val inner = firstShellWord(payload.groupValues[1]).first
       if (inner.isEmpty()) continue
       val before = segments.size
       scan(inner, 1)
@@ -548,16 +712,24 @@ internal object ShellOps {
   internal fun stripQuotedText(text: String): String {
     val out = StringBuilder()
     var i = 0
+    // 只对**段内第一个词**（命令词位置）做 quote removal —— shell 在查找命令前会剥掉那里的引号，
+    // 所以 `"screencap" -p /sdcard/x` 真的会执行 screencap（dash 实测），旧实现把引号段一律抹平
+    // ⇒ 命令词位置上的引号内容也被抹掉 ⇒ 整条放行（2026-10-28 自查，安全侧漏拦，与引擎侧同源）。
+    // 参数位置的引号必须继续抹掉：`echo "screencap"` 只是打印（fixture 有这条对照）。
+    var inFirstWord = true
     while (i < text.length) {
       val ch = text[i]
       if (ch == '\\') {
         if (i + 1 < text.length) out.append(text[i + 1])
         i += 2
+        inFirstWord = false
         continue
       }
-      if (ch == '\'' || ch == '"') {
-        val quote = ch
-        var j = i + 1
+      // `$'…'` / `$"…"` 在词首同样属于命令词：dash/bash 实测 `$'screencap' -p …` 会执行。
+      val ansiC = inFirstWord && ch == '$' && i + 1 < text.length && (text[i + 1] == '\'' || text[i + 1] == '"')
+      if (ch == '\'' || ch == '"' || ansiC) {
+        val quote = if (ansiC) text[i + 1] else ch
+        var j = (if (ansiC) i + 1 else i) + 1
         while (j < text.length) {
           if (quote == '"' && text[j] == '\\') {
             j += 2
@@ -571,10 +743,19 @@ internal object ShellOps {
           i = text.length
           continue
         }
-        out.append(' ')
+        if (inFirstWord) out.append(text, (if (ansiC) i + 1 else i) + 1, j) else out.append(' ')
         i = j + 1
+        inFirstWord = false
         continue
       }
+      if (ch == ' ' || ch == '\t' || ch == ';' || ch == '&' || ch == '|' || ch == '\n' || ch == '\r') {
+        // 第一个词在此结束：之后的引号都是参数，回到「抹掉」语义。
+        inFirstWord = false
+        out.append(ch)
+        i += 1
+        continue
+      }
+      inFirstWord = false
       out.append(ch)
       i += 1
     }
@@ -582,11 +763,21 @@ internal object ShellOps {
   }
 
   /** 把目标屏参数整体抹成空白（命令词匹配前归一化，使 `input -d 0 tap …` 也进命令词面）。 */
-  internal fun stripDisplayOptions(text: String): String = DISPLAY_OPTION.replace(text, " ")
+  internal fun stripDisplayOptions(text: String): String =
+    LONG_DISPLAY_OPTION.replace(SHORT_DISPLAY_OPTION.replace(text, " "), " ")
 
   /** 命令里的全部目标屏参数（拼写 + 原样数字串）。 */
-  internal fun displayOptionsIn(text: String): List<Pair<String, String>> =
-    DISPLAY_OPTION.findAll(text).map { it.groupValues[1] to it.groupValues[2] }.toList()
+  /** 目标屏选项：flag / 原始值 / 在文本里的起始下标（下标用于 input 的「只在 command 前才算」）。 */
+  internal data class DisplayOption(val flag: String, val value: String, val index: Int)
+
+  internal fun displayOptionsIn(text: String): List<DisplayOption> {
+    val out = ArrayList<DisplayOption>()
+    for (m in SHORT_DISPLAY_OPTION.findAll(text)) out.add(DisplayOption("-d", m.groupValues[1], m.range.first))
+    for (m in LONG_DISPLAY_OPTION.findAll(text)) {
+      out.add(DisplayOption(m.groupValues[1], m.groupValues[2], m.range.first))
+    }
+    return out.sortedBy { it.index }
+  }
 
   /**
    * 当前**已注册**虚拟屏的 SF token 集合（块G F6）。经 Shizuku shell 通道读
@@ -660,7 +851,7 @@ internal object ShellOps {
    * 数值化即失真（见坑 147）。与引擎侧 `adbCommandDisplayTokens` 的取法一致。
    */
   internal fun commandDisplayTokens(command: String): List<String> =
-    displayOptionsIn(command).map { it.second }
+    displayOptionsIn(command).map { it.value }
 
   /**
    * 落一条审计。

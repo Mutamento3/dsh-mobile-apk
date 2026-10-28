@@ -13,6 +13,25 @@ import java.nio.file.Files
  * filesDir/usr and the dsh engine process lifecycle (PATH/LD_LIBRARY_PATH/HOME
  * injected explicitly — the snapshot is self-sufficient, no Termux app needed).
  */
+/**
+ * `EngineManager.startEngine()` 的结果（issue #684）。
+ *
+ * 为什么不能用 `Boolean`：`true` 曾被同时用来表示「已 spawn」「已在跑」「另一路正在启动」
+ * 与「刷新中刻意让行」。最后一种**没有进程**，调用方的存活判据当拍即为假 —— 一次正常的
+ * 8-12 分钟快照刷新会被误判成「进程在预算内死亡」，两次重试后落持久修复门。
+ * 让行是一个独立结果，必须能被调用方区分出来。
+ */
+enum class EngineStartOutcome {
+  /** 已发起或已满足（进程在起 / 已在跑）：调用方可进入存活判据。 */
+  STARTED,
+
+  /** 快照刷新进行中，本次刻意不 spawn：**让行，不是失败，不计重试预算**。 */
+  DEFERRED_REFRESHING,
+
+  /** 被闸门拒绝（`lastStartRefusal` / `lastStartRefusalCode` 带原因）：失败。 */
+  REFUSED,
+}
+
 class EngineManager(private val context: Context, private val pickToken: String? = null) {
 
   init { EngineEndpoint.init(context) }
@@ -1347,7 +1366,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
 
   /** Starts the embedded engine. [force] is reserved for a confirmed hung boot
    * after its full cold-start deadline; routine probes must never force-restart. */
-  fun startEngine(port: Int = EngineEndpoint.preferredPort, force: Boolean = false): Boolean {
+  fun startEngine(port: Int = EngineEndpoint.preferredPort, force: Boolean = false): EngineStartOutcome {
     // 独立评审 6(a)：每次进入先**清掉上一次的拒启结论**，让「有码」严格等价于「本次就是被
     // 闸门 A 拒的」。旧实现只在**通过**闸门 A 时清码，于是闸门 A 之前的那几条 return false
     // （打包指纹不可用 / termux-exec 预载库缺失）会把**上一次**的 live-runtime 码与确诊项留下
@@ -1364,7 +1383,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
     //
     // 判据为什么放在这里而不是散在 7 处：失败出口的边界不清晰（同一个人数两次得到 5 和 7），
     // 逐处手写必然再漏。统一收口到一个函数，新增出口只要走它就不可能忘记。
-    fun refuse(code: String?, reason: String): Boolean {
+    fun refuse(code: String?, reason: String): EngineStartOutcome {
       if (code != null) lastStartRefusalCode = code
       if (reason.isNotEmpty()) lastStartRefusal = reason
       Log.e(TAG, "engine start refused: " + (lastStartRefusal ?: lastStartRefusalCode ?: "未归类原因"))
@@ -1374,7 +1393,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
         lastStartRefusalConfirmed,
       )
       LogCollector.writeBootFail(context, record.first, record.second)
-      return false
+      return EngineStartOutcome.REFUSED
     }
     // 启动时按系统语言落一次具体 locale：「跟随系统」不再是设置页里的可见选项。
     // 非中文一律 en（zh / zh-CN / zh-HK / zh-TW 等 zh-* 都算中文）；显式选过语言的用户
@@ -1386,8 +1405,11 @@ class EngineManager(private val context: Context, private val pickToken: String?
     // 快照刷新进行中禁止拉起（看门狗旁路闸门）：主流程刷新完成后自会启动；期间拉起只会
     // 起在半新半旧的运行时上。返回 true = 「无需再启动」（与冷却窗语义一致，5s 后看门狗复检）。
     if (EngineManager.snapshotRefreshing.get()) {
-      LogCollector.log(TAG, "engine start skipped (snapshot refresh in progress)")
-      return true
+      // issue #684：这里**没有** spawn，所以不能回「已发起」。旧实现返回 true，调用方的存活
+      // 判据立刻为假（STARTING 未置位 + 无子进程），把 8-12 分钟的正常刷新误判成
+      // 「进程在预算内死亡」，两次重试就落持久修复门。让行是一个独立结果，不是成功。
+      LogCollector.log(TAG, "engine start deferred (snapshot refresh in progress)")
+      return EngineStartOutcome.DEFERRED_REFRESHING
     }
     // LD_PRELOAD depends on the snapshot's termux-exec lib: when missing, every child exec fails,
     // and combined with the cooldown window that means a silent 90s engine outage — assert explicitly
@@ -1465,7 +1487,8 @@ class EngineManager(private val context: Context, private val pickToken: String?
     // 取证字段**刻意不清**：它是只增的现场记录，供诊断包读取。
     val now = System.currentTimeMillis()
     // Process-level CAS: only one concurrent call really starts (device-measured EADDRINUSE double-start).
-    if (!STARTING.compareAndSet(false, true)) return true
+    // 另一路已经进入 spawn 段：对本次调用而言「无需再启动」，但仍属已发起（有进程在起）。
+    if (!STARTING.compareAndSet(false, true)) return EngineStartOutcome.STARTED
     // A tracked child proves exactly whether another manager is cold-booting.
     // If it has exited, a caller may retry immediately; deferring on a timestamp
     // alone turns a real early crash into a 90-second outage.
@@ -1480,7 +1503,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
     if (!force && !restartForHardBundleRepair && engineUsable && !degradedHttp) {
       STARTING.set(false)
       LogCollector.log(TAG, "engine start skipped (existing engine usable: " + availability + ")")
-      return true
+      return EngineStartOutcome.STARTED
     }
     if ((force || restartForHardBundleRepair || degradedHttp) && availability == EngineProbe.EngineAvailability.OUR_HTTP && !managedProcessAlive) {
       STARTING.set(false)
@@ -1554,7 +1577,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
       // The cooldown is written only after a real start: failure paths don't consume the window (retry is immediate).
       EngineManager.lastStartAttemptAt = now
       LogCollector.log(TAG, "engine started")
-      true
+      EngineStartOutcome.STARTED
     } catch (t: Throwable) {
       lastStartRefusalCode = startupExceptionCode(t)
       lastStartRefusal = "spawn 抛出异常：" + t.javaClass.simpleName + ": " + (t.message ?: "无消息")
@@ -1569,7 +1592,7 @@ class EngineManager(private val context: Context, private val pickToken: String?
         "EngineManager.startEngine() spawn 阶段抛出异常：" + lastStartRefusal,
         t,
       )
-      false
+      EngineStartOutcome.REFUSED
     } finally {
       STARTING.set(false)
     }

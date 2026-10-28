@@ -829,7 +829,19 @@ internal class EngineStartFlow(private val activity: MainActivity) {
         }
       }
       if (!isCurrentEngineFlow(generation)) return@Thread
-      if (!activity.engineManager.startEngine()) {
+      // issue #684：让行与失败必须分开 ——「刷新中让行」没有进程，不能进存活判据、不能计重试预算。
+      // 旧实现把它当 true（已发起），于是存活判据当拍为假，一次正常的 8-12 分钟刷新被误判成
+      // 「进程在预算内死亡」，两次重试后落持久修复门。
+      val startOutcome = activity.engineManager.startEngine()
+      if (startOutcome == EngineStartOutcome.DEFERRED_REFRESHING) {
+        LogCollector.writeBootFail(
+          activity, "engine-start-deferred-refresh",
+          "本次启动请求撞上正在进行的快照刷新，已让行（非失败）：未 spawn、未置 STARTING、未计重试预算；"
+            + "由持有刷新的启动流在完成后拉起引擎。",
+        )
+        return@Thread
+      }
+      if (startOutcome == EngineStartOutcome.REFUSED) {
         requireCurrentEngineFlow(generation)
       // A Hard ownership mismatch is itself an install/runtime integrity failure.
       // There is no separate UI retry state that can resolve it: the assistant
@@ -853,7 +865,8 @@ internal class EngineStartFlow(private val activity: MainActivity) {
         val refusalCode = activity.engineManager.lastStartRefusalCode
         LogCollector.writeBootFail(
           activity, if (refusal != null) "engine-start-refused" else "engine-start-false",
-          "EngineManager.startEngine() 返回 false（未能拉起引擎进程）"
+          // issue #720：布尔时代的口径（"返回 false"）已随三态契约作废，落盘文案必须说清是哪一态。
+          "EngineManager.startEngine() 判为 REFUSED（引擎未 spawn，原因见 refusalCode）"
             + (refusalCode?.let { "；refusalCode=" + it } ?: "")
             // issue #309：把**判别性事实**（确诊项有几个）也写进 boot-fail，而不是只写进
             // LogCollector.log——后者只有采集器在跑时才落盘（独立评审 C6 指出的可诊断性缺口）。

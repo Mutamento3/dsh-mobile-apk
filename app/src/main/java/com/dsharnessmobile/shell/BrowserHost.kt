@@ -87,6 +87,11 @@ internal class BrowserHost(
      */
     private const val BLOCKED_REQUEST_LOG_LIMIT = 20
     private const val SNAPSHOT_MAX_NODES = 400
+    /**
+     * 截图回执里的交付说明。必须与实现一致：文件落在 `files/` 下，**不**是工具层读完即删，
+     * 而是由 [ShotCachePolicy] 按 TTL 与上限清理（issue #672）。
+     */
+    private const val SHOT_NOTE = "截图落在应用私有目录的引擎可读路径；同目录历史截图按 1 小时 TTL 与数量/总量上限自动清理。"
     /** 无活动标签页时的只读占位（避免把“没有页面”误判成“有页面”） */
     private val ORPHAN_GENERATION = AtomicLong(0)
     private val ORPHAN_REFS = HashSet<String>()
@@ -2074,7 +2079,7 @@ internal class BrowserHost(
       // tier-2：渲染进程 draw → PNG → 应用私有目录（与 tier-1 同一交付语义）。
       val png = rh.capturePng(remoteTabId(tab.owner, tab), 1600, 2400)
         ?: return@controlOnMain targetFailure(target, "shot-failed:renderer")
-      val dir = File(File(activity.filesDir, "home/tmp"), "dsh-tmp").apply { mkdirs() }
+      val dir = shotDir()
       val file = File.createTempFile("browser-shot-", ".png", dir)
       FileOutputStream(file).use { it.write(png) }
       // PNG IHDR 宽高（字节 16..23 大端）——不做整图解码。
@@ -2084,7 +2089,7 @@ internal class BrowserHost(
         or ((png[22].toInt() and 0xff) shl 8) or (png[23].toInt() and 0xff)) else 0
       return@controlOnMain pageReply(target).put("ok", true).put("path", file.absolutePath).put("bytes", file.length())
         .put("width", w).put("height", h).put("health", "ok")
-        .apply { if (!args.optBoolean("inline", false)) put("note", "截图落在应用私有目录的引擎可读路径；工具层读完即删。") }
+        .apply { if (!args.optBoolean("inline", false)) put("note", SHOT_NOTE) }
     }
     val browser = tab.view ?: return@controlOnMain targetFailure(target, "browser-not-created")
     try {
@@ -2092,14 +2097,24 @@ internal class BrowserHost(
       val bitmap = Bitmap.createBitmap(browser.width, browser.height, Bitmap.Config.ARGB_8888)
       try {
         browser.draw(Canvas(bitmap))
-        val dir = File(File(activity.filesDir, "home/tmp"), "dsh-tmp").apply { mkdirs() }
+        val dir = shotDir()
         val file = File.createTempFile("browser-shot-", ".png", dir)
         FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         pageReply(target).put("ok", true).put("path", file.absolutePath).put("bytes", file.length())
           .put("width", bitmap.width).put("height", bitmap.height).put("health", "ok")
-          .apply { if (!args.optBoolean("inline", false)) put("note", "截图落在应用私有目录的引擎可读路径；工具层读完即删。") }
+          .apply { if (!args.optBoolean("inline", false)) put("note", SHOT_NOTE) }
       } finally { bitmap.recycle() }
     } catch (t: Throwable) { targetFailure(target, "shot-failed:" + t.javaClass.simpleName) }
+  }
+
+  /**
+   * 截图落点。`files/` 下的文件不会被系统当缓存回收，历史 PNG 只能由壳侧自己清
+   * （issue #672）：每次取目录前先按 TTL 与数量/总量上限修剪一遍。
+   */
+  private fun shotDir(): File {
+    val dir = File(File(activity.filesDir, "home/tmp"), "dsh-tmp").apply { mkdirs() }
+    ShotCachePolicy.prune(dir)
+    return dir
   }
 
   // ── async plumbing ────────────────────────────────────────────────────────
