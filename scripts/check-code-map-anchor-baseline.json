@@ -3959,7 +3959,7 @@
       "const c5skip = absent.results.find((x) => x.id === 'C5')"
     ],
     "scripts/check-bounded-io.mjs:54": [
-      "// 只对「子进程/连接流」命中；HTTP 与文件流的读有各自超时语义，不在此列。"
+      "const exempt = buildTree('exempt', { 'Ok.kt': '// bounded-io-exempt: 合成夹具，自证豁免通道\\nval s = stream.bufferedReader().readText()\\n' })"
     ],
     "scripts/check-bridge-symmetry.mjs:1": [
       "#!/usr/bin/env node"
