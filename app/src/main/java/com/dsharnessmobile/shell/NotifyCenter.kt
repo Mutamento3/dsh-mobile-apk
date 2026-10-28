@@ -1060,7 +1060,10 @@ object NotifyCenter {
   ): Notification {
     val b = NotificationCompat.Builder(app, channelId)
       .setSmallIcon(android.R.drawable.stat_notify_chat)
-      .setAutoCancel(true)
+      // 交互类（提问 / 审批）**不得**点开即撤（0.14.11）：这类通知是用户作答的唯一入口，而引擎侧的
+      // 提问与审批都没有超时；点开看一眼就把入口撤掉，等于让请求永久挂起（与 P0-5「关掉提醒 = 任务
+      // 永久挂起」同一形态的静默失败）。其余类别保持点开即撤——它们是公告，看完就没用了。
+      .setAutoCancel(face != Face.QUESTION && face != Face.APPROVAL)
       .setOnlyAlertOnce(!face.popup || silentOverride)
       .setWhen(System.currentTimeMillis())
     when (face) {
