@@ -114,7 +114,10 @@ const SYMBOL_HASH_GROUP = '(?:@([0-9a-f]{4,16}))?'
 const SYMBOL_HINT_GROUP = '(?:#([0-9]+))?'
 const ANCHOR_RE = new RegExp('(?:^|[^A-Za-z0-9_./:@-])' + PATH_GROUP + LINE_GROUP + RANGE_GROUP + EXPECT_GROUP
   + '|(?:^|[^A-Za-z0-9_./:@-])' + PATH_GROUP + SYMBOL_GROUP + SYMBOL_HASH_GROUP + SYMBOL_HINT_GROUP, 'g')
-const EVIDENCE_RE = new RegExp(PATH_GROUP + LINE_GROUP + RANGE_GROUP + EXPECT_GROUP)
+// 耦合边证据同样接受符号锚点（`path#Symbol` / `path#Symbol@hash`），
+// 否则迁移后所有用符号锚点作证据的耦合边都会报「缺 path:line 证据」。
+const SYMBOL_EVIDENCE_RE = new RegExp(PATH_GROUP + SYMBOL_GROUP + SYMBOL_HASH_GROUP)
+const EVIDENCE_RE = new RegExp(PATH_GROUP + LINE_GROUP + RANGE_GROUP + EXPECT_GROUP + '|' + PATH_GROUP + SYMBOL_GROUP + SYMBOL_HASH_GROUP)
 
 function parseExpectation(raw) {
   if (raw === undefined) return { expect: undefined }
@@ -161,10 +164,29 @@ function definitionSitesOf(lines, name) {
     + '(?:fun|class|object|interface|val|var|let|function|type|def|struct|enum)\\s+'
     + esc + '(?![A-Za-z0-9_$])',
   )
-  const bareMember = new RegExp('^\\s*(?:(?:public|private|protected|static|async|readonly)\\s+)*' + esc + '\\s*[<(=:]')
+  // TS 类方法形态（`name(args) {`）没有关键字，必须单独认。
+  //
+  // 但它极容易把**调用点**也算进来：`flush()` 与 `fun flush() {` 在行首看起来都像。
+  // 判据收紧成三条同时满足，缺一不可：
+  //   ① 行首是 name（可带成员修饰符）
+  //   ② 紧跟 `(` 且该行以 `{` 或 `=>` 收尾（方法体开始），或紧跟 `:` 返回类型标注
+  //   ③ 行里没有 `=`（排除 `val x = name(...)`）也没有 `.` 前缀（排除 `obj.name(...)`）
+  // 实测教训：`flush()` 调用点、`val bare = stripQuotedText(segment)` 都被算成过定义，
+  // 导致 1 处定义的符号被判成 4 处歧义，甚至产出 `#ShellOps.bare` 指到函数参数上。
+  //
+  // 收紧为四条同时满足：
+  //   ① 行首是 name（可带成员修饰符），且 name 前**没有** val/var/let/const 关键字
+  //   ② 参数括号后紧跟 `{` 或 `=>`（方法体开始），中间只允许返回类型标注
+  //   ③ 整行不含 `=`（排除赋值；`=>` 例外，箭头函数体）
+  const bareMember = new RegExp('^\\s*(?:(?:public|private|protected|static|async|readonly|override|suspend|inline)\\s+)*'
+    + esc + '\\s*\\([^)]*\\)\\s*(?::\\s*[A-Za-z_<][^={]*)?\\s*(?:\\{|=>)')
+  const valueDecl = new RegExp('^\\s*(?:(?:private|public|internal|protected|static|const|override|lateinit)\\s+)*(?:val|var|let)\\s+')
   const sites = []
   for (let i = 0; i < lines.length; i += 1) {
     const t = lines[i]
+    // valueDecl 先行短路：`val bare = stripQuotedText(segment)` 这种值声明
+    // 之前会被 bareMember 的「name(args)」形态误判成方法定义。
+    if (valueDecl.test(t)) continue
     if (withKeyword.test(t) || bareMember.test(t)) sites.push(i)
   }
   return sites
@@ -172,15 +194,35 @@ function definitionSitesOf(lines, name) {
 
 function symbolAt(lines, symbol) {
   const parts = symbol.split('.')
+  // 只在**定义位**认名字，不在行内任意位置认。
+  //
+  // 早期写法是「路径前一个字符非标识符字符」式的宽匹配，结果 `"su", "command", "exec"`
+  // 这种字符串数组里的 `exec` 也被当成定义（实测 ShellOps.kt 的 INTERPRETER_WRAPPERS 就是），
+  // 于是 `#exec` 解析到了 136 行那一行字符串，body 完全不是真正的 exec 函数，
+  // refresh 时报「该行内容不在符号体内」。
+  //
+  // 定义位有两种形态：① 带 fun/class/val 等关键字；② TS 类方法 `name(args) {`。
   const findIn = (fromLine, toLine, name) => {
-    const re = new RegExp(
-      '(?:^|[^A-Za-z0-9_$])'
-      + '(?:(?:private|public|internal|protected|export|default|override|suspend|inline|operator|abstract|open|final|static|async|const|data|sealed|enum)[ ]+)*'
-      + '((?:fun|class|object|interface|val|var|let|function|type|def)[ ]+)?'
-      + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      + '(?![A-Za-z0-9_$])',
+    const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const keywordForm = new RegExp(
+      '^\\s*(?:(?:private|public|internal|protected|export|default|override|suspend|inline|operator|abstract|open|final|static|async|const|data|sealed|enum|lateinit|readonly)[ ]+)*'
+      + '(?:fun|class|object|interface|val|var|let|function|type|def|struct|enum)[ ]+'
+      + esc + '(?![A-Za-z0-9_$])',
     )
-    for (let i = fromLine; i < toLine; i += 1) if (re.test(lines[i])) return i
+    const memberForm = new RegExp(
+      '^\\s*(?:(?:public|private|protected|static|async|readonly|override|suspend|inline)\\s+)*'
+      + esc + '\\s*\\([^)]*\\)\\s*(?::\\s*[A-Za-z_<][^={]*)?\\s*(?:\\{|=>)',
+    )
+    // TS 值常量形态：`const name = ...`（含箭头函数 `= (args) =>`、数组 `= [`、对象 `= {`）。
+    // keywordForm 只认 `const name` 后面直接跟名字，遇到 `=` 就断了，所以这里单独认。
+    const constForm = new RegExp(
+      '^\\s*(?:(?:export|default)\\s+)*(?:const|let|var)\\s+'
+      + esc + '\\s*(?::[^=]+)?=\\s*',
+    )
+    for (let i = fromLine; i < toLine; i += 1) {
+      const t = lines[i]
+      if (keywordForm.test(t) || memberForm.test(t) || constForm.test(t)) return i
+    }
     return -1
   }
   const start = findIn(0, lines.length, parts[0])
@@ -241,6 +283,11 @@ function anchorBaselineSymbols() {
   return (ANCHOR_BASELINE && ANCHOR_BASELINE.symbols) || {}
 }
 
+/** 已有 `@hash` 锚点登记表（path#Symbol@hash -> true）。 */
+function anchorBaselineSymbolHashes() {
+  return (ANCHOR_BASELINE && ANCHOR_BASELINE.symbolHashes) || {}
+}
+
 /**
  * 把一条 legacy 锚点（path:line + 该行内容）**推导**成符号锚点。
  *
@@ -283,14 +330,50 @@ function deriveSymbolAnchor(lines, line, contentHash) {
 
   let symbol = null
   let symbolLine = -1
+  // 局部值声明不能当符号：`val bare = stripQuotedText(segment)` 是函数内变量，
+  // 生命周期是这一次调用，改它不算改契约。只有**类成员或顶层**的 val/var 才是符号。
+  // 判据：val/var 所在的包围深度必须是类体一层（用花括号深度近似：缩进 2 空格级 + 宿主类在场），
+  // 这里用更稳的做法——要求该 val/var 行的配对花括号**不**在某个函数体内。
+  //
+  // 判据用**花括号深度**而不是「向上找 fun」：向上找会被更近的局部 val 挡住
+  // （实测 ShellOps.kt:317 的 `val viaSu` 向上先遇到 315 行的 `val channelBroken`，
+  // 没走到 292 行的 `fun exec`，于是被当成类成员）。
+  const braceDepthAt = (lineIdx) => {
+    let depth = 0
+    for (let i = 0; i <= lineIdx && i < lines.length; i += 1) {
+      for (const ch of lines[i]) {
+        if (ch === '{') depth += 1
+        else if (ch === '}') depth -= 1
+      }
+    }
+    return depth
+  }
+  const isLocalValueDecl = (lineIdx) => {
+    const t = lines[lineIdx]
+    if (!/^\s*(?:(?:private|public|internal|protected|lateinit|override|const)\s+)*(?:val|var)\s/.test(t)) return false
+    // 类体直接成员 = 深度 1（object/class 的各占一层）；>= 2 说明嵌在函数/代码块里。
+    // 顶层文件级 val（Kotlin 不允许，TS 允许）= 深度 0，也算符号。
+    return braceDepthAt(lineIdx) >= 2
+  }
   for (let i = idx; i >= 0; i -= 1) {
     const dm = lines[i].match(defRe)
-    if (dm) { symbol = dm[1]; symbolLine = i; break }
+    if (dm) {
+      if (isLocalValueDecl(i)) continue
+      // 关键：目标行必须**真的落在这个符号体内**。
+      //
+      // 只取「向上最近的定义」不够：KDoc/注释块写在函数**上方**，但它属于下一个元素，
+      // 用最近定义会把注释归到上一个函数里（实测 ShellOps.kt 的 MAX_NESTING 就把
+      // 它下面的 KDoc 吞了，refresh 时报「该行内容不在符号体内」）。
+      // 判据：符号的配对花括号结束行 >= 目标行；单表达式体（无花括号）时要求同行或下一行。
+      const close = matchingBrace(lines, i)
+      if (close >= idx) { symbol = dm[1]; symbolLine = i; break }
+    }
   }
   if (symbol === null) {
     // 4) 退化为全文唯一内容匹配
     const target = lines[idx].trim()
     if (target === '') return { ok: false, reason: '该行为空行，无法推导' }
+    if (contentHash === null) return { ok: false, reason: '该行为空行，无法推导' }
     const hits = []
     for (let i = 0; i < lines.length; i += 1) if (lines[i].trim() === target) hits.push(i)
     if (hits.length !== 1) return { ok: false, reason: '内容在全文出现 ' + hits.length + ' 次，不唯一' }
@@ -302,6 +385,9 @@ function deriveSymbolAnchor(lines, line, contentHash) {
   let sameName = 0
   for (const l of lines) if (defRe.test(l) && nameRe.test(l)) sameName += 1
 
+  // contentHash 为 null 说明目标行是空行 / 纯空白：没有可判内容，不能产出符号锚点
+  // （否则会得到 `#Sym@null`，判定时永远「匹配」，等于把判据废掉）。
+  if (contentHash === null) return { ok: false, reason: '该行为空行，无法推导' }
   if (sameName === 1) {
     return { ok: true, symbol, hash: contentHash, line: symbolLine + 1, kind: 'symbol' }
   }
@@ -314,7 +400,11 @@ function deriveSymbolAnchor(lines, line, contentHash) {
 
 /** 行内容的短哈希（sha256 前 8 位），用于 `@hash` 判据。 */
 function contentHashOf(text) {
-  return createHash('sha256').update(text.trim()).digest('hex').slice(0, 8)
+  const t = text.trim()
+  // 空行不能当内容锚：空串的 sha256 恒为 e3b0c442…，任何空行都会「匹配」，
+  // 等于把判据废掉（实测迁移 ShellOps.kt 时产出过 #ShellOps@e3b0c442 这种无效锚点）。
+  if (t === '') return null
+  return createHash('sha256').update(t).digest('hex').slice(0, 8)
 }
 
 function countLegacyReferences(anchors) {
@@ -536,6 +626,11 @@ export function checkDoc(text, universe, fsView, anchorBaseline = ANCHOR_BASELIN
     // 行号变了不判红：这正是本方案要消灭的假红。
   }
 
+  /** 耦合边用符号锚点作证据时的校验（复用同一套判据，标签换成「证据」）。 */
+  const checkSymbolEvidence = (path, symbol, symbolHash, raw) => {
+    checkSymbolReference(path, symbol, symbolHash, null, 'evidence: ' + raw.slice(0, 60))
+  }
+
   const checkedReferences = new Set()
   const checkReference = (path, line, expectation, expectationError, label) => {
     const key = path + ':' + line
@@ -596,9 +691,12 @@ export function checkDoc(text, universe, fsView, anchorBaseline = ANCHOR_BASELIN
     if (!tableSet.has(c.from)) push('bad-coupling', '耦合边左端未登记：' + c.from + '（' + c.raw + '）')
     if (ID_SHAPE.test(c.to) && !tableSet.has(c.to)) push('bad-coupling', '耦合边右端是查点 ID 但未登记：' + c.to + '（' + c.raw + '）')
     const ev = (c.evidence || '').match(EVIDENCE_RE)
-    if (!ev) push('bad-coupling', '耦合边缺 `path:line` 证据：' + c.raw)
+    if (!ev) push('bad-coupling', '耦合边缺 `path:line` 或 `path#Symbol` 证据：' + c.raw)
     else if (ev[3] !== undefined && parseExpectation(ev[3]).expectError) {
       push('bad-coupling', '耦合边证据含无效期望片段：' + c.raw)
+    } else if (ev[4] !== undefined && ev[5] !== undefined) {
+      // 符号锚点作证据：校验符号可解析（判据与正文锚点一致）
+      checkSymbolEvidence(ev[4], ev[5], ev[6], c.raw)
     }
   }
 
@@ -943,7 +1041,8 @@ if (isMain) {
       .map((a) => a.path + ':' + a.line))
     for (const c of parsed.couplings) {
       const ev = (c.evidence || '').match(EVIDENCE_RE)
-      if (ev && ev[3] === undefined && !parseExpectation(ev[3]).expectError) {
+      // 只收集**行号形态**的证据进 legacy 基线；符号锚点形态（ev[4]）不进 sourceLines。
+      if (ev && ev[5] === undefined && ev[3] === undefined && !parseExpectation(ev[3]).expectError) {
         references.add(norm(ev[1]) + ':' + Number(ev[2]))
       }
     }
@@ -964,6 +1063,7 @@ if (isMain) {
     }
     // 符号锚点：缓存「符号体归一化结果」。行号**不写入基线**——它只是缓存。
     const symbols = { ...(anchorBaselineSymbols()) }
+    const symbolHashes = { ...(anchorBaselineSymbolHashes()) }
     const symbolKeys = parsed.anchors.filter((a) => a.symbolForm)
     for (const a of symbolKeys) {
       const src = fsView.sourceLines(a.path)
@@ -977,12 +1077,25 @@ if (isMain) {
         process.exit(1)
       }
       symbols[a.path + '#' + a.symbol] = hit.body
+      // 带 @hash 的锚点：把「该行内容确实在这个符号体内」登记下来。
+      // 判据锚在推导当时那一行的内容哈希上，同符号其它行改动不误伤。
+      if (a.symbolHash !== undefined) {
+        const bodyLines = hit.body.split('\n')
+        const hasLine = bodyLines.some((l) => contentHashOf(l) === a.symbolHash)
+        if (!hasLine) {
+          console.error('Cannot refresh symbol-hash anchor (line content not inside symbol body): '
+            + a.path + '#' + a.symbol + '@' + a.symbolHash)
+          process.exit(1)
+        }
+        symbolHashes[a.path + '#' + a.symbol + '@' + a.symbolHash] = true
+      }
     }
     writeFileSync(ANCHOR_BASELINE_ABS, JSON.stringify({
       formatVersion: 2,
       legacyReferenceCounts: countLegacyReferences(parsed.anchors),
       sourceLines,
       symbols,
+      symbolHashes,
     }, null, 2) + '\n')
     console.log('CHECK-CODE-MAP baseline refreshed: ' + references.size + ' legacy references, '
       + symbolKeys.length + ' symbol anchors')

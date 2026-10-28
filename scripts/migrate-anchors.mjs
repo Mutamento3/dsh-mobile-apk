@@ -12,7 +12,7 @@
  * 用法：
  *   node scripts/migrate-anchors.mjs --dry-run
  *   node scripts/migrate-anchors.mjs --dry-run --json out.json
- *   node scripts/migrate-anchors.mjs --apply --only SnapshotTransaction.kt,SnapshotFs.kt
+ *   node scripts/migrate-anchors.mjs --write --only SnapshotTransaction.kt,SnapshotFs.kt
  *
  * 幂等：已是符号形式（`path#Symbol`）的引用一律不动，重复执行结果相同。
  * 迁移后自动 `--refresh-anchor-baseline` 再校验，失败即回滚文档。
@@ -31,7 +31,9 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
 const DOC = join(ROOT, 'docs/AGENTS/EXECUTION-MAP.md')
 const argv = process.argv.slice(2)
-const APPLY = argv.includes('--apply')
+// 默认 **dry-run**；必须显式 --write 才落盘。这是硬要求：
+// 迁移会改 1600 条锚点的表示形式，误触一次影响面极大。
+const APPLY = argv.includes('--write') || argv.includes('--apply')
 const JSON_OUT = argv.indexOf('--json') > 0 ? argv[argv.indexOf('--json') + 1] : null
 const ONLY = argv.indexOf('--only') > 0
   ? new Set(argv[argv.indexOf('--only') + 1].split(',').map((s) => s.trim()).filter(Boolean))
@@ -52,8 +54,17 @@ for (const m of text.matchAll(RE)) {
   // 用捕获组重拼，保证与文档里的实际写法一致。
   const rel = m[1], lineStr = m[2], rest = m[3]
   const whole = rel + ':' + lineStr + (rest ?? '')
-  if (rest && rest.startsWith('#')) { report.skipped.push({ ref: whole, reason: '已是符号形式' }); continue }
-  if (ONLY && !ONLY.has(rel)) continue
+  // `#expect=` 不是符号锚点的一部分，是旧的期望片段写法；只有 `#Symbol` 才算「已是符号形式」。
+  if (rest && rest.startsWith('#') && !rest.startsWith('#expect=')) {
+    report.skipped.push({ ref: whole, reason: '已是符号形式' })
+    continue
+  }
+  // 带 #expect 的 legacy 锚点也要迁移：@hash 已承担同样的判据职责（hash 就是该行内容的哈希），
+  // 迁移后不再需要 #expect。旧 expect 值用于校验迁移前后指向同一行内容。
+  const legacyExpect = rest && rest.startsWith('#expect=') ? decodeURIComponent(rest.slice(8)) : null
+  // --only 支持**后缀匹配**：文档里同一个文件可能写成裸名（ShellOps.kt）
+  // 或全路径（app/src/main/java/.../ShellOps.kt），只按全等匹配会漏掉一半。
+  if (ONLY && ![...ONLY].some((o) => rel === o || rel.endsWith('/' + o))) continue
   const lines = fsView.sourceLines(rel)
   if (lines === null) { report.blocked.push({ ref: whole, reason: '文件不存在或裸名多候选（不猜）' }); continue }
   const line = Number(lineStr)
@@ -61,6 +72,10 @@ for (const m of text.matchAll(RE)) {
   if (lineText === undefined) { report.blocked.push({ ref: whole, reason: '行号越界' }); continue }
   const d = deriveAnchorFor(lines, line)
   if (!d.ok) { report.blocked.push({ ref: whole, reason: d.reason, text: lineText.trim().slice(0, 60) }); continue }
+  if (legacyExpect !== null && !lineText.includes(legacyExpect)) {
+    report.blocked.push({ ref: whole, reason: '旧 #expect 内容不在该行，拒绝迁移', text: lineText.trim().slice(0, 60) })
+    continue
+  }
   const target = d.symbol === null
     ? rel + '@' + d.hash
     : rel + '#' + d.symbol + '@' + d.hash
@@ -96,14 +111,20 @@ const orig = text
 let out = text, replaced = 0
 for (const [key, target] of rewrites) {
   const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  out = out.replace(new RegExp(esc + '(?!#expect=)', 'g'), () => { replaced += 1; return target })
+  // 一并吃掉紧跟其后的 #expect=...（迁移后由 @hash 承担同样的判据职责）
+  out = out.replace(new RegExp(esc + '(?:#expect=[^\`\\s)|]*)?', 'g'), () => { replaced += 1; return target })
 }
 writeFileSync(DOC, out)
 console.log('')
 console.log('  已改写 ' + replaced + ' 处')
 const rf = spawnSync('node', ['scripts/check-code-map.mjs', '--refresh-anchor-baseline'], { cwd: ROOT, encoding: 'utf8' })
 process.stdout.write(rf.stdout || '')
-if (rf.status !== 0) { writeFileSync(DOC, orig); console.error('  refresh 失败，文档已回滚'); process.exit(1) }
+if (rf.status !== 0) {
+  process.stderr.write(rf.stderr || '')
+  writeFileSync(DOC, orig)
+  console.error('  refresh 失败，文档已回滚')
+  process.exit(1)
+}
 const g = spawnSync('node', ['scripts/check-code-map.mjs'], { cwd: ROOT, encoding: 'utf8' })
 process.stdout.write((g.stdout || '') + (g.stderr || ''))
 if (g.status !== 0) { writeFileSync(DOC, orig); console.error('  校验失败，文档已回滚'); process.exit(1) }
