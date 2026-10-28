@@ -1164,6 +1164,76 @@
       ],
       "expect": "allow",
       "why": "无选项形态的对照。"
+    },
+    {
+      "name": "S-23a awk 的 system() 执行屏幕命令必须判拒",
+      "command": "awk 'BEGIN{system(\"screencap -p /sdcard/x.png\")}'",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "deny-unparsed",
+      "why": "真机 RC=0、出图 2872362 B（与直接 screencap 同字节）。awk 程序文本整段在引号里，stripQuotedText 后命令词面只剩 awk ⇒ 修前 families 空 ⇒ allow。"
+    },
+    {
+      "name": "S-23b awk 的绝对路径形式同样判拒",
+      "command": "/system/bin/awk 'BEGIN{system(\"screencap -p f\")}'",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "deny-unparsed",
+      "why": "与 S-23a 成对：判据必须穿透任意级路径前缀，不能只认裸 awk。"
+    },
+    {
+      "name": "S-23c busybox awk 同族",
+      "command": "busybox awk 'BEGIN{system(\"screencap -p f\")}'",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "deny-unparsed",
+      "why": "与 S-23a 成对：包装器前缀不得让判据失效（toybox awk 同理）。"
+    },
+    {
+      "name": "S-23d 对照 awk 正常打印必须放行",
+      "command": "awk '{print $1}' /sdcard/a.txt",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "allow",
+      "why": "awk 的常规用途（无 system 调用）不得被这条判据误伤。"
+    },
+    {
+      "name": "S-23e 对照 awk -F 字段分隔符放行",
+      "command": "awk -F: '{print $1}' /etc/hosts",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "allow",
+      "why": "同上，带选项的常规形态。"
+    },
+    {
+      "name": "S-23f 对照 引号内的 awk system 只是文本",
+      "command": "echo \"awk system(\"",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "allow",
+      "why": "判据锚定段首命令词，参数位置出现的 awk/system( 文本不得误拦。"
+    },
+    {
+      "name": "S-23g 对照 printf 里的 awk 词不误拦",
+      "command": "printf '%s' awk",
+      "ownedTargets": [
+        "7",
+        "11529215046816944610"
+      ],
+      "expect": "allow",
+      "why": "同上：awk 只作参数，不是命令词。"
     }
   ]
 }

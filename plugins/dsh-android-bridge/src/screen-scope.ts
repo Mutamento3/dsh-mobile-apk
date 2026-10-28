@@ -366,6 +366,19 @@ function isRuntimeCommandName(segment: string): boolean {
   return head.startsWith('$') || head.startsWith('`')
 }
 
+/**
+ * `awk` 的 `system(…)` 能执行任意命令，而程序文本通常整段在引号里 —— `stripQuotedText` 之后
+ * 命令词面只剩 `awk`，载荷里的屏幕命令完全不可见。
+ *
+ * 真机实测（2026-10-29，小米 14 Pro / SDK 37 / toybox awk）：
+ *   `awk 'BEGIN{system("screencap -p /sdcard/awk.png")}'`    RC=0，出图 2872362 B
+ * 双引号形态 `awk "BEGIN{system(\"screencap …\")}"` 也 RC=0（2872137 B），它修前是被引号
+ * 状态机在嵌套处判成 unparsed 才偶然拦住的。修前单引号形态判 allow。
+ * 对照必须继续放行：`awk '{print $1}' /sdcard/a.txt`（无 system 调用）。
+ */
+const AWK_EXEC_PAYLOAD =
+  /^[ \t]*(?:[^\s]*\/)?(?:busybox[ \t]+|toybox[ \t]+)?awk\b[^;|&]*\bsystem[ \t]*\(/i
+
 /** 去掉一层首尾成对的引号（`sh -c "…"` 的载荷取值）。不成对则原样返回。 */
 function unwrapOneQuote(text: string): string {
   const trimmed = text.trim()
@@ -684,6 +697,8 @@ export function screenCommandVerdict(
     const bare = stripQuotedText(segment)
     // 命令名来自运行时（`$CMD` / `"$(cat /sdcard/x.sh)"` / 反引号）：执行什么静态不可判。
     if (isRuntimeCommandName(segment)) return 'deny-unparsed'
+    // `awk` 的 system() 载荷不可见（程序文本在引号里）⇒ fail-closed。
+    if (AWK_EXEC_PAYLOAD.test(segment)) return 'deny-unparsed'
     // 载荷不可见的解释器调用：静态判不了，fail-closed。
     if (interpreterPayloadUnparsed(bare)) return 'deny-unparsed'
     const options = displayOptionsIn(bare)

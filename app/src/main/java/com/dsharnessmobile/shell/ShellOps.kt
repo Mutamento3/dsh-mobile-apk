@@ -236,6 +236,18 @@ internal object ShellOps {
   }
 
   /**
+   * `awk` 的 `system(…)` 能执行任意命令，而程序文本通常整段在引号里 —— stripQuotedText 之后
+   * 命令词面只剩 `awk`，载荷里的屏幕命令完全不可见。
+   *
+   * 真机实测（2026-10-29）：`awk 'BEGIN{system("screencap -p /sdcard/awk.png")}'` RC=0，
+   * 出图 2872362 B。修前判 allow。对照 `awk '{print $1}' /sdcard/a.txt` 必须继续放行。
+   */
+  private val AWK_EXEC_PAYLOAD = Regex(
+    """^[ \t]*(?:[^\s]*/)?(?:busybox[ \t]+|toybox[ \t]+)?awk\b[^;|&]*\bsystem[ \t]*\(""",
+    RegexOption.IGNORE_CASE,
+  )
+
+  /**
    * `sh -c '<内层>'` 形式（含 `/system/bin/sh`、`busybox sh`、`su` 等包装）。
    *
    * 末段必须是「短选项**簇**且簇尾是 `c`」（`-[a-zA-Z]*c`），不能只认光杆 `-c`：
@@ -518,6 +530,10 @@ internal object ShellOps {
       val bare = stripQuotedText(segment)
       // 命令名来自运行时（`$CMD` / `"$(cat /sdcard/x.sh)"` / 反引号）：执行什么静态不可判。
       if (isRuntimeCommandName(segment)) return ScreenCommandVerdict.DENY_UNPARSED
+      // `awk` 的 system() 载荷不可见（程序文本在引号里）⇒ fail-closed。
+      if (AWK_EXEC_PAYLOAD.containsMatchIn(segment)) {
+        return ScreenCommandVerdict.DENY_UNPARSED
+      }
       // 裸解释器段：管道/重定向喂 shell 的载荷对判定器不可见（#509），fail-closed。
       if (interpreterPayloadUnparsed(bare)) {
         return ScreenCommandVerdict.DENY_UNPARSED
