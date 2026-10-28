@@ -143,13 +143,18 @@ object VdisplayController {
   /** Android display id for one owned virtual alias, or null when the alias is unknown/not owned. */
   fun displayIdForAlias(alias: String?): Int? = synchronized(lock) {
     if (alias == null) return null
+    // #671：按别名取屏 = 本会话正在使用这块屏（a11y 操作/launch 落点），刷新空闲计时——
+    // 旧实现 touch() 全仓零调用，空闲回收退化为「建屏后 10 分钟必回收」。
+    touch(alias)
     records[alias]?.displayId
   }
 
   /** Owned alias for one virtual Android display id, or null. Never maps display 0. */
   fun aliasForDisplayId(displayId: Int): String? = synchronized(lock) {
     if (displayId == Display.DEFAULT_DISPLAY) return null
-    records.values.firstOrNull { it.displayId == displayId }?.alias
+    val hit = records.values.firstOrNull { it.displayId == displayId }?.alias
+    hit?.let { touch(it) }
+    hit
   }
 
   /** Owned virtual aliases ordered by allocation (the model-facing `virtual-N` set). */
@@ -173,10 +178,13 @@ object VdisplayController {
     // 内容宽高比与「谁被选中」无关，只与「哪块屏存在」有关，所以这里按
     // 指定别名 → 当前选中 → 唯一活跃屏 依次退化；只要本机还有虚拟屏，就能给出正确的宽高比。
     val record = synchronized(lock) {
-      (alias?.let { records[it] })
+      val hit = (alias?.let { records[it] })
         ?: records[selectedAlias]
         ?: records.values.firstOrNull()
         ?: return null
+      // #671：宿主正在渲染这块屏的内容 = 使用中，刷新空闲计时。
+      touch(hit.alias)
+      hit
     }
     return liveOrSnapshotSize(record)
   }
@@ -574,6 +582,7 @@ object VdisplayController {
     val record = selectedRecord() ?: recordOf(target)
       ?: return status(context.applicationContext).put("ok", false).put("code", "screen-not-ready")
         .put("guidance", "虚拟屏幕尚未创建，无法拉起测试应用。")
+    touch(record.alias) // #671：往这块屏送任务 = 使用中。
     val id = record.displayId
     val result = ShizukuTransport.runController(
       context.applicationContext,
@@ -688,6 +697,7 @@ object VdisplayController {
     val record = selectedRecord() ?: recordOf(target)
       ?: return status(appContext).put("ok", false).put("code", "screen-not-ready")
         .put("guidance", "虚拟屏幕尚未创建，无法在其上拉起应用；可先 android_vdisplay_create。")
+    touch(record.alias) // #671：往这块屏送任务 = 使用中。
     val id = record.displayId
     // 拉起路径（0.14.0 模拟器逐条实测，**四条路只有最后一条成立**）：
     //

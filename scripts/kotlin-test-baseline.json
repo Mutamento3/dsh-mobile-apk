@@ -1,6 +1,6 @@
 {
   "$comment": "Kotlin 单测基线（0.14.1）：只许升不许降。键=测试类名（=源文件名去 .kt），值=用例数。逐类记录而非只记总数——防「删 A 类用例 + 加 B 类用例」净零抵消。升档：node scripts/check-kotlin-test-count.mjs --update-baseline（会拒绝降档）。",
-  "totalTests": 1899,
+  "totalTests": 1911,
   "testsByClass": {
     "A11yHeartbeatCadenceTest": 5,
     "A11yPrefsReconcileTest": 6,
@@ -18,7 +18,7 @@
     "AuditLedgerSourceTest": 4,
     "BackGateTest": 13,
     "BootDiagnosticsContractTest": 17,
-    "BootFailLogTest": 25,
+    "BootFailLogTest": 27,
     "BootPageConsoleRouteTest": 10,
     "BootStallClockTest": 6,
     "BrowserHostCleartextConsistencyTest": 4,
@@ -121,7 +121,7 @@
     "RepairModelClientTest": 5,
     "RepairModelConfigTest": 10,
     "RepairToolCallParserTest": 16,
-    "RepairToolsTest": 16,
+    "RepairToolsTest": 20,
     "ReverseMigrationTest": 8,
     "RootChannelDecisionTest": 12,
     "RootGrantTest": 22,
@@ -139,6 +139,7 @@
     "ShizukuBindStateTest": 40,
     "ShizukuCaptureSettlementFixtureTest": 5,
     "ShizukuRpcLeaseWiringFixtureTest": 4,
+    "ShotCachePolicyTest": 6,
     "SnapshotBundledAssetTest": 7,
     "SnapshotExtractorTest": 3,
     "SnapshotFileModeTest": 1,

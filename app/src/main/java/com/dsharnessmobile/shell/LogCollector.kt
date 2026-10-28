@@ -527,8 +527,8 @@ object LogCollector {
    *
    * @param stage 失败阶段（可判别的短标识，如 `engine-start-false` / `process-died-during-boot` /
    *   `boot-budget-exceeded` / `start-flow-exception` / `snapshot-refresh-failed`）
-   * @param detail 人类可读的一句话补充（不含凭据）
-   * @param error 导致失败的异常（可为 null —— 多数失败分支是布尔判定而非异常）
+   * @param detail 人类可读的一句话补充（组装行时强制过 [EngineAuth.redact]，#673）
+   * @param error 导致失败的异常（可为 null —— 多数失败分支是布尔判定而非异常；栈同样过 redact）
    */
   fun writeBootFail(context: Context, stage: String, detail: String, error: Throwable? = null) {
     writeBootFailTo(
@@ -605,12 +605,17 @@ object LogCollector {
         error.printStackTrace(java.io.PrintWriter(sw))
         sw.toString()
       } catch (_: Throwable) { "" }
-      sb.append(" stack=").append(stack.replace('\n', '|').replace('\r', '|').take(BOOT_FAIL_STACK_MAX_CHARS))
+      sb.append(" stack=").append(
+        EngineAuth.redact(stack).replace('\n', '|').replace('\r', '|').take(BOOT_FAIL_STACK_MAX_CHARS),
+      )
     } else {
       // 显式标注「本次失败无可读异常」——绝不留空（空字段会让读的人以为漏采）。
       sb.append(" error=none(boolean-failure-path) stack=none")
     }
-    sb.append(" detail=").append(detail.replace('\n', ' ').replace('\r', ' '))
+    // #673：detail 与 stack 都在组装行内强制过 EngineAuth.redact——拒启收口（#657）把 spawn
+    // 异常的 message 原样当 detail 传入，异常消息可能携带带 token 的引擎 URL；注释里那句
+    // 「detail 不含凭据」此前只是约定没有强制。诊断包会离开进程，token 绝不能跟着走。
+    sb.append(" detail=").append(EngineAuth.redact(detail).replace('\n', ' ').replace('\r', ' '))
     return sb.toString()
   }
 
