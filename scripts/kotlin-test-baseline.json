@@ -178,6 +178,7 @@
     "WatchdogMarkerDebugGateTest": 6,
     "WatchdogPluginTreeTest": 5,
     "WebViewShimTest": 13,
-    "WindowPickTest": 5
+    "WindowPickTest": 5,
+    "VdisplayTouchLockTest": 1
   }
 }
