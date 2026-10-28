@@ -65,6 +65,42 @@ class ShotCachePolicyTest {
   }
 
   @Test
+  fun publishedCaptureCountsTowardLimitsAndRemainsAvailable() {
+    val dir = tempDir()
+    try {
+      val now = 1_800_000_000_000L
+      val oldest = shot(dir, "oldest", 100, now - 2_000L)
+      val newer = shot(dir, "newer", 100, now - 1_000L)
+      val capture = shot(dir, "current", 100, now)
+
+      assertTrue(
+        ShotCachePolicy.prunePublished(dir, capture, nowMs = now, maxFiles = 2, maxBytes = 250L),
+      )
+
+      assertTrue("本次回执指向的截图必须保留", capture.isFile)
+      assertFalse("超限时应先删最旧历史图", oldest.exists())
+      assertTrue("较新历史图应保留", newer.isFile)
+      val retained = dir.listFiles()!!.filter { it.isFile && it.name.endsWith(ShotCachePolicy.SUFFIX) }
+      assertEquals("发布后数量上限必须立即生效", 2, retained.size)
+      assertTrue("发布后字节上限必须立即生效", retained.sumOf { it.length() } <= 250L)
+    } finally {
+      dir.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun oversizedCaptureIsDeletedAndMustNotBeReturned() {
+    val dir = tempDir()
+    try {
+      val capture = shot(dir, "too-large", 101, 1_800_000_000_000L)
+      assertFalse(ShotCachePolicy.prunePublished(dir, capture, nowMs = 1_800_000_000_000L, maxBytes = 100L))
+      assertFalse("超限截图不能留下一个成功回执所指向的文件", capture.exists())
+    } finally {
+      dir.deleteRecursively()
+    }
+  }
+
+  @Test
   fun foreignFilesAndDirectoriesAreNeverTouched() {
     val dir = tempDir()
     try {

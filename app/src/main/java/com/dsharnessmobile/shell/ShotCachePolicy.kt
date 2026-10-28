@@ -39,6 +39,7 @@ internal object ShotCachePolicy {
     ttlMs: Long = DEFAULT_TTL_MS,
     maxFiles: Int = DEFAULT_MAX_FILES,
     maxBytes: Long = DEFAULT_MAX_BYTES,
+    preserve: File? = null,
   ): Int {
     val files = try {
       dir.listFiles() ?: return 0
@@ -55,7 +56,7 @@ internal object ShotCachePolicy {
     val remaining = ArrayList<File>(shots.size)
     var removed = 0
     for (file in shots) {
-      if (file.lastModified() < expiredBefore) {
+      if (!sameFile(file, preserve) && file.lastModified() < expiredBefore) {
         if (delete(file)) removed++ else remaining.add(file)
       } else {
         remaining.add(file)
@@ -65,21 +66,52 @@ internal object ShotCachePolicy {
     // 从旧到新删，直到数量与总量都落回阈值内。
     remaining.sortBy { it.lastModified() }
     var totalBytes = remaining.sumOf { sizeOf(it) }
-    var index = 0
-    while (index < remaining.size &&
-      (remaining.size - index > maxFiles || totalBytes > maxBytes)
-    ) {
-      val file = remaining[index]
+    var count = remaining.size
+    for (file in remaining) {
+      if (count <= maxFiles && totalBytes <= maxBytes) break
+      if (sameFile(file, preserve)) continue
       // 必须在删除**前**取长度：删除后 length() 归零，总量就永远不减，会把目录删空。
       val fileBytes = sizeOf(file)
       if (delete(file)) {
         totalBytes -= fileBytes
+        count--
         removed++
       }
-      index++
     }
     return removed
   }
+
+  /** Prune after publishing a capture while preserving the file being returned to the caller. */
+  fun prunePublished(
+    dir: File,
+    capture: File,
+    nowMs: Long = System.currentTimeMillis(),
+    ttlMs: Long = DEFAULT_TTL_MS,
+    maxFiles: Int = DEFAULT_MAX_FILES,
+    maxBytes: Long = DEFAULT_MAX_BYTES,
+  ): Boolean {
+    if (!capture.isFile || !isManagedShot(capture) || capture.parentFile?.absoluteFile != dir.absoluteFile) return false
+    if (maxFiles <= 0 || sizeOf(capture) > maxBytes) {
+      delete(capture)
+      prune(dir, nowMs, ttlMs, maxFiles, maxBytes)
+      return false
+    }
+    prune(dir, nowMs, ttlMs, maxFiles, maxBytes, preserve = capture)
+    val remaining = try {
+      dir.listFiles()?.filter { it.isFile && isManagedShot(it) }.orEmpty()
+    } catch (_: Exception) {
+      return false
+    }
+    val withinLimits = remaining.size <= maxFiles && remaining.sumOf { sizeOf(it) } <= maxBytes
+    if (!withinLimits) delete(capture)
+    return withinLimits && capture.isFile
+  }
+
+  private fun isManagedShot(file: File): Boolean =
+    file.name.startsWith(PREFIX) && file.name.endsWith(SUFFIX)
+
+  private fun sameFile(file: File, other: File?): Boolean =
+    other != null && file.absoluteFile == other.absoluteFile
 
   private fun sizeOf(file: File): Long = try {
     file.length()

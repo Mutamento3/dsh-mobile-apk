@@ -2082,6 +2082,9 @@ internal class BrowserHost(
       val dir = shotDir()
       val file = File.createTempFile("browser-shot-", ".png", dir)
       FileOutputStream(file).use { it.write(png) }
+      if (!ShotCachePolicy.prunePublished(dir, file)) {
+        return@controlOnMain targetFailure(target, "shot-failed:cache-limit")
+      }
       // PNG IHDR 宽高（字节 16..23 大端）——不做整图解码。
       val w = if (png.size > 24) ((png[16].toInt() and 0xff) shl 24 or ((png[17].toInt() and 0xff) shl 16)
         or ((png[18].toInt() and 0xff) shl 8) or (png[19].toInt() and 0xff)) else 0
@@ -2100,6 +2103,9 @@ internal class BrowserHost(
         val dir = shotDir()
         val file = File.createTempFile("browser-shot-", ".png", dir)
         FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        if (!ShotCachePolicy.prunePublished(dir, file)) {
+          return@controlOnMain targetFailure(target, "shot-failed:cache-limit")
+        }
         pageReply(target).put("ok", true).put("path", file.absolutePath).put("bytes", file.length())
           .put("width", bitmap.width).put("height", bitmap.height).put("health", "ok")
           .apply { if (!args.optBoolean("inline", false)) put("note", SHOT_NOTE) }
