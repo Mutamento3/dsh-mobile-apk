@@ -1725,10 +1725,10 @@
       "return false"
     ],
     "OverlayReport.kt:348": [
-      "* 缺陷现场：有摘要、无正文（`body` 字段缺失的旧条目）时，[reportBodyText] 按设计回落 summary，"
+      "*"
     ],
     "OverlayReport.kt:370": [
-      "* 但**不得低于 300dp**（横屏 1600x900 时 40% 只有 240dp，比下限 140dp 只多 100dp），"
+      "/**"
     ],
     "OverlayService.kt:106": [
       "/** 完成位（会话维、带消费标记）。**必须放在服务级字段**：面板收起态要能存活"
