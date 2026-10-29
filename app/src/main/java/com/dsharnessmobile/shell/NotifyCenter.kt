@@ -99,6 +99,7 @@ object NotifyCenter {
   enum class Face(
     val category: String,
     val description: String,
+    val descriptionEn: String,
     val candidates: List<String>,
     val importance: Int,
     val popup: Boolean,
@@ -112,23 +113,23 @@ object NotifyCenter {
     val interactive: Boolean,
   ) {
     SILENT(
-      "silent", "看门狗与引擎状态；静默更新，不弹出",
+      "silent", "看门狗与引擎状态；静默更新，不弹出", "Watchdog and engine status; silent updates, no popup",
       listOf("dsh-silent"), NotificationManager.IMPORTANCE_LOW, false, false,
     ),
     TODO(
-      "todo", "任务步骤进度；静默更新，不弹出",
+      "todo", "任务步骤进度；静默更新，不弹出", "Task step progress; silent updates, no popup",
       listOf("dsh-todo-progress"), NotificationManager.IMPORTANCE_LOW, false, false,
     ),
     REPORT(
-      "report", "每轮任务结束的汇报；需要出现在锁屏之上",
+      "report", "每轮任务结束的汇报；需要出现在锁屏之上", "End-of-run report; must appear above the lock screen",
       listOf("dsh-report", "dsh-report-h2"), NotificationManager.IMPORTANCE_HIGH, true, false,
     ),
     QUESTION(
-      "question", "引擎向你提问；可直接在通知栏回复",
+      "question", "引擎向你提问；可直接在通知栏回复", "The engine asks you something; you can reply from the shade",
       listOf("dsh-question", "dsh-question-h2"), NotificationManager.IMPORTANCE_HIGH, true, true,
     ),
     APPROVAL(
-      "approval", "工具执行前的授权请求；请确认不是他人代答",
+      "approval", "工具执行前的授权请求；请确认不是他人代答", "Approval request before a tool runs; make sure nobody else answers",
       listOf("dsh-auth", "dsh-auth-h2", "dsh-auth-h3"), NotificationManager.IMPORTANCE_HIGH, true, true,
     );
 
@@ -139,7 +140,10 @@ object NotifyCenter {
      * 把「提问」写在设置页，同一个东西两个名字（审查档 §4.3）；本批把用词收到一处，
      * 这里派生取值，设置页标签同源于同一张表。
      */
-    val label: String get() = UserCopy.notifyCategory(category)
+    fun label(app: Context? = null): String = UserCopy.notifyCategory(category, app)
+
+    /** 渠道说明（跟随语言）。 */
+    fun descriptionText(app: Context? = null): String = UiText.t(app, description, descriptionEn)
 
     companion object {
       fun of(category: String): Face? = values().firstOrNull { it.category == category }
@@ -468,7 +472,7 @@ object NotifyCenter {
       }
     }
     if (chosen != null && selection.create) {
-      manager.createNotificationChannel(buildChannel(chosen, face))
+      manager.createNotificationChannel(buildChannel(chosen, face, app))
       val created = manager.getNotificationChannel(chosen)
       // 少数 ROM 会把新建渠道的 importance 打回默认值：这里以设备实际值为准再判一次。
       if (created != null && created.importance < face.importance) {
@@ -483,7 +487,7 @@ object NotifyCenter {
       // （S3-13 要的正是两侧同名，光改字面量不够）。
       // 这里按 id 校正展示名与说明：**用渠道当前 importance 重建**，不尝试提升/降低 importance,
       // 因此不会干扰「用户改过的重要性」判定（那是降级检测的输入）。
-      renameChannelIfNeeded(manager, chosen, face)
+      renameChannelIfNeeded(manager, chosen, face, app)
     }
     prefs(app).edit()
       .putBoolean(KEY_CHANNELS_INITIALIZED, true)
@@ -523,16 +527,35 @@ object NotifyCenter {
     for (face in Face.values()) {
       val id = channelFor(app, face) ?: continue
       val existing = manager.getNotificationChannel(id) ?: continue
-      if (!channelRenameNeeded(existing.name?.toString().orEmpty(), existing.description, face.label, face.description)) continue
-      renameChannelIfNeeded(manager, id, face)
+      if (!channelRenameNeeded(
+          existing.name?.toString().orEmpty(),
+          existing.description,
+          face.label(app),
+          face.descriptionText(app),
+        )
+      ) {
+        continue
+      }
+      renameChannelIfNeeded(manager, id, face, app)
       renamed += 1
+    }
+    // 引擎前台服务渠道（EngineService 建，名字含中文「引擎」）也要跟着语言走，
+    // 否则切英文后通知设置里仍能看到「DeepCode 引擎」。
+    val engineCh = manager.getNotificationChannel("engine")
+    if (engineCh != null) {
+      val want = UserCopy.APP_NAME + UiText.t(app, " 引擎", " engine")
+      if (engineCh.name?.toString().orEmpty() != want) {
+        engineCh.name = want
+        manager.createNotificationChannel(engineCh)
+        renamed += 1
+      }
     }
     return renamed
   }
 
-  private fun buildChannel(id: String, face: Face): NotificationChannel {
-    val ch = NotificationChannel(id, face.label, face.importance)
-    ch.description = face.description
+  private fun buildChannel(id: String, face: Face, app: Context): NotificationChannel {
+    val ch = NotificationChannel(id, face.label(app), face.importance)
+    ch.description = face.descriptionText(app)
     ch.setShowBadge(true)
     if (face.popup) {
       ch.enableVibration(true)
@@ -554,18 +577,30 @@ object NotifyCenter {
    * @param id - 已选中的渠道 id。
    * @param face - 该渠道对应的语义。
    */
-  private fun renameChannelIfNeeded(manager: NotificationManager, id: String, face: Face) {
+  private fun renameChannelIfNeeded(manager: NotificationManager, id: String, face: Face, app: Context) {
     val existing = manager.getNotificationChannel(id) ?: return
-    if (!channelRenameNeeded(existing.name?.toString().orEmpty(), existing.description, face.label, face.description)) return
-    manager.createNotificationChannel(buildChannelKeepingImportance(existing, face))
-    LogCollector.log("dsh-notify", "channel " + face.category + " renamed to '" + face.label + "' (id=" + id +
+    if (!channelRenameNeeded(
+        existing.name?.toString().orEmpty(),
+        existing.description,
+        face.label(app),
+        face.descriptionText(app),
+      )
+    ) {
+      return
+    }
+    manager.createNotificationChannel(buildChannelKeepingImportance(existing, face, app))
+    LogCollector.log("dsh-notify", "channel " + face.category + " renamed to '" + face.label(app) + "' (id=" + id +
       ", importance kept=" + existing.importance + ")")
   }
 
   /** 按既有渠道的**当前** importance 重建，只改展示名与说明（其余保持系统现状）。 */
-  private fun buildChannelKeepingImportance(existing: NotificationChannel, face: Face): NotificationChannel {
-    val ch = NotificationChannel(existing.id, face.label, existing.importance)
-    ch.description = face.description
+  private fun buildChannelKeepingImportance(
+    existing: NotificationChannel,
+    face: Face,
+    app: Context,
+  ): NotificationChannel {
+    val ch = NotificationChannel(existing.id, face.label(app), existing.importance)
+    ch.description = face.descriptionText(app)
     ch.setShowBadge(true)
     ch.enableVibration(existing.shouldVibrate())
     ch.setSound(existing.sound, existing.audioAttributes)
@@ -592,7 +627,7 @@ object NotifyCenter {
     for (face in Face.values()) {
       val row = JSONObject()
       row.put("category", face.category)
-      row.put("label", face.label)
+      row.put("label", face.label(app))
       val selected = channelFor(app, face)
       row.put("selected", selected ?: "")
       row.put("popup", face.popup)
@@ -889,7 +924,7 @@ object NotifyCenter {
     // 探针与一行 flashStatus（面板收起时看不到），用户看到一条不响的提问通知却不知道原因。这里让
     // 「为什么静默 + 怎么恢复」**跟着通知本身走**：通知在哪儿，解释就在哪儿。
     val degradedNotice = if (channelId == null && face.interactive) {
-      "系统已把「" + face.label + "」通知降级为静默——到系统设置里可恢复"
+      "系统已把「" + face.label(app) + "」通知降级为静默——到系统设置里可恢复"
     } else null
     if (fallback == null) {
       // 连静默渠道都不可用（极端：用户逐个降级）——明确记录，绝不静默失败
@@ -1068,25 +1103,31 @@ object NotifyCenter {
       .setWhen(System.currentTimeMillis())
     when (face) {
       Face.SILENT -> {
-        b.setContentTitle(entry.displayTitle())
-        b.setContentText(entry.text.ifBlank { "引擎状态更新" })
+        b.setContentTitle(entry.displayTitle(app))
+        b.setContentText(entry.text.ifBlank { UiText.t(app, "引擎状态更新", "Engine status update") })
         b.setSilent(true) // 第二道保险（javadoc 明写它同时阻止 peek）
-        if (entry.count > 1) b.setSubText("共 " + entry.count + " 条")
+        if (entry.count > 1) b.setSubText(UiText.t(app, "共 " + entry.count + " 条", entry.count.toString() + " updates"))
       }
       Face.TODO -> {
-        b.setContentTitle(entry.displayTitle())
-        b.setContentText(if (entry.current.isBlank()) "步骤 " + entry.done + "/" + entry.total else "当前：" + entry.current)
-        b.setSubText("步骤 " + entry.done + "/" + entry.total)
+        b.setContentTitle(entry.displayTitle(app))
+        b.setContentText(
+          if (entry.current.isBlank()) {
+            UiText.t(app, "步骤 " + entry.done + "/" + entry.total, "Step " + entry.done + "/" + entry.total)
+          } else {
+            UiText.t(app, "当前：" + entry.current, "Current: " + entry.current)
+          },
+        )
+        b.setSubText(UiText.t(app, "步骤 " + entry.done + "/" + entry.total, "Step " + entry.done + "/" + entry.total))
         b.setProgress(entry.total.coerceAtLeast(0), entry.done.coerceAtLeast(0), false)
         b.setSilent(true)
         b.setCategory(NotificationCompat.CATEGORY_PROGRESS)
         b.setOnlyAlertOnce(true)
       }
       Face.REPORT -> {
-        b.setContentTitle(entry.displayTitle())
-        b.setContentText(reportLine(entry))
-        b.setStyle(NotificationCompat.BigTextStyle().bigText(reportBigText(entry)))
-        b.setSubText(UserCopy.reportMetaLine(entry.durationLabel(), entry.toolCount))
+        b.setContentTitle(entry.displayTitle(app))
+        b.setContentText(reportLine(entry, app))
+        b.setStyle(NotificationCompat.BigTextStyle().bigText(reportBigText(entry, app)))
+        b.setSubText(UserCopy.reportMetaLine(entry.durationLabel(), entry.toolCount, app))
         if (!silentOverride) b.setPriority(NotificationCompat.PRIORITY_HIGH)
       }
       Face.QUESTION -> {
@@ -1107,12 +1148,14 @@ object NotifyCenter {
         // S3-8：旧标题恒为类别词「需要授权」，把引擎给的**具体对象**（工具名）丢在正文里——用户
         // 一眼看到「需要授权」四个字，不知道要放行什么。标题带上具体对象，类别词只作兜底。
         b.setContentTitle(
-          entry.toolName.ifBlank { null }?.let { "「" + it + "」需要授权" }
-            ?: entry.displayTitle().ifBlank { UserCopy.notifyCategory(Face.APPROVAL.category) },
+          entry.toolName.ifBlank { null }?.let {
+            UiText.t(app, "「" + it + "」需要授权", "「" + it + "」needs approval")
+          }
+            ?: entry.displayTitle(app).ifBlank { UserCopy.notifyCategory(Face.APPROVAL.category, app) },
         )
-        b.setContentText(approvalLine(entry))
-        b.setStyle(NotificationCompat.BigTextStyle().bigText(approvalLine(entry) + "\n仅本次生效"))
-        b.setSubText("仅本次生效")
+        b.setContentText(approvalLine(app, entry))
+        b.setStyle(NotificationCompat.BigTextStyle().bigText(approvalLine(app, entry) + "\n" + UiText.t(app, "仅本次生效", "Applies once")))
+        b.setSubText(UiText.t(app, "仅本次生效", "Applies once"))
         b.setPriority(NotificationCompat.PRIORITY_HIGH)
         addApprovalActions(app, b, entry)
       }
@@ -1139,17 +1182,18 @@ object NotifyCenter {
     return b.build()
   }
 
-  private fun reportLine(entry: NotifyEntry): String {
-    val head = entry.outcomeLabel.ifBlank { entry.outcomeLabel() }
+  private fun reportLine(entry: NotifyEntry, app: android.content.Context): String {
+    val head = entry.outcomeLabel.ifBlank { entry.outcomeLabel(app) }
     val summary = if (entry.summary.isNotBlank()) entry.summary else entry.text
     return if (summary.isBlank()) head else head + " · " + summary
   }
 
-  private fun reportBigText(entry: NotifyEntry): String {
-    val sb = StringBuilder(reportLine(entry))
-    sb.append("\n").append(UserCopy.reportMetaLine(entry.durationLabel(), entry.toolCount))
+  private fun reportBigText(entry: NotifyEntry, app: android.content.Context): String {
+    val sb = StringBuilder(reportLine(entry, app))
+    sb.append("\n").append(UserCopy.reportMetaLine(entry.durationLabel(), entry.toolCount, app))
     if (entry.presentedFiles.isNotEmpty()) {
-      sb.append("\n产出：").append(entry.presentedFiles.joinToString("、"))
+      sb.append("\n").append(UiText.t(app, "产出：", "Output: "))
+        .append(entry.presentedFiles.joinToString(UiText.t(app, "、", ", ")))
     }
     return sb.toString()
   }
@@ -1158,10 +1202,14 @@ object NotifyCenter {
    * 审批正文（S3-7）：保留被操作目标的可辨识末段，而不是把整条路径抹成 `[路径]`。
    * 用户要确认的**正是那个目标**；抹掉它等于让用户在不知道放行什么的情况下点「批准一次」。
    */
-  private fun approvalLine(entry: NotifyEntry): String {
-    val tool = entry.toolName.ifBlank { "未知工具" }
+  private fun approvalLine(app: Context, entry: NotifyEntry): String {
+    val tool = entry.toolName.ifBlank { UiText.t(app, "未知工具", "unknown tool") }
     val reason = entry.reason.trim()
-    return if (reason.isBlank()) "工具 " + tool + " 请求执行" else "工具 " + tool + "：" + redactPathsKeepingTail(reason)
+    return if (reason.isBlank()) {
+      UiText.t(app, "工具 " + tool + " 请求执行", "Tool " + tool + " wants to run")
+    } else {
+      UiText.t(app, "工具 " + tool + "：" + redactPathsKeepingTail(reason), "Tool " + tool + ": " + redactPathsKeepingTail(reason))
+    }
   }
 
   /** 正文脱敏：绝对路径截断 + token 形态遮挡（§5.6；不改写 engine.log 本体）。 */
@@ -1454,19 +1502,43 @@ object NotifyCenter {
   }
 
   /** 发送测试通知（设置页自证按钮；按类各一条；权限缺失时二次请求由界面负责）。 */
+  /** 发送测试通知（设置页自证按钮；按类各一条；权限缺失时二次请求由界面负责）。 */
   fun sendTest(context: Context, category: String): Result {
+    val app = context.applicationContext
+    // 文案面（0.14.11）：这五条是用户点「发送测试通知」后看得见的通知，切到英文后仍是中文。
+    // 标题/正文与其它原生文案走同一条 UiText.t。
     val entry = when (category) {
-      "todo" -> NotifyEntry(kind = "todo", sessionId = "test", total = 5, done = 2, current = "测试进度")
+      "todo" -> NotifyEntry(
+        kind = "todo", sessionId = "test", total = 5, done = 2,
+        current = UiText.t(app, "测试进度", "Test progress"),
+      )
       "report" -> NotifyEntry(
-        kind = "report", sessionId = "test", title = "测试会话", outcome = "completed",
-        outcomeLabel = "已完成", summary = "这是一条工作汇报测试", durationMs = 12_000, toolCount = 3,
+        kind = "report", sessionId = "test", outcome = "completed",
+        title = UiText.t(app, "测试会话", "Test session"),
+        outcomeLabel = UiText.t(app, "已完成", "Completed"),
+        summary = UiText.t(app, "这是一条工作汇报测试", "This is a work-report notification test"),
+        durationMs = 12_000, toolCount = 3,
       )
       "question" -> NotifyEntry(
         kind = "question", eventId = "test-q",
-        questions = listOf(NotifyQuestion("q1", "测试提问", "现在方便吗？", emptyList())),
+        questions = listOf(
+          NotifyQuestion(
+            "q1",
+            UiText.t(app, "测试提问", "Test question"),
+            UiText.t(app, "现在方便吗？", "Is now a good time?"),
+            emptyList(),
+          ),
+        ),
       )
-      "approval" -> NotifyEntry(kind = "approval", eventId = "test-a", toolName = "bash", reason = "测试授权请求")
-      else -> NotifyEntry(kind = "silent", event = "test", title = "后台动态测试", text = "引擎状态正常")
+      "approval" -> NotifyEntry(
+        kind = "approval", eventId = "test-a", toolName = "bash",
+        reason = UiText.t(app, "测试授权请求", "Test approval request"),
+      )
+      else -> NotifyEntry(
+        kind = "silent", event = "test",
+        title = UiText.t(app, "后台动态测试", "Background activity test"),
+        text = UiText.t(app, "引擎状态正常", "Engine status is healthy"),
+      )
     }
     return notifyEvent(context, entry)
   }
@@ -1554,22 +1626,22 @@ data class NotifyEntry(
   val questions: List<NotifyQuestion> = emptyList(),
   val target: String? = null,
 ) {
-  fun displayTitle(): String = title.ifBlank {
+  fun displayTitle(app: android.content.Context? = null): String = title.ifBlank {
     if (kind == "report") {
-      UserCopy.notifyCategory(NotifyCenter.Face.REPORT.category)
+      UserCopy.notifyCategory(NotifyCenter.Face.REPORT.category, app)
     } else {
       UserCopy.APP_NAME
     }
   }
 
-  fun outcomeLabel(): String = when (outcome) {
-    "completed" -> "已完成"
-    "error" -> "失败"
-    "blocked" -> "被阻塞"
-    "aborted" -> "已中止"
-    "max-tokens" -> "输出超限"
-    "interrupted" -> "被中断"
-    else -> if (outcome.isBlank()) "" else "结果未知"
+  fun outcomeLabel(app: android.content.Context? = null): String = when (outcome) {
+    "completed" -> UiText.t(app, "已完成", "Completed")
+    "error" -> UiText.t(app, "失败", "Failed")
+    "blocked" -> UiText.t(app, "被阻塞", "Blocked")
+    "aborted" -> UiText.t(app, "已中止", "Aborted")
+    "max-tokens" -> UiText.t(app, "输出超限", "Output limit reached")
+    "interrupted" -> UiText.t(app, "被中断", "Interrupted")
+    else -> if (outcome.isBlank()) "" else UiText.t(app, "结果未知", "Unknown result")
   }
 
   /**
