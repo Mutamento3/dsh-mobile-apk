@@ -26,8 +26,8 @@
  *   collapse toggle;
  * - `@`/slash menu: the menu's own outside-pointerdown dismissal;
  * - menu drill-down: the last enabled breadcrumb (one level per press).
- * - attachment source menu (this plugin's own paperclip popup): its own
- *   outside-pointerdown dismissal, which the enhancer implements.
+ * - composer "+" bottom sheet (this plugin's own): its own outside-pointerdown
+ *   dismissal, which the sheet implements.
  * - global main panel (upstream's plugin manager and its kin): one detail level
  *   per press through the page's own crumb control, then the page's own back
  *   control (this plugin's, at the list root — see mobile/main-panel-back.ts).
@@ -51,7 +51,7 @@ export type BackLayerKind =
   | 'sidebar-bubbles'
   | 'menu'
   | 'menu-drill'
-  | 'attachment-menu'
+  | 'composer-sheet'
   | 'model-menu'
   | 'main-panel'
   | 'marketplace'
@@ -98,14 +98,14 @@ const MENU_SELECTOR = '[data-trigger-menu]'
 // ComposerPopupGuard marks only the open, aria-controlled Android ModelSelect portal.
 const MODEL_MENU_SELECTOR = '[data-dsh-android-model-menu]'
 /**
- * This plugin's own attachment-source popup (attachment-picker-menu.ts).
+ * This plugin's own composer "+" bottom sheet (composer-sheet.ts).
  *
- * D8: the menu is mounted on document.body and removed on close, so its presence is exactly
- * "open". It was not a layer, and the shell's back callback treats "no layer" as FINISH_ACTIVITY
- * (BackGate.kt:56-60), so pressing system back with the menu open exited the app instead of
- * closing it.
+ * Same D8 rule the attachment-source popup used: the sheet is mounted on document.body and removed
+ * on close, so its presence is exactly "open". The shell's back callback treats "no layer" as
+ * FINISH_ACTIVITY (BackGate.kt:56-60), so without this entry pressing system back with the sheet
+ * open would exit the app instead of closing it.
  */
-const ATTACHMENT_MENU_SELECTOR = '[data-dsh-attachment-picker-menu]'
+const COMPOSER_SHEET_SELECTOR = '[data-dsh-composer-sheet-backdrop]'
 /**
  * 第三方市场插件（dshmarketplace-plugin）的整页浮层。
  *
@@ -141,7 +141,7 @@ const OBSERVED_ATTRIBUTES = [
   'data-sidebar-right-panel',
   'data-sidebar-right-open',
   'data-trigger-menu',
-  'data-dsh-attachment-picker-menu',
+  'data-dsh-composer-sheet-backdrop',
   'data-dsh-android-model-menu',
   'data-plugin-panel',
   'data-dsh-main-panel-back',
@@ -489,8 +489,8 @@ export class BackStackSignal {
     if (drill !== null) found.push(drill)
     const modelMenu = this.detectModelMenu()
     if (modelMenu !== null) found.push(modelMenu)
-    const attachmentMenu = this.detectAttachmentMenu()
-    if (attachmentMenu !== null) found.push(attachmentMenu)
+    const composerSheet = this.detectComposerSheet()
+    if (composerSheet !== null) found.push(composerSheet)
     const marketplace = this.detectMarketplace()
     if (marketplace !== null) found.push(marketplace)
     return found
@@ -587,16 +587,16 @@ export class BackStackSignal {
   }
 
   /**
-   * This plugin's own attachment-source menu.
+   * This plugin's own composer "+" bottom sheet.
    *
    * Distinct from the upstream trigger menus: it is our node, mounted on document.body, and the
-   * enhancer already closes it on the same outside-pointerdown gesture upstream menus use - so the
-   * shared dismissal path below is the right control.
+   * sheet already closes on the same outside-pointerdown gesture upstream menus use - so the shared
+   * dismissal path below is the right control.
    */
-  private detectAttachmentMenu(): BackLayerDetection | null {
-    const menu = document.querySelector<HTMLElement>(ATTACHMENT_MENU_SELECTOR)
-    if (menu === null) return null
-    return { id: 'attachment-menu', kind: 'attachment-menu', close: () => closeMenu(menu) }
+  private detectComposerSheet(): BackLayerDetection | null {
+    const sheet = document.querySelector<HTMLElement>(COMPOSER_SHEET_SELECTOR)
+    if (sheet === null) return null
+    return { id: 'composer-sheet', kind: 'composer-sheet', close: () => closeMenu(sheet) }
   }
 
   /**

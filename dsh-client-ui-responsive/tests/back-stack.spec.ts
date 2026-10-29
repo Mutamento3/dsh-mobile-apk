@@ -308,19 +308,18 @@ describe('other layers', () => {
     expect(seenMode).toEqual(['click'])
   })
 
-  // D8 (2026-09-25): the plugin's own attachment-source popup is mounted on document.body, so its
-  // presence is exactly "open". It used to be invisible to this stack; the shell's back callback
-  // treats "no layer" as FINISH_ACTIVITY (BackGate.kt:56-60), so back with the menu open exited the
-  // app instead of closing the menu.
-  it('counts the attachment source menu as a layer and closes it, not the activity', async () => {
+  // D8: the plugin's own composer "+" bottom sheet is mounted on document.body, so its
+  // presence is exactly "open". The shell's back callback treats "no layer" as FINISH_ACTIVITY
+  // (BackGate.kt:56-60), so back with the sheet open must close it, not exit the app.
+  it('counts the composer sheet as a layer and closes it, not the activity', async () => {
     signal.attach()
     const popup = document.createElement('div')
-    popup.setAttribute('data-dsh-attachment-picker-menu', '')
+    popup.setAttribute('data-dsh-composer-sheet-backdrop', '')
     document.body.appendChild(popup)
     const seen: string[] = []
     document.addEventListener('pointerdown', event => { seen.push((event.target as Element)?.tagName ?? '') }, true)
     await flush()
-    expect(window.__dshBackKinds).toEqual(['attachment-menu'])
+    expect(window.__dshBackKinds).toEqual(['composer-sheet'])
     expect(window.__dshBackDepth).toBe(1)
     expect(uplink).toHaveBeenLastCalledWith(true)
     expect(window.__dshBack?.()).toBe(true)
@@ -333,16 +332,16 @@ describe('other layers', () => {
     expect(uplink).toHaveBeenLastCalledWith(false)
   })
 
-  it('stacks the attachment menu above an open upstream menu', async () => {
+  it('stacks the composer sheet above an open upstream menu', async () => {
     signal.attach()
     const upstream = document.createElement('div')
     upstream.setAttribute('data-trigger-menu', '')
     document.body.appendChild(upstream)
     const popup = document.createElement('div')
-    popup.setAttribute('data-dsh-attachment-picker-menu', '')
+    popup.setAttribute('data-dsh-composer-sheet-backdrop', '')
     document.body.appendChild(popup)
     await flush()
-    expect(window.__dshBackKinds).toEqual(['menu', 'attachment-menu'])
+    expect(window.__dshBackKinds).toEqual(['menu', 'composer-sheet'])
     expect(window.__dshBack?.()).toBe(true)
   })
 

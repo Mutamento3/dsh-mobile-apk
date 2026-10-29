@@ -33,8 +33,9 @@ import { MOBILE_SETTINGS_CSS } from './mobile-settings.css.ts'
 import { APPEARANCE_ROW_CSS } from './appearance-row.css.ts'
 import { MobileSettingsNav } from './mobile/settings-nav.ts'
 import { COMPOSER_MENU_CSS } from './composer-menu.css.ts'
-import { ATTACHMENT_PICKER_MENU_CSS } from './attachment-picker-menu.css.ts'
-import { AttachmentPickerMenuEnhancer } from './mobile/attachment-picker-menu.ts'
+import { COMPOSER_SHEET_CSS } from './mobile/composer-sheet.css.ts'
+import { ComposerSheet } from './mobile/composer-sheet.ts'
+import { zh as sheetZh, en as sheetEn } from './mobile/composer-sheet.locales.ts'
 import { FILE_CARD_CAPSULE_CSS } from './mobile/file-card-capsule.css.ts'
 import { FileCardCapsule, type FileCardBridge } from './mobile/file-card-actions.ts'
 import { zh as cardZh, en as cardEn } from './mobile/file-card-capsule.locales.ts'
@@ -236,15 +237,23 @@ export function apply(ctx: ClientContext): void {
     return () => { guard.detach() }
   }, 'ui-responsive: composer popup geometry guard')
 
-  // The upstream paperclip keeps one hidden file input and one addFiles/upload admission path.
-  // Add an upward DSH-native source menu in front of that exact input rather than a second picker
-  // bridge: each row changes accept in its own user gesture, clicks the existing input, then restores it.
-  ctx.effect(() => injectStyle('attachment-picker-menu', ATTACHMENT_PICKER_MENU_CSS), 'ui-responsive: attachment picker source menu styles')
-  ctx.effect(() => {
-    const picker = new AttachmentPickerMenuEnhancer()
-    picker.attach()
-    return () => { picker.detach() }
-  }, 'ui-responsive: paperclip attachment/image source menu')
+  // 输入行「+」改为底部 sheet：三块瓦片（拍照 / 照片 / 本地文件）在上，上游「+」菜单里的
+  // 全部项自动映射成行在下（不加白名单，第三方插件往「+」里加的东西自动出现）。
+  // 只拦截「+」的点击，权限 / 模型 / 发送一律不动。键盘行为见 composer-sheet.ts 文件头。
+  ctx.effect(() => injectStyle('composer-sheet', COMPOSER_SHEET_CSS), 'ui-responsive: composer sheet styles')
+  ctx.inject(['locale'], (scope) => {
+    const namespace = 'androidComposerSheet'
+    const t = scope.locale.bind(namespace)
+    scope.effect(() => scope.locale.register(namespace, { zh: sheetZh, en: sheetEn }), 'ui-responsive: composer sheet copy')
+    scope.effect(() => {
+      const sheet = new ComposerSheet()
+      sheet.attach()
+      // locale/change 后换绑：sheet 每次打开都读最新的 t。
+      const unbind = scope.on('locale/change', () => { sheet.setTranslate(t) })
+      sheet.setTranslate(t)
+      return () => { unbind(); sheet.detach() }
+    }, 'ui-responsive: composer + bottom sheet')
+  })
 
   // 交付文件卡片（换行汇总卡）上的两段胶囊：另一种打开方式 + 转发。
   // 卡片是上游只读包 ui-deliverables 的 ChangedFiles，没有文件级操作插槽，故按 DOM 增强；
