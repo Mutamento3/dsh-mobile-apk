@@ -1266,6 +1266,24 @@ object NotifyCenter {
    * @param entry - 通知条目。
    * @returns true = 需要在通知里显式给出「打开应用作答」的入口。
    */
+  /**
+   * 通知点击的落点目标（0.14.11，N1）：交互类通知只带 agent 键，旧实现只读 session 键。
+   *
+   * 为什么 agent 键等价于会话 id：交互类通知来自 user-questions/request 与 approval/request
+   * 两条 waterfall 帧，帧里只有 agentId（dsh-api-remotes 写入 agent.id），而 dsh-agent 注册时
+   * 强断言 agent.id === agent.session.id，不等直接抛错；所以 agentId 就是会话 id。
+   *
+   * @param sessionExtra dsh.notify.session 的值。
+   * @param agentExtra dsh.notify.agent 的值。
+   * @returns 非空目标；两者都空返回 null（调用方据此不动作，也不贴一个错会话）。
+   */
+  internal fun resolveNotifyTarget(sessionExtra: String?, agentExtra: String?): String? {
+    val session = sessionExtra?.trim().orEmpty()
+    if (session.isNotEmpty()) return session
+    val agent = agentExtra?.trim().orEmpty()
+    return if (agent.isNotEmpty()) agent else null
+  }
+
   internal fun questionNeedsAppEntry(entry: NotifyEntry): Boolean =
     entry.questions.any { it.options.size > 2 }
 

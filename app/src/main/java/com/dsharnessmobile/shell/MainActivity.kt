@@ -717,8 +717,12 @@ class MainActivity : ComponentActivity() {
   private var pendingNotifySession: String? = null
 
   private fun consumeNotifyRoute(intent: Intent?) {
-    val session = intent?.getStringExtra(NotifyCenter.EXTRA_TARGET_SESSION).orEmpty()
-    if (session.isEmpty()) return
+    // 交互类通知（提问 / 审批）只带 EXTRA_TARGET_AGENT，旧实现只读 session 键 ⇒ 点开不落点。
+    // 解析规则抽在 NotifyCenter.resolveNotifyTarget（纯函数，可离线判定）。
+    val session = NotifyCenter.resolveNotifyTarget(
+      intent?.getStringExtra(NotifyCenter.EXTRA_TARGET_SESSION),
+      intent?.getStringExtra(NotifyCenter.EXTRA_TARGET_AGENT),
+    ) ?: return
     pendingNotifySession = session
     deliverNotifyRoute()
   }

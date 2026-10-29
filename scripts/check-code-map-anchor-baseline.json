@@ -1387,22 +1387,22 @@
       "\"unreadable\""
     ],
     "MainActivity.kt:1030": [
-      "pageRecovery.pause()"
+      "engineFlow.destroy() // Invalidate and cancel startup callers before destroying their page owners."
     ],
     "MainActivity.kt:1054": [
-      "webView.destroy()"
+      "if (BrowserHostHolder.host === browserHost) BrowserHostHolder.host = null"
     ],
     "MainActivity.kt:1057": [
-      "// EngineService owns the child lifecycle. An Activity can be recreated by"
+      "themeRetryRunnable?.let { webView.removeCallbacks(it) }"
     ],
     "MainActivity.kt:1076": [
-      "* ③ 都没有 → 关掉本回调后重新 dispatch，落回 Activity 默认 finish。"
+      "*"
     ],
     "MainActivity.kt:1164": [
-      "// agree on the language from the first frame."
+      "// 0.13.3：textZoom 持久化退役（D6 收益省略）——上游 ui-theme fontSize 原生管内容字号。"
     ],
     "MainActivity.kt:1167": [
-      "override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {"
+      "// the page. Inject it before the first load so the engine UI and the shell"
     ],
     "MainActivity.kt:145": [
       "/**"
@@ -1450,46 +1450,46 @@
       "private fun consumeNotifyRoute(intent: Intent?) {"
     ],
     "MainActivity.kt:769": [
-      "} catch (_: Throwable) {"
+      "this,"
     ],
     "MainActivity.kt:772": [
-      "}"
+      ").show()"
     ],
     "MainActivity.kt:78": [
       "/** System insets in CSS px, cached until the engine page is ready to receive them. */"
     ],
     "MainActivity.kt:782": [
-      "if (!RepairState.active && RepairState.required(this)) {"
+      ""
     ],
     "MainActivity.kt:784": [
-      "// Resume passive observation of the one already authorized attempt. Do not spawn or reset retries."
+      "super.onResume()"
     ],
     "MainActivity.kt:788": [
-      "showGuide()"
+      "// Resume passive observation of the one already authorized attempt. Do not spawn or reset retries."
     ],
     "MainActivity.kt:793": [
-      "if (!userClosedEngine) engineFlow.startEngineService() // Native fallback/recreation does not disable task protection."
+      "applyRepairRequiredGuide()"
     ],
     "MainActivity.kt:803": [
-      "showGuide()"
+      "// 把人按回错误页；那时后续的启动路径会给出新的相位。"
     ],
     "MainActivity.kt:812": [
-      "pendingAuthRejectedUrl = null"
+      ")"
     ],
     "MainActivity.kt:815": [
-      "if (initialAuthRecoveryPending) startInitialEngineAuthRecovery()"
+      "pendingAuthRejectedUrl?.let { url ->"
     ],
     "MainActivity.kt:822": [
-      "// 0.14.1 批 3（P3-2）：渠道**展示名**随用词更新同步（幂等；未变则零写入）。"
+      "// （特权面改由 Shizuku 承载，不再有需要回前台收敛的门1 prefs）。"
     ],
     "MainActivity.kt:850": [
-      "}"
+      "runOnUiThread {"
     ],
     "MainActivity.kt:880": [
-      "deliverRecoveryNotice()"
+      "pushSystemDark(webView)"
     ],
     "MainActivity.kt:923": [
-      "} catch (t: Throwable) {"
+      "val generation = pageRecovery.generation"
     ],
     "MobileChrome.tsx:35": [
       "?? null"
@@ -2200,10 +2200,10 @@
       "/**"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:1030": [
-      "pageRecovery.pause()"
+      "engineFlow.destroy() // Invalidate and cancel startup callers before destroying their page owners."
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:1113": [
-      "onBackPressedDispatcher.onBackPressed()"
+      "// 层穷尽：交回 Activity 默认行为。重新 dispatch（而非直接 finish()）保持与"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:137": [
       "/** 覆盖层所在的根视图；超时兜底的 post/removeCallbacks 都挂在它上面。 */"
@@ -2242,19 +2242,19 @@
       "private fun consumeNotifyRoute(intent: Intent?) {"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:771": [
-      "}"
+      "Toast.LENGTH_LONG,"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:812": [
-      "pendingAuthRejectedUrl = null"
+      ")"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:815": [
-      "if (initialAuthRecoveryPending) startInitialEngineAuthRecovery()"
+      "pendingAuthRejectedUrl?.let { url ->"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:89": [
       "private val pickToken: String = EngineManager.ensurePickToken()"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MainActivity.kt:923": [
-      "} catch (t: Throwable) {"
+      "val generation = pageRecovery.generation"
     ],
     "app/src/main/java/com/dsharnessmobile/shell/MuxClient.kt:172": [
       "sendFrame(out, 0x1, streamOpen.toByteArray(Charsets.UTF_8))"
