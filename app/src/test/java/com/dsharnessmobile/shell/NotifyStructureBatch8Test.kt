@@ -265,6 +265,47 @@ class NotifyStructureBatch8Test {
   }
 
   /**
+   * N5（0.14.11）：失败通知里的「你所提交的内容」曾经是**原始 JSON**。
+   *
+   * 现场形状来自 NotifyActionReceiver.outcomeFor（线上唯一构造点），不是想象出来的：
+   *   审批 -> {"kind":"result","value":"allowed-once"}
+   *   选答 -> {"kind":"result","value":{"answers":[{"id":"q1","selected":["方案A"]}]}}
+   *   回复 -> {"kind":"result","value":{"answers":[{"id":"q1","selected":[],"custom":"我选第二个方案"}]}}
+   * 旧实现只取 optString("value")，对象形态会拿到它的 JSON 文本 ⇒ 用户看到一串花括号。
+   */
+  @Test
+  fun answerSummaryRendersTheRealOutcomeShapes() {
+    fun summary(json: String) = NotifyDecisionQueue.answerSummary(
+      NotifyDecisionQueue.Decision("r1", "e1", "question", json, 0L),
+    )
+
+    assertEquals("审批通过", "allowed-once", summary("{\"kind\":\"result\",\"value\":\"allowed-once\"}"))
+    assertEquals("审批拒绝", "rejected", summary("{\"kind\":\"result\",\"value\":\"rejected\"}"))
+    assertEquals(
+      "单选选项",
+      "方案A",
+      summary("{\"kind\":\"result\",\"value\":{\"answers\":[{\"id\":\"q1\",\"selected\":[\"方案A\"]}]}}"),
+    )
+    assertEquals(
+      "自由文本回复",
+      "我选第二个方案",
+      summary("{\"kind\":\"result\",\"value\":{\"answers\":[{\"id\":\"q1\",\"selected\":[],\"custom\":\"我选第二个方案\"}]}}"),
+    )
+    assertEquals(
+      "多问合成一行",
+      "甲；乙",
+      summary(
+        "{\"kind\":\"result\",\"value\":{\"answers\":[" +
+          "{\"id\":\"q1\",\"selected\":[],\"custom\":\"甲\"}," +
+          "{\"id\":\"q2\",\"selected\":[],\"custom\":\"乙\"}]}}",
+      ),
+    )
+    val rendered = summary("{\"kind\":\"result\",\"value\":{\"answers\":[{\"id\":\"q1\",\"selected\":[\"方案A\"]}]}}")
+    assertFalse("不得把原始 JSON 甩到用户脸上", rendered.contains("{") || rendered.contains("answers"))
+    assertEquals("空对象不编造", "", summary("{}"))
+  }
+
+  /**
    * N2（0.14.11）：plan-review 的计划正文放在 `detail`，旧实现只拼 question，
    * 于是通知栏里只有「Approve this plan and leave plan mode?」+ 按钮 —— 用户盲批。
    */
