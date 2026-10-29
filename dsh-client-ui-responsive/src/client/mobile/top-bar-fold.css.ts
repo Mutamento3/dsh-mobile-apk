@@ -15,8 +15,11 @@
  * 30px 高的行里。这与 snapshot-panels.css.ts 处理同一个问题的先例一致（那里也是打开面板时
  * 临时把 containment 换成 normal）。
  *
- * 箭头挂在 [data-conversation-tabs] 上（上游该属性是稳定的锚点，见 ConversationSession.tsx:143），
- * 不按「对话」「轨迹」文字匹配 —— 视图标签由 conversation.view 插槽注册，文案可变可增。
+ * 箭头挂在 [data-conversation-tabs] 的**父行**上（该属性是稳定锚点，见 ConversationSession.tsx:143），
+ * 且始终是那一行的末位。不挂进标签条内部：标签条由 React 拥有（visibleViewLimit 变化时它往
+ * 自己末尾 append 标签），箭头一旦在内部，就对不上下一次 append 之后的位置，看起来就夹在两个
+ * 视图标签之间了。不按「对话」「轨迹」文字匹配 —— 视图标签由 conversation.view 插槽注册，
+ * 文案可变可增。
  */
 export const TOP_BAR_FOLD_CSS: string = `
 /* 关闭态：座位内容整体离场，顶栏只剩标题、两个侧边栏按钮与三点菜单。 */
@@ -58,14 +61,15 @@ html[data-dsh-mobile-form] div[data-dsh-topbar-fold-uncontained] {
   contain: none;
 }
 
-/* 折叠箭头：紧凑、与两个侧边栏按钮同一视觉重量，靠右。 */
-/* 视图菜单（上游的「…」）：用户定例移除，只保留折叠箭头。
-   注意它**不是**标签条的子节点，而是标签条（[data-conversation-tabs]）的兄弟节点——
-   按「标签条的下一个兄弟」精确命中；标签条存在但没有菜单时该规则自然不生效。 */
-html[data-dsh-mobile-form] [data-conversation-tabs] + * {
+/* 视图菜单（上游的「…」）：用户定例移除，只保留折叠箭头（#862 的行为，保留）。
+   它**不是**标签条的子节点，而是标签条（[data-conversation-tabs]）的兄弟节点。
+   按「兄弟 + 带 menu 语义」精确命中：+ * 是「谁排在我后面就藏谁」的开放规则，
+   折叠箭头同样会被挂到这一行，将来任何插到那里的兄弟节点都会被误伤。 */
+html[data-dsh-mobile-form] [data-conversation-tabs] + [aria-haspopup='menu'] {
   display: none;
 }
 
+/* 折叠箭头：紧凑、与两个侧边栏按钮同一视觉重量，靠右。 */
 html[data-dsh-mobile-form] [data-dsh-topbar-fold-arrow] {
   display: inline-flex;
   align-items: center;

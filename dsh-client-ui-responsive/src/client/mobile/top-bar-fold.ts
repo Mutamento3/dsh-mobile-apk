@@ -27,7 +27,7 @@ let langWatcherInstalled = false
 
 /** 上游标题栏插件 UI 的座位（稳定属性，非 hashed 类名）。 */
 const ACTIONS_SELECTOR = 'div[data-slot="conversation.session.header.actions"]'
-/** 上游视图标签条：折叠箭头挂在这里（ConversationSession.tsx:143 的稳定锚点）。 */
+/** 上游视图标签条（ConversationSession.tsx:143 的稳定锚点）。箭头挂在**它的父行**上，不挂它内部。 */
 const TABS_SELECTOR = '[data-conversation-tabs]'
 /** 承载标题行 containment 的那一行（上游 .titleRow 带 container-type: inline-size）。 */
 const TITLE_ROW_FALLBACK = 'div[data-slot="conversation.session.header"] > div'
@@ -234,11 +234,15 @@ export class TopBarFold {
   }
 
   /**
-   * 确保折叠箭头挂在**标签行**最右（标签行不在场则不动）。
+   * 确保折叠箭头是**标签行**的最后一个元素（标签行不在场则不动）。
    *
-   * 挂到 `[data-conversation-tabs]` 的**父节点**而不是它自己：上游的视图菜单（「…」）
-   * 是标签条的兄弟节点，挂在标签条内部的话箭头只会落在最后一个 tab 之后，到不了最右。
-   * 父节点就是那一行容器（`div.tabs`），箭头作为它的末项 + `margin-left:auto` 才是真最右。
+   * 挂到 `[data-conversation-tabs]` 的**父节点**而不是它自己：标签条是 React 拥有的列表
+   * （`visibleViewLimit` 变化时它会往自己末尾插标签）。箭头一旦进了标签条内部，React 下一次
+   * 追加标签就会插到箭头**之后**，箭头看起来就夹在两个视图标签中间了。父节点是那一行容器
+   * （`div.tabs`），React 不往那里插标签，箭头待得住。
+   *
+   * 「末位」每次同步都要重新确认，不能只在首次挂载时确认一次：React 可能在我们插入之后
+   * 又往行尾追加节点（例如「…」菜单晚一步出现），箭头就不再是最右了。
    */
   /** 语言变化时回写无障碍名（只注册一次）。 */
   private ensureLanguageWatcher(): void {
@@ -251,7 +255,12 @@ export class TopBarFold {
     const tabs = document.querySelector<HTMLElement>(TABS_SELECTOR)
     const host = tabs?.parentElement ?? null
     if (host === null) return
-    if (this.arrow !== null && this.arrowHost === host && host.contains(this.arrow)) return
+    if (this.arrow !== null && this.arrowHost === host && host.lastElementChild === this.arrow) return
+    // 方向对但位置不是末位：原地重挂即可，不必重建按钮（保焦点/保已绑监听）。
+    if (this.arrow !== null && this.arrowHost === host) {
+      host.appendChild(this.arrow)
+      return
+    }
     this.removeArrow()
     this.ensureLanguageWatcher()
     const arrow = document.createElement('button')
