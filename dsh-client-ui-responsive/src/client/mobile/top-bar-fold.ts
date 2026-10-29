@@ -1,4 +1,8 @@
 import { HeaderPopups } from './header-popups.ts'
+import { observeDocumentLanguage } from '../i18n.ts'
+
+/** 语言观察器只装一次（箭头会被反复重建）。 */
+let langWatcherInstalled = false
 
 /**
  * 竖屏顶栏插件 UI 折叠（0.14.7 / Spec 2.6）。
@@ -236,12 +240,20 @@ export class TopBarFold {
    * 是标签条的兄弟节点，挂在标签条内部的话箭头只会落在最后一个 tab 之后，到不了最右。
    * 父节点就是那一行容器（`div.tabs`），箭头作为它的末项 + `margin-left:auto` 才是真最右。
    */
+  /** 语言变化时回写无障碍名（只注册一次）。 */
+  private ensureLanguageWatcher(): void {
+    if (langWatcherInstalled) return
+    langWatcherInstalled = true
+    observeDocumentLanguage(() => { this.arrow?.setAttribute('aria-label', this.foldLabel()) })
+  }
+
   private ensureArrow(): void {
     const tabs = document.querySelector<HTMLElement>(TABS_SELECTOR)
     const host = tabs?.parentElement ?? null
     if (host === null) return
     if (this.arrow !== null && this.arrowHost === host && host.contains(this.arrow)) return
     this.removeArrow()
+    this.ensureLanguageWatcher()
     const arrow = document.createElement('button')
     arrow.type = 'button'
     arrow.setAttribute(ARROW_ATTR, '')
