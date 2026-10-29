@@ -371,7 +371,7 @@ class OverlayPanel(private val svc: OverlayService) {
 
     // 输入行：输入框 + 蓝圆发送（白箭头 IconSendOutline16）+ 红圆停止（白方块 rx=3）
     val input = EditText(svc).apply {
-      hint = inputHintFor(false, false)
+      hint = inputHintFor(false, false, UiText.isEnglish(svc))
       textSize = 13f
       isSingleLine = true
       inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
@@ -1268,7 +1268,7 @@ class OverlayPanel(private val svc: OverlayService) {
 
   /** 输入框提示语随忙态/目标会话变化（S2-11：空闲态发的是新一轮/新会话，不是插话）。 */
   private fun refreshInputHint() {
-    inputBox?.hint = inputHintFor(svc.sessionBusy, svc.activeSessionId.isNotEmpty())
+    inputBox?.hint = inputHintFor(svc.sessionBusy, svc.activeSessionId.isNotEmpty(), UiText.isEnglish(svc))
   }
 
   /** Light refresh on auto-follow (G2: no refetch, no window rebuild — marks only). */
@@ -1459,10 +1459,10 @@ internal const val SESSION_UNKNOWN_LABEL = "未命名会话"
  * 选 mode=steer/queue，空闲时开的是新一轮；目标会话为空时还会先 `session/create` 新建会话。
  * 用错词会让用户误判「这句话会被塞进正在跑的轮次」，或反过来以为空闲时不能发。
  */
-internal fun inputHintFor(busy: Boolean, hasSession: Boolean): String = when {
-  busy -> "发消息可插话…"
-  hasSession -> "发消息开新一轮…"
-  else -> "发消息新建会话…"
+internal fun inputHintFor(busy: Boolean, hasSession: Boolean, english: Boolean = false): String = when {
+  busy -> if (english) "Type to interject…" else "发消息可插话…"
+  hasSession -> if (english) "Type to start a new round…" else "发消息开新一轮…"
+  else -> if (english) "Type to start a new session…" else "发消息新建会话…"
 }
 
 /**
