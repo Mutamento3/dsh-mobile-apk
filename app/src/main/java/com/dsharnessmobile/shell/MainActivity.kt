@@ -488,6 +488,11 @@ class MainActivity : ComponentActivity() {
   /** Navigate only after this process's engine generation has published a real port. */
   private fun loadConfirmedEnginePage() {
     if (!EngineEndpoint.confirmed || EngineEndpoint.port <= 0 || !webViewReady) return
+    // #686 第二层：在此注册守卫——此刻 EngineEndpoint 端口已确定，守卫里可以用**精确**
+    // origin（EngineProbe.ENGINE_URL）。早注册 + 通配会让本机其它端口的页面拿到桥，
+    // 早注册 + 精确值又可能拿到未确定的端口，所以选「晚注册 + 精确值」。
+    // document-start 脚本对**其后**创建的文档生效，所以必须早于下面的 loadUrl。
+    installBridgeOriginGuard()
     val authCookie = EngineAuth.cookie(this)
     if (authCookie != null) {
       try {
@@ -1184,6 +1189,48 @@ class MainActivity : ComponentActivity() {
       WebViewCompat.addDocumentStartJavaScript(webView, script, setOf("*"))
     } catch (t: Throwable) {
       Log.w(TAG, "locale bootstrap could not be installed: " + t.message)
+    }
+  }
+
+  /**
+   * #686 第二层：安装桥帧来源守卫（见 [BridgeOriginGuard]）。
+   *
+   * 第一层是 [AndroidBridge.checkTrustedFrame]：每个桥方法入口校验**顶层帧 URL** 是否为引擎
+   * origin。它关死了「顶层被劫持出引擎 origin」，但按定义读不到「调用者来自哪个子帧」——
+   * 引擎 origin 顶层之下的跨源子帧仍够得到桥面（该缺口在 AndroidBridge 里如实登记）。
+   *
+   * 本层补的就是那个缺口：document-start 脚本让**每个文档自己**读 location.origin 与
+   * 「是否为顶层帧」，非放行帧把 window.androidBridge 整体封死。两层互补，缺一不可：
+   * 第一层挡顶层劫持，第二层挡子帧越权。
+   *
+   * 时序：本函数在 configureWebView() 内、且在 addJavascriptInterface 之前调用；首次
+   * loadUrl 走由 webViewReady 把守的更晚路径。因此任何文档解析时守卫已就位。
+   *
+   * 内核不支持 DOCUMENT_START_SCRIPT 时**必须发出可见告警**（不是静默跳过）：
+   * 老内核上第二层不存在，只剩第一层，属已知风险，PR 里单独登记。
+   */
+  private fun installBridgeOriginGuard() {
+    // 端口未确定就**不注册**，并报可见告警：不回退通配（http://127.0.0.1:* 会让本机任何
+    // 其他端口的页面拿到桥，风险面比现状更大），也不用未确定的值（会把合法主帧误封）。
+    if (!EngineEndpoint.confirmed || EngineEndpoint.port <= 0) {
+      Log.w(TAG, "WARNING: bridge frame origin guard NOT installed (engine port not confirmed yet); cross-origin subframes can still reach window.androidBridge (#686)")
+      try {
+        LogCollector.writeBootDiag(this, "bridge-guard-port-unconfirmed", "EngineEndpoint.port=" + EngineEndpoint.port + " confirmed=" + EngineEndpoint.confirmed)
+      } catch (t: Throwable) {
+        Log.w(TAG, "bridge guard port diag failed: " + t.message)
+      }
+      return
+    }
+    // 精确 origin：只用 EngineEndpoint 的持久化值（EngineProbe.ENGINE_URL 派生于它）。
+    val origins = listOf(EngineProbe.ENGINE_URL)
+    if (!BridgeOriginGuard.install(webView, origins)) {
+      // 可见告警：老内核降级。写日志 + 落启动诊断，运营侧能查到，不静默。
+      Log.w(TAG, "WARNING: bridge frame origin guard NOT installed (kernel lacks DOCUMENT_START_SCRIPT); cross-origin subframes can still reach window.androidBridge (#686)")
+      try {
+        LogCollector.writeBootDiag(this, "bridge-guard-unsupported", "DOCUMENT_START_SCRIPT unavailable")
+      } catch (t: Throwable) {
+        Log.w(TAG, "bridge guard fallback diag failed: " + t.message)
+      }
     }
   }
 

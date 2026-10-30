@@ -394,7 +394,15 @@ class AndroidBridge(
     onAllFilesAccessRequest()
   }
 
-  /** One-shot session token for the directory-picker bridge (validated by the engine-side pick endpoint; null = disabled). */
+  /**
+   * One-shot session token for the directory-picker bridge (validated by the engine-side pick
+   * endpoint; null = disabled).
+   *
+   * #686：本方法**不做**第二层凭据。整对象已在非放行帧被封死（见 BridgeOriginGuard），
+   * 再加一层持有式凭据是冗余代码——实测证明跨源子帧连 window.androidBridge 都摸不到，
+   * 到不了这里。保留正控断言（BridgeOriginGuardTest.pickTokenWorksOnAllowedFrame）
+   * 守住「放行帧照常拿得到真值」这条行为即可。
+   */
   @JavascriptInterface
   fun getPickToken(): String? = trusted { pickToken }
 
