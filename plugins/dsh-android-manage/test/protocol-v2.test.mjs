@@ -244,6 +244,22 @@ test('FX-206.1：o 列缺失/越界/非递增一律失败关闭（宁可不给�
   assert.equal(decodeV2({ ...payload, o: [0, 2, 3, 5] }).ok, true)
 })
 
+test('p / d 列的值域必须与 o 同档失败关闭（越界会静默产出错行号/错深度）', () => {
+  const payload = encodeV2(MAPPING_ROWS, 'all', 1, 0, 100, 100)
+  const n = payload.n
+  // 把整列替换成同一个越界值，保持长度合法（只让值域越界）。
+  const full = (col, v) => payload[col].map(() => v)
+  // p：下游会拼成 'n' + 该值当 ref 发出去 ⇒ 越界等于给模型一个不存在的句柄。
+  assert.equal(decodeV2({ ...payload, p: full('p', n + 999) }).ok, false, 'p 越界必须拒绝')
+  assert.equal(decodeV2({ ...payload, p: full('p', -2) }).ok, false, 'p 小于 -1 必须拒绝')
+  // d：负深度会让预序单调栈算错，subtreeEnd / parentId / ^nX 父链全偏。
+  assert.equal(decodeV2({ ...payload, d: full('d', -5) }).ok, false, 'd 负值必须拒绝')
+  // 对照：-1 表示「无祖先」，是合法值，必须继续放行。
+  assert.equal(decodeV2({ ...payload, p: full('p', -1) }).ok, true, 'p=-1 必须放行')
+  // 对照：长度 1 的广播列同样要校验（否则广播形态成为绕过口）。
+  assert.equal(decodeV2({ ...payload, d: [-3] }).ok, false, 'd 广播列的负值也必须拒绝')
+})
+
 test('FX-206.4：truncated 真值透出（缺列 = false，不再静默丢弃）', () => {
   const payload = encodeV2(MAPPING_ROWS, 'all', 1, 0, 100, 100)
   assert.equal(decodeV2(payload).value.truncated, false)

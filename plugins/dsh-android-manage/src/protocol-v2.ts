@@ -154,6 +154,20 @@ export function decodeV2(data: unknown): DecodeResult {
   const actionableAncestor = new Int32Array(n)
   for (let i = 0; i < n; i++) {
     const flag = pick(cols.f, i, n)
+    // 值域校验原来只做了 `o`（原始行号），`d`/`p` 两列「整数数组 + 长度 1 或 n」就放行 ——
+    // 但一个当**深度**、一个当**行下标**用，越界会静默产出错数据：
+    //   d[..]=-5     ⇒ 下方预序单调栈算错 ⇒ subtreeEnd / parentId / ^nX 父链全偏；
+    //   p[..]=999999 ⇒ cacheFromV2 之后 actionableAncestor 被拼成 'n999999' 当 ref 发出去，
+    //                  模型按它点得到「未找到目标元素」，归因落在「节点消失」而不是「载荷坏了」。
+    // 与 `o` 同档失败关闭（2026-10-29 自查：o 越界本来就拒，p/d 越界当时能过）。
+    const depth = pick(cols.d, i, n)
+    if (!Number.isInteger(depth) || depth < 0) {
+      return { ok: false, error: `d[${i}]=${String(depth)} 非法：深度必须是非负整数` }
+    }
+    const anc = pick(cols.p, i, n)
+    if (!Number.isInteger(anc) || anc < -1 || anc >= n) {
+      return { ok: false, error: `p[${i}]=${String(anc)} 越界：可操作祖先必须是 -1 或 [0, n=${n}) 内的行下标` }
+    }
     const x = b[i * 4]; const y = b[i * 4 + 1]; const w = b[i * 4 + 2]; const h = b[i * 4 + 3]
     rows[i] = {
       id: 'n' + i,
@@ -165,7 +179,7 @@ export function decodeV2(data: unknown): DecodeResult {
       x, y, w, h,
       cx: x + Math.floor(w / 2),
       cy: y + Math.floor(h / 2),
-      depth: pick(cols.d, i, n),
+      depth,
       clickable: (flag & FLAG.clickable) !== 0,
       scrollable: (flag & FLAG.scrollable) !== 0,
       editable: (flag & FLAG.editable) !== 0,
@@ -174,7 +188,7 @@ export function decodeV2(data: unknown): DecodeResult {
       pkg: sym(S, pick(cols.k, i, n)),
       windowId: sym(S, pick(cols.w, i, n)),
     }
-    actionableAncestor[i] = pick(cols.p, i, n)
+    actionableAncestor[i] = anc
   }
 
   // 子树区间：预序 + 深度 ⇒ 首个更浅或同深的后续行（单调栈，O(n)）。

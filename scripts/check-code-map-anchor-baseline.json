@@ -3152,6 +3152,7 @@
     "index.js:2198": [
       "* @returns compact facts and child-local failures; complete child event arrays are released after extraction.",
       "* Collect each related child's own descriptor through existing historical codecs.",
+      "additionalProperties: false,",
       "const incidental = new Set([",
       "function signature(pattern) {",
       "let total = 0;",
@@ -3800,10 +3801,10 @@
       "const expected = schema.properties[key].type"
     ],
     "protocol-v2.ts:235": [
-      ""
+      "byId.set(withOrig.id, entry)"
     ],
     "protocol-v2.ts:349": [
-      "const hit = symIndex.get(s)"
+      "if (leafInSet) {"
     ],
     "reference-menu.ts:133": [
       "}"
