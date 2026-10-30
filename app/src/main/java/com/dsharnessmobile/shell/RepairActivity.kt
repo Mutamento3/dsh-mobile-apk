@@ -66,13 +66,26 @@ class RepairActivity : Activity() {
   private var modelNotice: LinearLayout? = null
   private var modelNoticeText: TextView? = null
   private var reloadModels: Button? = null
+  // #1017：候选在后台解码，打开会话时先把会话偏好的模型身份/强度寄存在这里。
+  private var pendingIdentity: String? = null
+  private var pendingEffort: String? = null
+  /**
+   * 会话落盘器。所有 `saveCurrentSession()` 都只是提交快照，序列化与磁盘写发生在
+   * `dsh-repair-session-writer` 线程上；onDestroy 会 flush 到落盘为止。
+   */
+  private val sessionWriter = RepairSessionWriter { session ->
+    RepairConversationStore.save(filesDir, session)
+  }
   private var diagnosticsReady = false
   private var defaultModelAvailable = false
   private var modelSources = ""
+  /** 配置树的根（`home/.dsh`）整个不存在：运行时还没解出来，不是没配模型（issue #1012）。 */
+  private var modelRootMissing = false
 
   private fun loadRepairModels(): List<RepairModelConnection> {
     val result = RepairModelConfig.loadDetailed(applicationContext)
     defaultModelAvailable = result.defaultAvailable
+    modelRootMissing = result.rootMissing
     // 状态必须说清「为什么没候选」，而不是只报一个「未读到可用模型」。
     // 用户拿着这句话无法区分：没配置 / 配置读不到 / 读到了但缺凭据——三种修法完全不同。
     // 文案表本身也放在 RepairModelNotice（statusLabels），单测钉的是**生产代码用的那份表**；
@@ -152,9 +165,10 @@ class RepairActivity : Activity() {
         connections = loadRepairModels()
         selectedModel = 0
         selectedEffort = connections.firstOrNull()?.defaultReasoningEffort
-        if (connections.isEmpty()) UiText.t(this,
-          "未读到可用模型。可在控制台修好配置后重新读取，也可直接重试引擎。",
-          "No model is available. Fix configuration in the console and reload, or retry the engine.") else null
+        // 0 候选**不在这里**合成一句话（issue #1012）：failure 是「读取本身失败」，
+        // 优先级压过一切。若把「没候选」也塞进 failure，rootMissing 分支永远轮不到，
+        // 用户看到的还是那句「未读到可用模型」。说什么由 RepairModelNotice.present 决定。
+        null
       } catch (e: Exception) {
         UiText.t(this, "读取模型配置失败：", "Could not read model configuration: ") + e.javaClass.simpleName
       }
@@ -303,9 +317,14 @@ class RepairActivity : Activity() {
       defaultUnavailableText = UiText.t(this,
         "当前默认模型不可用。请点右上角选择模型，再发送修复需求。",
         "The configured default model is unavailable. Choose a model at the top right before sending a repair request."),
+      rootMissing = modelRootMissing,
+      rootMissingText = UiText.t(this,
+        "运行时还没解出来（配置目录尚不存在）。这不是模型没配好——请返回启动页重试引擎，等快照解压完成后再回来看。也可打开控制台查看启动日志。",
+        "The runtime has not been extracted yet; the configuration directory does not exist. This is not a missing model: go back and retry the engine, then return once the snapshot finishes extracting. The console shows the startup log."),
     )
     modelButton.isEnabled = notice.modelControlsEnabled
-    send.isEnabled = notice.modelControlsEnabled
+    // 发送键与模型选择分开（issue #1012 A3）：0 候选时选择器确实没得选，但发送不该一起关。
+    send.isEnabled = notice.sendEnabled
     modelNotice?.visibility = if (notice.visible) View.VISIBLE else View.GONE
     modelNoticeText?.text = notice.text.orEmpty()
     modelNoticeText?.visibility = if (notice.visible) View.VISIBLE else View.GONE
@@ -320,12 +339,10 @@ class RepairActivity : Activity() {
     reloadModels?.isEnabled = false
     Thread {
       val loaded = runCatching { loadRepairModels() }
+      // 同上（issue #1012）：只有「读取抛错」才是 failure；0 候选交给 present() 判该说哪句。
       val failure = loaded.exceptionOrNull()?.let {
         UiText.t(this, "读取模型配置失败：", "Could not read model configuration: ") + it.javaClass.simpleName
-      } ?: if (loaded.getOrDefault(emptyList()).isEmpty()) {
-        UiText.t(this, "未读到可用模型，请检查本地模型配置与凭据。",
-          "No model is available. Check local model configuration and credentials.")
-      } else null
+      }
       val next = loaded.getOrDefault(emptyList())
       runOnUiThread {
         if (!alive) return@runOnUiThread
@@ -333,7 +350,9 @@ class RepairActivity : Activity() {
         restoreSelection()
         applyModelState(failure)
         reloadModels?.isEnabled = true
-        if (failure == null) addSystemMessage(
+        // 只有真的读到了候选才说「已重新读取」：0 候选时上面那句横幅才是用户该看的，
+        // 再补一句「已重新读取」会让人以为已经好了（issue #1012）。
+        if (failure == null && next.isNotEmpty()) addSystemMessage(
           UiText.t(this, "已重新读取模型配置。", "Model configuration reloaded."),
         )
       }
@@ -472,10 +491,16 @@ class RepairActivity : Activity() {
     runAgent("自动读取本轮诊断文件，检查运行时，定位并修复启动失败。使用工具实际执行修复并验证，不要只给建议。")
   }
 
+  /**
+   * 打开（或新建）会话。**只做会话本身的事**：配置解码不在这里。
+   *
+   * #1017：这里原先调 `RepairModelConfig.load(applicationContext)`，于是 onCreate（主线程）
+   * 先把整份模型配置解析一遍，紧接着 worker 里的 `loadRepairModels()` 又把同一份配置完整
+   * 解析第二遍——一次打开解析两遍，且第一遍在主线程（还会顺带原子写一次
+   * `repair-model-source.json`）。现在唯一解码点是后台的 `loadRepairModels()`；
+   * 这里只记下恢复出的模型偏好，等候选到达后由 `restoreSelection()` 落定。
+   */
   private fun openOrCreateSession(restoredId: String? = null) {
-    connections = runCatching { RepairModelConfig.load(applicationContext) }.getOrDefault(emptyList())
-    selectedModel = 0
-    selectedEffort = connections.firstOrNull()?.defaultReasoningEffort
     val session = restoredId?.let { RepairConversationStore.load(filesDir, it) }
       ?: RepairConversationStore.create(filesDir)
     currentSessionId = session.id
@@ -483,7 +508,9 @@ class RepairActivity : Activity() {
     history = JSONArray(session.history.toString())
     eventLog = JSONArray(session.events.toString())
     if (RepairToolCallParser.completeInterruptedTail(history)) saveCurrentSession()
-    restoreSelection(session)
+    // 候选尚未解码：先把会话里记下的身份/强度留下，等 connections 到位后再解析成索引。
+    pendingIdentity = session.modelIdentity
+    pendingEffort = session.reasoningEffort
     renderEvents(session.events)
   }
 
@@ -515,14 +542,25 @@ class RepairActivity : Activity() {
     scrollToBottom()
   }
 
+  /**
+   * 把「会话偏好的模型 + 推理强度」解析成当前候选下标。
+   *
+   * #1017：候选改为后台解码后，打开会话时 connections 还是空的，偏好只能先记在
+   * [pendingIdentity]/[pendingEffort] 里，等 worker 拿到候选再落定（显式传 session 的
+   * 路径——切会话——仍以传入的会话为准）。否则恢复会话会静默退回第一个候选。
+   */
   private fun restoreSelection(session: RepairConversation? = null) {
-    val identity = session?.modelIdentity
+    val identity = session?.modelIdentity ?: pendingIdentity
     val index = connections.indexOfFirst { it.identity == identity }
     selectedModel = if (index >= 0) index else 0
-    val wanted = session?.reasoningEffort
+    val wanted = session?.reasoningEffort ?: pendingEffort
     selectedEffort = wanted?.takeIf { effort ->
       connections.getOrNull(selectedModel)?.reasoningEfforts?.any { it.id == effort } == true
     } ?: connections.getOrNull(selectedModel)?.defaultReasoningEffort
+    if (connections.isNotEmpty()) {
+      pendingIdentity = null
+      pendingEffort = null
+    }
   }
 
   private fun renderEvents(events: JSONArray) {
@@ -557,6 +595,19 @@ class RepairActivity : Activity() {
     saveCurrentSession()
   }
 
+  /**
+   * 冻结当前会话并**提交**给写线程。
+   *
+   * #1017：修前这里在调用线程上做两件重活——把 history/events 各过一遍 `toString()` +
+   * 重新解析（整份会话 JSON 的序列化/反序列化），然后 `RepairConversationStore.save` 原子
+   * 落盘并重写索引、扫描目录。调用点包含主线程路径（自动开修、切会话、关模型面板、
+   * onDestroy），等于把整份会话的序列化与文件 IO 压在主线程上。
+   *
+   * 现在：主线程只做 O(元素数) 的结构深拷贝（不起整份字符串），落盘交给
+   * [RepairSessionWriter] 的单线程串行写。顺序语义由写线程保证——同一时刻只有一笔在写，
+   * 且提交之间以最新一笔覆盖旧的，所以「切会话时先存旧、再载新」不会出现旧数据覆盖新数据。
+   * 退出（onDestroy）显式 [RepairSessionWriter.flush]，最后一笔不丢。
+   */
   private fun saveCurrentSession() {
     val id = currentSessionId ?: return
     var firstUser = ""
@@ -566,14 +617,13 @@ class RepairActivity : Activity() {
     }
     if (firstUser.isNotBlank()) currentTitle = firstUser.lineSequence().firstOrNull()
       ?.trim()?.take(48)?.takeIf { it.isNotBlank() } ?: currentTitle
-    RepairConversationStore.save(
-      filesDir,
+    sessionWriter.submit(
       RepairConversation(
         id = id,
         title = currentTitle,
-        history = JSONArray(history.toString()),
-        events = JSONArray(eventLog.toString()),
-        modelIdentity = connections.getOrNull(selectedModel)?.identity,
+        history = RepairSessionJson.copy(history),
+        events = RepairSessionJson.copy(eventLog),
+        modelIdentity = connections.getOrNull(selectedModel)?.identity ?: pendingIdentity,
         reasoningEffort = selectedEffort,
       ),
     )
@@ -584,16 +634,23 @@ class RepairActivity : Activity() {
   }
 
   private fun submit() {
-    val text = input.text.toString().trim()
     if (busy.get()) return
-    if (text.isNotEmpty()) {
-      input.setText("")
-      runAgent(text)
-    } else {
-      // Do not append a duplicate prompt when the user taps send on an empty
-      // composer. Chat history must reflect what was actually typed.
+    val text = input.text.toString().trim()
+    // 判定在 RepairModelNotice（纯函数、可单测）；这里只落结果。
+    // 关键顺序（issue #1012 A3）：先按判定确认真的要发，再清空输入。
+    // 旧实现先 input.setText("") 再在 runAgent() 里无候选时静默 return——
+    // 用户打的字凭空消失且界面毫无反应。
+    val decision = RepairModelNotice.composer(connections.size, text)
+    // Do not append a duplicate prompt when the user taps send on an empty composer.
+    if (!decision.send && !decision.notifyNoModel) return
+    if (decision.notifyNoModel) {
+      addSystemMessage(UiText.t(this,
+        "没有可用模型，这条消息没有发出，内容已保留在输入框。请先重新读取模型配置，或返回启动页重试引擎。",
+        "No model is available, so this message was not sent. Your draft is kept in the composer. Reload the model configuration, or go back and retry the engine."))
       return
     }
+    input.setText("")
+    runAgent(text)
   }
 
   private fun runAgent(prompt: String) {
@@ -646,7 +703,10 @@ class RepairActivity : Activity() {
     // array element from any temporary gateway envelope fields.
     history.put(JSONObject(answer.toString()))
           lastTextual = RepairToolCallParser.textualToolCalls(answer)
-          val reasoning = answer.optString("reasoning_content", "")
+          // issue #1014：取值走 RepairToolCallParser.reasoningText —— Android 的 org.json 会把
+          // JSONObject.NULL 渲染成字符串 "null"，直接 optString + isNotBlank 会把它当成真实推理，
+          // 于是多出一张正文只有 null 的「思考」卡并被 recordEvent 写进会话事件（重开会话仍在）。
+          val reasoning = RepairToolCallParser.reasoningText(answer)
           if (reasoning.isNotBlank()) {
             removePendingActivity()
             recordEvent(JSONObject().put("type", "reasoning").put("text", reasoning))
@@ -722,12 +782,22 @@ class RepairActivity : Activity() {
         connections.forEach { it.clearCredential() }
         saveCurrentSession()
         busy.set(false)
+        // #1017：本轮结束要重新读配置（凭据在上面已从连接对象上抹掉，下一轮必须重新取），
+        // 但整份解码原先发生在 runOnUiThread 里 = 主线程上又解析一遍配置。这里改走与
+        // 打开时同一个解码入口 loadRepairModels()，仍在 worker 线程上，主线程只拿到结果赋值。
+        val refreshed = runCatching { loadRepairModels() }.getOrDefault(emptyList())
         runOnUiThread {
           if (alive) {
             setBusy(false)
-            connections = runCatching { RepairModelConfig.load(applicationContext) }.getOrDefault(emptyList())
-            send.isEnabled = connections.isNotEmpty()
-            modelButton.isEnabled = connections.isNotEmpty()
+            // 两个 issue 在这几行的并集解：#1017 把这一处从「主线程再整份解析一遍配置」改成
+            // 复用 worker 上已经解好的 refreshed（那个只返回候选的窄入口已被 #1017 删除，
+            // 唯一解码点只剩后台的 loadRepairModels）；#1012 A3 的判据（发送键不按候选数关）
+            // 保留 —— 两者互不矛盾。
+            connections = refreshed
+            selectedModel = selectedModel.coerceIn(0, refreshed.lastIndex.coerceAtLeast(0))
+            // 与 applyModelState / setBusy 同一条规则（issue #1012 A3）：发送键不按候选数关。
+            send.isEnabled = true
+            modelButton.isEnabled = refreshed.isNotEmpty()
           }
         }
       }
@@ -738,7 +808,9 @@ class RepairActivity : Activity() {
     input.isEnabled = !value
     reloadModels?.isEnabled = !value
     modelButton.isEnabled = connections.isNotEmpty()
-    send.isEnabled = connections.isNotEmpty()
+    // 发送键在空闲态始终可点（issue #1012 A3）；0 候选时点击由 submit() 给出可见提示
+    // 并保留草稿，而不是让用户对着一颗点不动的按钮猜。
+    send.isEnabled = true
     styleSendButton(this, send, value)
   }
 
@@ -1204,6 +1276,9 @@ class RepairActivity : Activity() {
     alive = false
     cancelWork()
     saveCurrentSession()
+    // #1017：落盘已经在写线程上，退出前必须等到它落完，否则切后台/旋转后的最后一笔会话会丢。
+    // flush 超时会在调用线程把最后一笔同步写完，宁慢不丢。
+    sessionWriter.flush()
     RepairState.active = false
     super.onDestroy()
   }
