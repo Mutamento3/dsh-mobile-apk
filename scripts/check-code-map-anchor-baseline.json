@@ -3560,7 +3560,7 @@
       "export const CONTROL_TOKEN_HEADER = 'x-dsh-control-token'"
     ],
     "plugins/dsh-android-bridge/src/shell-ops.ts:120": [
-      "export function translateAdbLine(line: string): ShellLineTranslation {"
+      "function unquote(text: string): string {"
     ],
     "plugins/dsh-android-bridge/test/privilege-status.test.mjs:1": [
       "// android_privilege_status 返回面回归（0.14.0-preview）："
