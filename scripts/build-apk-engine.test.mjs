@@ -36,6 +36,16 @@ test('shared terminal engine installs snapshot and fingerprint, builds, then cop
       writeFileSync(out, JSON.stringify({ schema: 1, complete: true, fingerprint: 'fixture', entries: [{ id: 'factory', name: 'factory-plugin' }] }))
       return { status: 0 }
     }
+    // issue #1077：终端阶段在拷贝进交付目录**之前**就对 Gradle 产物验签。
+    // 这里断言它判的是 am build 的输出，而不是交付目录里那份尚未存在的拷贝。
+    if (args[0]?.endsWith('check-apk-signatures.mjs')) {
+      assert.equal(command, process.execPath)
+      assert.ok(args.includes('--apk'), '签名段必须按文件验，不是按目录')
+      assert.equal(args[args.indexOf('--apk') + 1], join(f.apkDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk'))
+      return { status: 0 }
+    }
+    // issue #1119：产物形态门禁（--self-test 与 --dir 两段）也在终端阶段里，同样要放行。
+    if (args[0]?.endsWith('check-apk-form.mjs')) return { status: 0 }
     assert.equal(command, process.platform === 'win32' ? 'gradlew.bat' : './gradlew')
     // 发布资产从 release 变体产出（issue #1118）：debug 变体带 android:debuggable。
     assert.deepEqual(args, [':app:assembleRelease', '--no-daemon', '-PversionNameSuffix=-preview'])
@@ -63,7 +73,10 @@ test('shared terminal engine installs snapshot and fingerprint, builds, then cop
   assert.equal(readFileSync(result).toString(), 'signed-test-apk')
   assert.ok(existsSync(join(f.apkDir, 'app', 'src', 'main', 'assets', 'plugin-hard-manifest.json')))
   assert.equal(existsSync(oldIntermediates), false)
-  assert.equal(calls.length, 3)
+  // 5 段：hard-manifest -> fingerprint -> Gradle -> 验签 -> 产物形态
+  // （#1077 把验签提到拷贝之前；#1119 在验签之后追加了产物形态一段。
+  //  assembleApk 里 selfTest=false —— 调用方三路各自跑过 --self-test，这里不重复。）
+  assert.equal(calls.length, 5)
   assert.equal(calls[0].args[0].endsWith('build-hard-manifest.mjs'), true)
   assert.equal(calls[0].args[calls[0].args.indexOf('--snapshot') + 1], resolve(f.snapshot))
   assert.equal(calls[0].args[calls[0].args.indexOf('--out') + 1], join(f.apkDir, 'app', 'src', 'main', 'assets', 'plugin-hard-manifest.json'))
@@ -74,6 +87,9 @@ test('shared terminal engine installs snapshot and fingerprint, builds, then cop
   assert.equal(calls[1].options.shell, false)
   assert.equal(calls[2].options.cwd, resolve(f.apkDir))
   assert.equal(calls[2].options.shell, process.platform === 'win32')
+  assert.equal(calls[3].args[0].endsWith('check-apk-signatures.mjs'), true, '验签必须在拷贝之前')
+  assert.equal(calls[4].args[0].endsWith('check-apk-form.mjs'), true, '产物形态（#1119）必须在拷贝之前')
+  assert.equal(calls[4].options.cwd, resolve(fileURLToPath(new URL('.', import.meta.url))))
 })
 
 test('fingerprint rejection stops before Gradle and a Gradle failure does not copy an artifact', (t) => {
@@ -109,6 +125,10 @@ test('release mode preserves existing intermediates when clean is not requested'
   }, (command, args) => {
     if (args[0]?.endsWith('check-snapshot-fingerprint.mjs')) return { status: 0 }
     if (args[0]?.endsWith('build-hard-manifest.mjs')) return { status: 0 }
+    // #1077：终端阶段在拷贝前先验签，这一支不得被当成 gradle 调用。
+    if (args[0]?.endsWith('check-apk-signatures.mjs')) return { status: 0 }
+    // #1119：签名之后还有产物形态门禁，同样不是 gradle 调用。
+    if (args[0]?.endsWith('check-apk-form.mjs')) return { status: 0 }
     assert.equal(command, 'custom-gradle')
     const built = join(f.apkDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
     mkdirSync(join(built, '..'), { recursive: true })
@@ -231,6 +251,9 @@ test('受控负控：把构建类型改回 debug 后，最终产物形态门禁�
     }, (command, args) => {
       if (args[0]?.endsWith('check-snapshot-fingerprint.mjs')) return { status: 0 }
       if (args[0]?.endsWith('build-hard-manifest.mjs')) return { status: 0 }
+      // issue #1077：终端阶段在拷贝前先跑签名与形态两段门禁，它们不是 Gradle 调用。
+      if (args[0]?.endsWith('check-apk-signatures.mjs')) return { status: 0 }
+      if (args[0]?.endsWith('check-apk-form.mjs')) return { status: 0 }
       // Gradle 任务必须跟着 buildType 走：debug 档不得被 release 任务悄悄顶替。
       assert.equal(args[0], buildType === 'debug' ? ':app:assembleDebug' : ':app:assembleRelease')
       const built = join(f.apkDir, 'app', 'build', 'outputs', 'apk', buildType, 'app-' + buildType + '.apk')
