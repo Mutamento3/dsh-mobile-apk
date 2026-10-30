@@ -600,7 +600,7 @@ class OverlayPanel(private val svc: OverlayService) {
   private fun pendingChip(label: String, filled: Boolean, red: Boolean, dp: Float, onClick: () -> Unit): TextView = TextView(svc).apply {
     text = label
     textSize = 12f
-    maxLines = 2
+    maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
     setTextColor(if (filled || red) Color.WHITE else themeColors().inputText)
     background = GradientDrawable().apply {
       cornerRadius = 14 * dp
@@ -831,7 +831,7 @@ class OverlayPanel(private val svc: OverlayService) {
           text = desc
           textSize = 11f
           setTextColor(subColor)
-          maxLines = 1
+          maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = (8 * dp).toInt() })
         box.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
           setMargins(0, 0, 0, (4 * dp).toInt())
