@@ -62,22 +62,45 @@ const TILE_ATTR = 'data-dsh-composer-sheet-tile'
 const ROWS_ATTR = 'data-dsh-composer-sheet-rows'
 const ROW_ATTR = 'data-dsh-composer-sheet-row'
 /**
- * 横屏 / 桌面形态标记：挂在 backdrop 上，CSS 据此切成「锚在 + 上的卡片」，
- * 不再画全屏遮罩、不再贴底。
+ * 收场动画标记：挂在 backdrop 上，CSS 据此播放「飞回视口底」的退场动画。
  *
- * 判据与 CSS 里那段媒体查询逐字对应；改一处必须改两处。竖屏手机不命中，
- * 仍是原来的底部 sheet（用户定例保持）。
+ * 为什么要一个属性而不是直接 remove：remove() 是瞬时的，用户看不到卡片飞回去，
+ * 观感上像「闪一下消失」。加了标记之后由 CSS 播 160ms，脚本等动画结束再 remove。
+ * 真机 WebView 有 WAAPI（Element.getAnimations），jsdom 没有 —— 没有动画就不等，
+ * 立刻 remove，测试与无动画环境的行为保持一致。
  */
-const ANCHORED_ATTR = 'data-dsh-composer-sheet-anchored'
-const ANCHORED_MEDIA = '(orientation: landscape) and (max-height: 500px), (min-width: 768px)'
-/** 卡片与「+」之间的间隙（规格 8px）。 */
-const ANCHOR_GAP_PX = 8
-/** 卡片宽度上限（像手机，不像平板）；与 CSS 里的 max-width 兜底一致。 */
-const ANCHOR_MAX_WIDTH_PX = 360
-/** 视口边距：卡片离左右边缘至少留这么多，避免贴边。 */
-const ANCHOR_VIEWPORT_MARGIN_PX = 12
-/** 卡片高度上限（规格 min(70vh, 480px)）。 */
-const ANCHOR_MAX_HEIGHT_PX = 480
+const LEAVING_ATTR = 'data-dsh-composer-sheet-leaving'
+/** 退场动画时长（规格 140-160ms）。与 CSS 里 dsh-composer-card-out/panel-out 同值。 */
+const EXIT_ANIMATION_MS = 160
+/**
+ * 借用上游菜单期间，菜单外层容器上的临时隐藏标记。
+ *
+ * 为什么必须隐藏（而不是只「读完就关」）：读菜单要跨一次上游提交，实测在这台设备上
+ * 从派发 click 到选项出现约 1.2s。这 1.2s 里上游 listbox 是**真的画在屏幕上**的 ——
+ * 设备实测它 right=1022.33，而卡片 right=682.33，那一列 role=option 的副标题就露在
+ * 卡片右侧外面。用户在开面板的瞬间会看到上游菜单闪一下，正是要消掉的「漏字」现象。
+ *
+ * 用 visibility: hidden 而不是 display: none / remove()：
+ *   - display: none 会让上游的测量与定位拿到 0 尺寸，菜单可能因此改变挂载行为；
+ *   - remove() 是别人的 DOM，且我们后面还要在这棵树上按索引取 option 转发 mousedown。
+ * visibility: hidden 保留布局与节点身份，只是不可见 —— 合成事件仍能直接派发到节点上。
+ */
+const CONCEAL_ATTR = 'data-dsh-composer-sheet-concealed'
+
+/**
+ * 附件入口在行列表里的标题（中英两套文案，精确匹配的闭集）。
+ *
+ * 三块瓦片（拍照 / 照片 / 本地文件）已经覆盖了附件入口，上游「+」菜单里那条
+ * 同义的「文件 / file」行是重复的。
+ *
+ * **必须是精确匹配的闭集，不能用位置或前缀**：
+ *   - 按位置（li:first-child / index === 0）会连带隐掉插件插到最前面的项；
+ *   - 按前缀（startsWith 文件）会误伤「文件预览」「文件管理」这类真实功能项。
+ * 两条都会让用户丢功能，而不是少一条冗余项。负控用例见 composer-sheet.spec.ts。
+ */
+const ATTACHMENT_ROW_TITLES: ReadonlySet<string> = new Set([
+  '文件', '本地文件', 'file', 'files', 'local file', 'local files',
+])
 
 type TileKind = 'camera' | 'photo' | 'file'
 
@@ -329,102 +352,6 @@ export class ComposerSheet {
     return this.backdrop?.querySelector<HTMLElement>('[' + PANEL_ATTR + ']') ?? null
   }
 
-  /** 当前是否卡片形态（横屏 / 桌面）。 */
-  private isAnchoredForm(): boolean {
-    if (typeof window.matchMedia !== 'function') return false
-    return window.matchMedia(ANCHORED_MEDIA).matches
-  }
-
-  /**
-   * 把面板锚到「+」按钮上。
-   *
-   * 几何全部由内联样式写入（带 !important），CSS 只管外观：这样竖屏贴底与横屏
-   * 锚定能共用同一个 panel 元素，切形态时把内联值撤掉即可回到 CSS。
-   * @param button - 「+」按钮（几何锚点）。
-   */
-  private placeAnchored(button: HTMLElement): void {
-    const panel = this.panel()
-    if (panel === null) return
-    const plus = button.getBoundingClientRect()
-    const viewportW = window.innerWidth
-    const viewportH = window.innerHeight
-    // 左边缘对齐「+」，但不越过左侧安全边距（「+」贴左边时留一点呼吸）。
-    const left = Math.max(ANCHOR_VIEWPORT_MARGIN_PX, plus.left)
-    // 宽度三重夹取：
-    //   1. 上限 360；
-    //   2. 视口减两侧边距（窄视口不被拉出屏幕）；
-    //   3. 视口减「卡片左边缘到右边的可用宽度」—— 加号靠右时卡片只能向左收，
-    //      否则左对齐加号会把右半截顶出屏幕。这是 max-width:
-    //      calc(100vw - 2 * plusLeft) 的等价实现，但按实际 left 算更准
-    //      （left 可能已被上一条夹过）。
-    const width = Math.min(
-      ANCHOR_MAX_WIDTH_PX,
-      viewportW - ANCHOR_VIEWPORT_MARGIN_PX * 2,
-      viewportW - left - ANCHOR_VIEWPORT_MARGIN_PX,
-    )
-    // 上方可用高度 = 「+」顶边 - 间隙 - 顶部安全边距。
-    const spaceAbove = plus.top - ANCHOR_GAP_PX - ANCHOR_VIEWPORT_MARGIN_PX
-    // 最小可用高度：三瓦片 96 + 内边距 24。低于它就没有展示价值，翻到下方。
-    const minUseful = 96 + 24
-    const openUpward = spaceAbove >= minUseful
-    // 高度上限再按实际可用空间收紧，避免卡片顶出屏幕。
-    const spaceBelow = viewportH - plus.bottom - ANCHOR_GAP_PX - ANCHOR_VIEWPORT_MARGIN_PX
-    const maxHeight = Math.min(
-      ANCHOR_MAX_HEIGHT_PX,
-      viewportH * 0.7,
-      Math.max(minUseful, openUpward ? spaceAbove : spaceBelow),
-    )
-    panel.style.setProperty('position', 'fixed', 'important')
-    panel.style.setProperty('left', left + 'px', 'important')
-    panel.style.setProperty('width', width + 'px', 'important')
-    panel.style.setProperty('max-height', maxHeight + 'px', 'important')
-    if (openUpward) {
-      // 自下展开：底边贴「+」上沿再留 8px。
-      panel.style.setProperty('bottom', (viewportH - plus.top + ANCHOR_GAP_PX) + 'px', 'important')
-      panel.style.removeProperty('top')
-      panel.setAttribute('data-dsh-composer-sheet-dir', 'up')
-    } else {
-      // 下方展开：顶边贴「+」下沿再留 8px。
-      panel.style.setProperty('top', (plus.bottom + ANCHOR_GAP_PX) + 'px', 'important')
-      panel.style.removeProperty('bottom')
-      panel.setAttribute('data-dsh-composer-sheet-dir', 'down')
-    }
-  }
-
-  /**
-   * 形态切换 / 尺寸变化时重算锚点。
-   *
-   * 竖屏形态下把内联几何全部撤掉，交回 CSS 贴底 —— 少撤一条，切回竖屏就会
-   * 带着横屏的 left/width 贴底，右下角露出空白。
-   */
-  private readonly relayout = (): void => {
-    const backdrop = this.backdrop
-    const panel = this.panel()
-    if (backdrop === null || panel === null) return
-    const button = this.addButton
-    if (this.isAnchoredForm() && button !== null) {
-      backdrop.setAttribute(ANCHORED_ATTR, '')
-      panel.setAttribute('aria-modal', 'false')
-      this.placeAnchored(button)
-      return
-    }
-    backdrop.removeAttribute(ANCHORED_ATTR)
-    panel.setAttribute('aria-modal', 'true')
-    panel.style.removeProperty('position')
-    panel.style.removeProperty('left')
-    panel.style.removeProperty('width')
-    panel.style.removeProperty('max-height')
-    panel.style.removeProperty('bottom')
-    panel.style.removeProperty('top')
-    panel.removeAttribute('data-dsh-composer-sheet-dir')
-  }
-
-  /** 视口变化（转屏 / 改窗口大小）时重算；卡片没开时什么都不做。 */
-  private readonly onViewportChange = (): void => {
-    if (this.backdrop === null) return
-    this.relayout()
-  }
-
   private open(button: HTMLElement): void {
     this.close()
     const t = this.text()
@@ -460,11 +387,8 @@ export class ComposerSheet {
     document.body.append(backdrop)
     this.backdrop = backdrop
     button.setAttribute('aria-expanded', 'true')
-    // 形态判定与锚定几何：backdrop 挂上之后立刻算一次（横屏卡片要贴「+」）。
-    this.relayout()
-    // 转屏 / 改窗口大小时重算锚点；close() 里解绑。
-    window.addEventListener('resize', this.onViewportChange)
-    window.addEventListener('orientationchange', this.onViewportChange)
+    // 几何全部交给 CSS（居中卡片），脚本不写内联定位，因此不需要 relayout /
+    // 视口变化监听：转屏后 grid + place-items: center 自动重新居中。
     this.lockBodyScroll()
     // 到这里 backdrop 已经挂到 body 上（this.backdrop 也已赋值），读菜单拿到的
     // 行才有地方写。顺序不能提前：见 fillRows 的注释。
@@ -503,6 +427,93 @@ export class ComposerSheet {
     body.style.overflow = 'hidden'
   }
 
+  /**
+   * 把上游「+」菜单临时藏起来（借用期间），返回还原函数。
+   *
+   * 藏的是菜单的**最外层容器**（有 [data-trigger-menu] 的那层），没有就退到 listbox
+   * 本身：只藏 listbox 时，上游可能还有一个定位用的外壳留在屏幕上。
+   * @param card - 上游合成器卡片（菜单挂在它里面）。
+   * @returns 还原函数；没有菜单可藏时返回空操作。
+   */
+  private concealUpstreamMenu(card: Element): () => void {
+    /** 被我们隐藏过的节点：还原时直接遍历它，不依赖节点是否还挂在 DOM 上。 */
+    const pending = new Set<HTMLElement>()
+    const apply = (): void => {
+      const menu = card.querySelector(UPSTREAM_MENU_SELECTOR)
+      if (menu === null) return
+      const target = menu.closest('[data-trigger-menu]') ?? menu
+      if (!(target instanceof HTMLElement)) return
+      if (target.getAttribute(CONCEAL_ATTR) !== null) return
+      target.setAttribute(CONCEAL_ATTR, '')
+      target.style.setProperty('visibility', 'hidden', 'important')
+      pending.add(target)
+    }
+    apply()
+    // **必须持续盯，不能只在挂上之后藏一次**：菜单是异步提交进 DOM 的，
+    // 等 waitForMenu 轮询到选项再藏，中间那几百毫秒到 1.2s 它已经画在屏幕上了
+    // （实测正是这段窗口让上游副标题露在卡片外）。观察器让它在出现的**第一帧**
+    // 就不可见：MutationObserver 回调在提交后、绘制前同步跑。
+    const observer = new MutationObserver(apply)
+    observer.observe(card, { childList: true, subtree: true })
+    return () => {
+      // **顺序是判据，不是风格**：观察器回调是微任务，会排在本函数之后。
+      // 先 disconnect 再还原，否则那条排队的回调会在还原**之后**再藏一次，
+      // 于是「还原」看似执行了、节点却仍然是 hidden（实测：撤掉还原代码后
+      // 断言照样绿，因为两种写法最终都停在 hidden 上——那条断言当时是假绿）。
+      observer.disconnect()
+      // 用 pending 记录，而不是事后 querySelector：节点可能已被上游卸载（脱 DOM），
+      // querySelector 就找不到它，还原也就漏掉了（那正是「脱离后仍要保持已还原」的情形）。
+      for (const node of pending) {
+        node.removeAttribute(CONCEAL_ATTR)
+        node.style.removeProperty('visibility')
+      }
+      pending.clear()
+    }
+  }
+  /**
+   * 播退场动画并真正移除面板。
+   *
+   * 为什么不用 `animationend` 一个事件了事：动画可能因为元素不可见、
+   * prefers-reduced-motion、或浏览器跳过动画而**根本不触发** animationend，
+   * 那种情况下监听器永远等不到，面板就永久留在 DOM 里（比不播动画严重得多）。
+   * 所以「事件」与「超时」两条路都要走，先到先算，且用幂等闸保证只 remove 一次。
+   *
+   * 无 WAAPI（jsdom / 老 WebView）时立刻 remove：那种环境本来就没有动画可播。
+   * @param backdrop - 正在离场的遮罩（已经不再挂在 this.backdrop 上）。
+   */
+  private playExit(backdrop: HTMLElement): void {
+    const supportsAnimations = typeof backdrop.getAnimations === 'function'
+    // **必须先挂标记再取动画，顺序反了就没有退场动画**（设备实测 0 帧）：
+    // getAnimations() 返回的是**当前已存在**的动画对象，而退场动画由 LEAVING_ATTR
+    // 那条 CSS 规则定义。先取后挂 = 取到的是入场动画（或空集），
+    // 于是「没有动画就立刻 remove」把面板直接抹掉，用户看不到收回。
+    backdrop.setAttribute(LEAVING_ATTR, '')
+    // subtree: true 是必须的：竖屏的退场动画挂在**子元素** panel 上，遮罩自己只有
+    // backdrop-out。只查遮罩自身会漏掉 panel 那条。
+    const animations = supportsAnimations ? backdrop.getAnimations({ subtree: true }) : []
+    if (animations.length === 0) {
+      // 无 WAAPI（jsdom / 老 WebView）或动画被浏览器跳过：立刻移除，
+      // 否则面板会永久留在 DOM 里（比没有动画严重得多）。
+      backdrop.remove()
+      return
+    }
+    // 收场期间**保留**事件接收（不加 pointer-events: none）：遮罩此刻已不在 this.backdrop 上，
+    // onBackdropPointerDown 会直接早退，重复点击不会再次触发 close()；
+    // 而一旦关掉事件，这 160ms 里点击会穿透到背后页面（与「透明遮罩必须能接住点击」
+    // 同一条理由）。要防的只是「点到半透明卡片」，那由 CSS 的 pointer-events 维持原样即可。
+    let removed = false
+    const finish = (): void => {
+      if (removed) return
+      removed = true
+      backdrop.remove()
+    }
+    for (const animation of animations) {
+      animation.addEventListener('finish', finish, { once: true })
+      animation.addEventListener('cancel', finish, { once: true })
+    }
+    // 兜底：动画被跳过 / 被打断 / 事件丢失时也必须收场。比动画时长多留一档余量。
+    window.setTimeout(finish, EXIT_ANIMATION_MS + 120)
+  }
   /** 按快照还原背景滚动（没有快照就什么都不做，不无条件清空）。 */
   private restoreBodyScroll(): void {
     for (const [element, previous] of this.overflowSnapshot) {
@@ -573,7 +584,12 @@ export class ComposerSheet {
     // 一次上游提交，这几帧里面板可能还没挂到 body 上（实测：读到了 9 个上游项，
     // 却因为此刻未挂载而整批丢弃，面板只剩三块瓦片）。
     if (this.backdrop === null || !this.backdrop.contains(rows)) return
-    for (const row of mapped) rows.append(this.buildRow(row))
+    for (const row of mapped) {
+      // 附件入口那条（文件 / file）不复制：三块瓦片已经覆盖它。
+      // 用标题精确命中而不是位置/前缀，理由见 ATTACHMENT_ROW_TITLES。
+      if (ATTACHMENT_ROW_TITLES.has(row.title.trim().toLowerCase())) continue
+      rows.append(this.buildRow(row))
+    }
   }
 
   private buildRow(row: MappedRow): HTMLElement {
@@ -645,6 +661,9 @@ export class ComposerSheet {
     // 以前复位写在菜单读到之后的 finally 里，菜单没读到时那条早退路径会把它永远留在 true，
     // 用户此后再按 Escape 都关不掉 sheet。
     this.borrowing = true
+    // 从**派发打开之前**就开始藏：菜单会在我们不知情的某一帧挂进 DOM，
+    // 事后藏已经晚了一步（那时它已经可见过一次）。观察器在挂载那一帧就把它按下去。
+    const restoreVisibility = this.concealUpstreamMenu(card)
     try {
       if (openedHere) {
         // **先把焦点还给编辑器**：上游 MenuView 绑在 draft editor 的 caret 上，编辑器
@@ -667,10 +686,12 @@ export class ComposerSheet {
         return run(options)
       } finally {
         this.closeUpstreamMenu(card)
+        restoreVisibility()
       }
     } finally {
       // 借完就还：之后用户按 Esc 必须能正常关掉 sheet。
       this.borrowing = false
+      restoreVisibility()
       // 上游刚刚把焦点给了编辑器：重新压回去，键盘才不会跟着冒出来。
       // 只在 sheet 还开着这次借用的那一代时做 —— 用户已经关掉的话，这一下会把他
       // 此刻正在用的输入框 blur 掉，键盘自己缩回（#999）。
@@ -837,11 +858,13 @@ export class ComposerSheet {
     // 关掉 sheet 时借用一定结束：万一借用段还没走到自己的 finally，这里的复位
     // 保证 Escape 立刻可用（#1001）。
     this.borrowing = false
-    window.removeEventListener('resize', this.onViewportChange)
-    window.removeEventListener('orientationchange', this.onViewportChange)
+
     if (this.backdrop !== null) {
-      this.backdrop.remove()
+      // 先摘掉引用，再播退场动画：close() 是同步语义（调用方回来时面板状态已归零），
+      // 动画只是视觉上的余韵，不能让它决定「关没关」。
+      const leaving = this.backdrop
       this.backdrop = null
+      this.playExit(leaving)
       if (this.addButton !== null) {
         if (this.previousExpanded === null) this.addButton.removeAttribute('aria-expanded')
         else this.addButton.setAttribute('aria-expanded', this.previousExpanded)
