@@ -95,7 +95,7 @@ internal object SafeMode {
       if (itemIndent == null) { out.add(line); out.addAll(body); i = end; continue }
       val kept = ArrayList<String>()
       for (item in insertChildChunks(body, itemIndent)) {
-        val name = itemName(item.lines)
+        val name = itemName(item.lines, itemIndent)
         val id = itemId(item.lines)
         if (name != null && !isProductOwned(name, hardEntries, id)) continue // 第三方条目：整条摘掉
         kept.addAll(item.lines)
@@ -712,8 +712,30 @@ internal object SafeMode {
   }
 
   /** 条目的包名：取条目片段里**第一个** `name:`（条目自身的 name 行总在 config 之前）。 */
-  private fun itemName(chunk: List<String>): String? =
-    chunk.firstNotNullOfOrNull { NAME_KEY.find(it)?.groupValues?.get(1)?.trim('\'', '"') }
+  /**
+   * 条目的包名：只认**条目键层**（与首键同列）的 `name:`。
+   *
+   * 为什么不能取「片段里第一个 name:」：`config:` 子树里出现 `name:` 很常见（插件配置字段），
+   * 那样「只有 `id:`、没有 `name:`」的条目会被判成「有 name 且名字不匹配」⇒ 整条被当第三方摘掉，
+   * 与本函数文档「子条目若没有 name 就保留（宁可不摘也不误伤；摘错一个能跑的比漏摘一个更糟）」
+   * 直接矛盾 —— 2026-10-28 自查实测到这条误摘（python 等价算法复现后落到 JVM 用例）。
+   *
+   * 判据：首键所在列（`    - id: x` 里 `id` 的列）＝键层列；只有与该列**同列**的行才算条目自己的键。
+   * 更深的一律是某个子块的内容（`config:` 里的 `name:` 缩进必然更大），一律不参与归属判定。
+   * 首键本身就是 name（`- name: x`）时直接取它。
+   */
+  private fun itemName(chunk: List<String>, itemIndent: Int): String? {
+    val header = chunk.firstOrNull { ITEM.containsMatchIn(it) } ?: return null
+    NAME_KEY.find(header)?.let { return it.groupValues[1].trim('\'', '"') }
+    val keyColumn = header.indexOfFirst { it.isLetter() }
+    if (keyColumn <= itemIndent) return null
+    for (line in chunk) {
+      if (line.isBlank() || line === header) continue
+      if (line.indexOfFirst { c -> !c.isWhitespace() } != keyColumn) continue
+      NAME_KEY.find(line)?.let { return it.groupValues[1].trim('\'', '"') }
+    }
+    return null
+  }
 
   private fun itemId(chunk: List<String>): String? = chunk.firstNotNullOfOrNull {
     Regex("""^\s*-\s+id:\s*['"]?([^'"\s]+)""").find(it)?.groupValues?.get(1)
@@ -729,7 +751,7 @@ internal object SafeMode {
       while (end < lines.size && !endsInsertGroup(lines[end])) end++
       val body = lines.subList(i + 1, end)
       val indent = body.firstOrNull { ITEM.containsMatchIn(it) }?.indexOfFirst { !it.isWhitespace() }
-      if (indent != null) for (chunk in insertChildChunks(body, indent)) out += InsertEntry(itemId(chunk.lines), itemName(chunk.lines))
+      if (indent != null) for (chunk in insertChildChunks(body, indent)) out += InsertEntry(itemId(chunk.lines), itemName(chunk.lines, indent))
       i = end
     }
     return out
@@ -748,7 +770,7 @@ internal object SafeMode {
       val itemIndent = body.firstOrNull { ITEM.containsMatchIn(it) }
         ?.let { it.indexOfFirst { c -> !c.isWhitespace() } }
       if (itemIndent != null) {
-        for (child in insertChildChunks(body, itemIndent)) itemName(child.lines)?.let { out.add(it) }
+        for (child in insertChildChunks(body, itemIndent)) itemName(child.lines, itemIndent)?.let { out.add(it) }
       }
       i = end
     }
